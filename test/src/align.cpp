@@ -24,7 +24,6 @@
 
 #include <common.hpp>
 
-
 #include <sdsl/io.hpp>
 
 #include <ms_pointers.hpp>
@@ -39,130 +38,125 @@
 
 typedef std::pair<std::string, std::vector<uint8_t>> pattern_t;
 
-std::vector<pattern_t> read_patterns(std::string filename)
+// std::vector<pattern_t> read_patterns(std::string filename)
+// {
+//   // Open File
+//   FILE *fd;
+//   if ((fd = fopen(filename.c_str(), "r")) == nullptr)
+//     error("open() file " + filename + " failed");
+
+//   std::vector<pattern_t> patterns;
+
+//   pattern_t pattern;
+
+//   char c;
+//   while (fread(&c, sizeof(char), 1, fd) == 1)
+//   {
+//     if (c == '>')
+//     {
+//       if (pattern.second.size() > 0)
+//         patterns.push_back(pattern);
+
+//       pattern.first.clear();
+//       pattern.second.clear();
+
+//       pattern.first.append(1, c);
+//       while (fread(&c, sizeof(char), 1, fd) == 1 && c != '\n')
+//         pattern.first.append(1, c);
+//     }
+//     else
+//     {
+//       pattern.second.push_back(c);
+//       while (fread(&c, sizeof(char), 1, fd) == 1 && c != '\n')
+//         pattern.second.push_back(c);
+//     }
+//   }
+
+//   if (pattern.second.size() > 0)
+//     patterns.push_back(pattern);
+
+//   fclose(fd);
+
+//   return patterns;
+// }
+
+struct Patterns
 {
-  // Open File
-  FILE *fd;
-  if ((fd = fopen(filename.c_str(), "r")) == nullptr)
-    error("open() file " + filename + " failed");
+private:
+  std::ifstream input_file;
 
-  std::vector<pattern_t> patterns;
+public:
+  using pattern_t = std::pair<std::string, std::vector<uint8_t>>;
 
-  pattern_t pattern;
+  Patterns(std::string input_path) : input_file(input_path) {}
 
-  char c;
-  while (fread(&c, sizeof(char), 1, fd) == 1)
-  {
-    if (c == '>')
-    {
-      if (pattern.second.size() > 0)
-        patterns.push_back(pattern);
+  pattern_t next();
+  bool end();
 
-      pattern.first.clear();
-      pattern.second.clear();
+  size_t n_patterns = 0;
+};
 
-      pattern.first.append(1, c);
-      while (fread(&c, sizeof(char), 1, fd) == 1 && c != '\n')
-        pattern.first.append(1, c);
-    }
-    else
-    {
-      pattern.second.push_back(c);
-      while (fread(&c, sizeof(char), 1, fd) == 1 && c != '\n')
-        pattern.second.push_back(c);
-    }
-  }
+Patterns::pattern_t Patterns::next()
+{
+  n_patterns++;
+  std::string header, read;
+  std::vector<uint8_t> pattern;
+  // header
+  std::getline(input_file, header);
+  // read
+  std::getline(input_file, read);
 
-  if (pattern.second.size() > 0)
-    patterns.push_back(pattern);
-
-  fclose(fd);
-
-  return patterns;
+  pattern_t out;
+  out.first = header;
+  std::copy(read.begin(), read.end(), std::back_inserter(out.second));
+  return out;
 }
 
-int main(int argc, char *const argv[])
+bool Patterns::end()
 {
+  return input_file.eof();
+}
+
+class aligner_t
+{
+public:
   using SelSd = SelectSdvec<>;
   using DagcSd = DirectAccessibleGammaCode<SelSd>;
 
-  Args args;
-  parseArgs(argc, argv, args);
+  aligner_t(std::string filename, size_t min_len_ = 50) : min_len(min_len_)
+  {
+    verbose("Building the matching statistics index");
+    std::chrono::high_resolution_clock::time_point t_insert_start = std::chrono::high_resolution_clock::now();
 
-  // Building the r-index
+    std::string filename_ms = filename + ".ms";
 
-  verbose("Building the matching statistics index");
-  std::chrono::high_resolution_clock::time_point t_insert_start = std::chrono::high_resolution_clock::now();
+    ifstream fs_ms(filename_ms);
+    ms.load(fs_ms);
 
-  std::string filename_ms = args.filename + ".ms";
-  ms_pointers<> ms;
-  ifstream fs_ms(filename_ms);
-  ms.load(fs_ms);
+    std::chrono::high_resolution_clock::time_point t_insert_end = std::chrono::high_resolution_clock::now();
 
-  std::chrono::high_resolution_clock::time_point t_insert_end = std::chrono::high_resolution_clock::now();
+    verbose("Matching statistics index construction complete");
+    verbose("Memory peak: ", malloc_count_peak());
+    verbose("Elapsed time (s): ", std::chrono::duration<double, std::ratio<1>>(t_insert_end - t_insert_start).count());
 
-  verbose("Matching statistics index construction complete");
-  verbose("Memory peak: ", malloc_count_peak());
-  verbose("Elapsed time (s): ", std::chrono::duration<double, std::ratio<1>>(t_insert_end - t_insert_start).count());
+    verbose("Building random access");
+    t_insert_start = std::chrono::high_resolution_clock::now();
 
-  verbose("Building random access");
-  t_insert_start = std::chrono::high_resolution_clock::now();
+    std::string filename_slp = filename + ".slp";
 
-  // pfp_ra ra(args.filename, args.w);
-  std::string filename_slp = args.filename + ".slp";
-  SelfShapedSlp<uint32_t, DagcSd, DagcSd, SelSd> ra;
-  ifstream fs(filename_slp);
-  ra.load(fs);
+    ifstream fs(filename_slp);
+    ra.load(fs);
 
-  size_t n = ra.getLen();
+    n = ra.getLen();
 
-  t_insert_end = std::chrono::high_resolution_clock::now();
+    t_insert_end = std::chrono::high_resolution_clock::now();
 
-  verbose("Matching statistics index construction complete");
-  verbose("Memory peak: ", malloc_count_peak());
-  verbose("Elapsed time (s): ", std::chrono::duration<double, std::ratio<1>>(t_insert_end - t_insert_start).count());
+    verbose("Matching statistics index construction complete");
+    verbose("Memory peak: ", malloc_count_peak());
+    verbose("Elapsed time (s): ", std::chrono::duration<double, std::ratio<1>>(t_insert_end - t_insert_start).count());
+  }
 
-  sdsl::nullstream ns;
-
-  size_t ms_size = ms.serialize(ns);
-  // size_t ra_size = sdsl::size_in_bytes(ra);
-
-  verbose("MS size (bytes): ", ms_size);
-  // verbose("RA size (bytes): ", ra_size);
-
-
-  // size_t space = ms_size + ra_size;
-  // verbose("Total size (bytes): ", space);
-
-  verbose("Reading patterns");
-  t_insert_start = std::chrono::high_resolution_clock::now();
-
-  std::vector<pattern_t> patterns = read_patterns(args.patterns);
-
-  t_insert_end = std::chrono::high_resolution_clock::now();
-
-  verbose("Memory peak: ", malloc_count_peak());
-  verbose("Elapsed time (s): ", std::chrono::duration<double, std::ratio<1>>(t_insert_end - t_insert_start).count());
-
-  verbose("Processing patterns");
-  t_insert_start = std::chrono::high_resolution_clock::now();
-
-  std::ofstream f_pointers(args.patterns + ".pointers");
-  std::ofstream f_lengths(args.patterns + ".lengths");
-
-  if (!f_pointers.is_open())
-    error("open() file " + std::string(args.filename) + ".pointers failed");
-
-  if (!f_lengths.is_open())
-    error("open() file " + std::string(args.filename) + ".lengths failed");
-
-
-  size_t min_len = 0;
-  size_t aligned_reads = 0;
-
-
-
-  for (auto pattern : patterns)
+  void align(pattern_t &pattern)
   {
     size_t mem_pos = 0;
     size_t mem_len = 0;
@@ -181,7 +175,7 @@ int main(int argc, char *const argv[])
       l = (l == 0 ? 0 : (l - 1));
 
       // Update MEM
-      if (lengths [i] > mem_len)
+      if (lengths[i] > mem_len)
       {
         mem_len = lengths[i];
         mem_pos = pointers[i];
@@ -189,21 +183,10 @@ int main(int argc, char *const argv[])
       }
     }
 
-    f_pointers << pattern.first << endl;
-    for (auto elem : pointers)
-      f_pointers << elem << " ";
-    f_pointers << endl;
-
-    f_lengths << pattern.first << endl;
-    for (auto elem : lengths)
-      f_lengths << elem << " ";
-    f_lengths << endl;
-
-
     // Align the read
-    if( mem_len >= min_len)
+    if (mem_len >= min_len)
     {
-      char* str = (char*) malloc(400);
+      char *str = (char *)malloc(400);
 
       int32_t maskLen = pattern.second.size() / 2;
       maskLen = maskLen < 15 ? 15 : maskLen;
@@ -212,7 +195,7 @@ int main(int argc, char *const argv[])
       // Extract the context from the reference
       size_t left_occ = (mem_pos > 100 ? mem_pos - 100 : 0);
       size_t len = mem_len + 200;
-      ra.expandSubstr( left_occ, len, str );
+      ra.expandSubstr(left_occ, len, str);
 
       // Declares a default Aligner
       StripedSmithWaterman::Aligner aligner;
@@ -223,7 +206,7 @@ int main(int argc, char *const argv[])
       // Aligns the query to the ref
       aligner.Align(query.c_str(), str, len, filter, &alignment, maskLen);
 
-      std::string ref(str,str + len);
+      std::string ref(str, str + len);
 
       cout << "===== SSW result =====" << endl;
       cout << ref << endl;
@@ -243,13 +226,50 @@ int main(int argc, char *const argv[])
 
       aligned_reads++;
 
-      delete str; 
+      delete str;
     }
   }
 
+  size_t get_aligned_reads()
+  {
+    return aligned_reads;
+  }
 
-  f_pointers.close();
-  f_lengths.close();
+protected:
+  ms_pointers<> ms;
+  SelfShapedSlp<uint32_t, DagcSd, DagcSd, SelSd> ra;
+
+  size_t min_len = 0;
+  size_t aligned_reads = 0;
+  size_t n = 0;
+};
+
+int
+main(int argc, char *const argv[])
+{
+
+  Args args;
+  parseArgs(argc, argv, args);
+
+  verbose("Construction of the aligner");
+  std::chrono::high_resolution_clock::time_point t_insert_start = std::chrono::high_resolution_clock::now();
+
+  aligner_t aligner(args.filename, 0);
+
+  std::chrono::high_resolution_clock::time_point t_insert_end = std::chrono::high_resolution_clock::now();
+  verbose("Memory peak: ", malloc_count_peak());
+  verbose("Elapsed time (s): ", std::chrono::duration<double, std::ratio<1>>(t_insert_end - t_insert_start).count());
+
+  verbose("Processing patterns");
+  t_insert_start = std::chrono::high_resolution_clock::now();
+
+  Patterns patterns(args.patterns);
+
+  while (not patterns.end())
+  {
+    pattern_t pattern = patterns.next();
+    aligner.align(pattern);
+  }
 
   t_insert_end = std::chrono::high_resolution_clock::now();
 
@@ -258,12 +278,11 @@ int main(int argc, char *const argv[])
 
   auto mem_peak = malloc_count_peak();
   verbose("Memory peak: ", malloc_count_peak());
-  verbose("Number of aligned reads: ", aligned_reads, "/", patterns.size());
+  verbose("Number of aligned reads: ", aligner.get_aligned_reads(), "/", patterns.n_patterns);
 
   size_t space = 0;
   if (args.memo)
   {
-    verbose("Thresholds size (bytes): ", space);
   }
 
   if (args.store)
