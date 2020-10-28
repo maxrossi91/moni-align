@@ -233,3 +233,40 @@ if(NOT shaped_slp_POPULATED)
   set(FOLCA_SOURCE_DIR ${shaped_slp_SOURCE_DIR}/folca)
   set(SUX_SOURCE_DIR ${shaped_slp_SOURCE_DIR}/external/sux/sux)
 endif()
+
+## Add SSW
+FetchContent_Declare(
+  ssw
+  GIT_REPOSITORY https://github.com/mengyao/Complete-Striped-Smith-Waterman-Library
+  GIT_TAG master
+  )
+  
+  FetchContent_GetProperties(ssw)
+  if(NOT ssw_POPULATED)
+  FetchContent_Populate(ssw)
+  # execute_process(COMMAND make
+  #       RESULT_VARIABLE result
+  #       WORKING_DIRECTORY ${ssw_SOURCE_DIR} )
+  # if(result)
+  #     message(FATAL_ERROR "CMake step for ssw failed: ${result}")
+  # endif()
+  
+  add_library(ssw OBJECT ${ssw_SOURCE_DIR}/src/ssw_cpp.cpp ${ssw_SOURCE_DIR}/src/ssw.c)
+  target_include_directories(ssw PUBLIC ${ssw_SOURCE_DIR}/src)
+  endif()
+  
+  
+  # ## Add tlx
+  # FetchContent_Declare(
+  #   tlx
+  #   GIT_REPOSITORY https://github.com/tlx/tlx
+  #   GIT_TAG master
+  #   )
+    
+  # FetchContent_GetProperties(tlx)
+  # if(NOT tlx_POPULATED)
+  #   FetchContent_Populate(tlx)
+  #   add_subdirectory(${tlx_SOURCE_DIR} ${tlx_BINARY_DIR})
+  # endif()
+  
+  

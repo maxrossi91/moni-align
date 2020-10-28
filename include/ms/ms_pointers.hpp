@@ -33,14 +33,13 @@
 
 #include <r_index.hpp>
 
-#include<ms_rle_string.hpp>
+#include <ms_rle_string.hpp>
 
 template <class sparse_bv_type = ri::sparse_sd_vector,
           class rle_string_t = ms_rle_string_sd>
 class ms_pointers : ri::r_index<sparse_bv_type, rle_string_t>
 {
 public:
-
     std::vector<size_t> thresholds;
 
     // std::vector<ulint> samples_start;
@@ -62,8 +61,9 @@ public:
 
     typedef size_t size_type;
 
-    ms_pointers(std::string filename) : 
-        ri::r_index<sparse_bv_type, rle_string_t>()
+    ms_pointers() {}
+
+    ms_pointers(std::string filename, bool rle = false) : ri::r_index<sparse_bv_type, rle_string_t>()
     {
         verbose("Building the r-index from BWT");
 
@@ -72,8 +72,27 @@ public:
         std::string bwt_fname = filename + ".bwt";
 
         verbose("RLE encoding BWT and computing SA samples");
-        std::ifstream ifs(bwt_fname);
-        this->bwt = rle_string_t(ifs); 
+
+        if (rle)
+        {
+            std::string bwt_heads_fname = bwt_fname + ".heads";
+            std::ifstream ifs_heads(bwt_heads_fname);
+            std::string bwt_len_fname = bwt_fname + ".len";
+            std::ifstream ifs_len(bwt_len_fname);
+            this->bwt = rle_string_t(ifs_heads, ifs_len);
+
+            ifs_heads.seekg(0);
+            ifs_len.seekg(0);
+            this->build_F_(ifs_heads, ifs_len);
+        }
+        else
+        {
+            std::ifstream ifs(bwt_fname);
+            this->bwt = rle_string_t(ifs);
+
+            ifs.seekg(0);
+            this->build_F(ifs);
+        }
         // std::string istring;
         // read_file(bwt_fname.c_str(), istring);
         // for(size_t i = 0; i < istring.size(); ++i)
@@ -86,17 +105,14 @@ public:
         int log_r = bitsize(uint64_t(this->r));
         int log_n = bitsize(uint64_t(this->bwt.size()));
 
-        verbose("Number of BWT equal-letter runs: r = " , this->r);
-        verbose("Rate n/r = " , double(this->bwt.size()) / this->r);
-        verbose("log2(r) = " , log2(double(this->r)));
-        verbose("log2(n/r) = " , log2(double(this->bwt.size()) / this->r));
+        verbose("Number of BWT equal-letter runs: r = ", this->r);
+        verbose("Rate n/r = ", double(this->bwt.size()) / this->r);
+        verbose("log2(r) = ", log2(double(this->r)));
+        verbose("log2(n/r) = ", log2(double(this->bwt.size()) / this->r));
 
-        ifs.seekg(0);
-        this->build_F(ifs);
         // this->build_F(istring);
         // istring.clear();
         // istring.shrink_to_fit();
-
 
         read_samples(filename + ".ssa", this->r, log_n, samples_start);
         read_samples(filename + ".esa", this->r, log_n, this->samples_last);
@@ -106,8 +122,6 @@ public:
         verbose("R-index construction complete");
         verbose("Memory peak: ", malloc_count_peak());
         verbose("Elapsed time (s): ", std::chrono::duration<double, std::ratio<1>>(t_insert_end - t_insert_start).count());
-
-
 
         verbose("Reading thresholds from file");
 
@@ -131,7 +145,7 @@ public:
         size_t length = filestat.st_size / THRBYTES;
         thresholds.resize(length);
 
-        for(size_t i = 0; i < length; ++i )
+        for (size_t i = 0; i < length; ++i)
             if ((fread(&thresholds[i], THRBYTES, 1, fd)) != 1)
                 error("fread() file " + tmp_filename + " failed");
 
@@ -141,7 +155,6 @@ public:
 
         verbose("Memory peak: ", malloc_count_peak());
         verbose("Elapsed time (s): ", std::chrono::duration<double, std::ratio<1>>(t_insert_end - t_insert_start).count());
-
     }
 
     void read_samples(std::string filename, ulint r, int log_n, int_vector<> &samples)
@@ -160,7 +173,7 @@ public:
         if (filestat.st_size % SSABYTES != 0)
             error("invilid file " + filename);
 
-        size_t length = filestat.st_size / (2*SSABYTES);
+        size_t length = filestat.st_size / (2 * SSABYTES);
         //Check that the length of the file is 2*r elements of 5 bytes
         assert(length == r);
 
@@ -171,7 +184,7 @@ public:
         uint64_t left = 0;
         uint64_t right = 0;
         size_t i = 0;
-        while (fread((char *)&left, SSABYTES, 1, fd) && fread((char *)&right, SSABYTES, 1,fd))
+        while (fread((char *)&left, SSABYTES, 1, fd) && fread((char *)&right, SSABYTES, 1, fd))
         {
             ulint val = (right ? right - 1 : r - 1);
             assert(bitsize(uint64_t(val)) <= log_n);
@@ -181,8 +194,39 @@ public:
         fclose(fd);
     }
 
+    vector<ulint> build_F_(std::ifstream &heads, std::ifstream &lengths)
+    {
+        heads.clear();
+        heads.seekg(0);
+        lengths.clear();
+        lengths.seekg(0);
+
+        this->F = vector<ulint>(256, 0);
+        int c;
+        ulint i = 0;
+        while ((c = heads.get()) != EOF)
+        {
+            size_t length;
+            lengths.read((char *)&length, 5);
+            if (c > TERMINATOR)
+                this->F[c] += length;
+            else
+            {
+                this->F[TERMINATOR] += length;
+                this->terminator_position = i;
+            }
+            i++;
+        }
+        for (ulint i = 255; i > 0; --i)
+            this->F[i] = this->F[i - 1];
+        this->F[0] = 0;
+        for (ulint i = 1; i < 256; ++i)
+            this->F[i] += this->F[i - 1];
+        return this->F;
+    }
+
     // Computes the matching statistics pointers for the given pattern
-    std::vector<size_t> query(const std::vector<uint8_t>& pattern)
+    std::vector<size_t> query(const std::vector<uint8_t> &pattern)
     {
         size_t m = pattern.size();
 
@@ -199,7 +243,7 @@ public:
             if (this->bwt.number_of_letter(c) == 0)
             {
                 sample = 0;
-            } 
+            }
             else if (pos < this->bwt.size() && this->bwt[pos] == c)
             {
                 sample--;
@@ -223,7 +267,7 @@ public:
 
                     // Here we should use Phi_inv that is not implemented yet
                     // sample = this->Phi(this->samples_last[run_of_j - 1]) - 1;
-                    sample = samples_start[run_of_j] - 1;
+                    sample = samples_start[run_of_j];
 
                     next_pos = j;
                 }
@@ -234,7 +278,7 @@ public:
                     rnk--;
                     ri::ulint j = this->bwt.select(rnk, c);
                     ri::ulint run_of_j = this->bwt.run_of_position(j);
-                    sample = this->samples_last[run_of_j] - 1;
+                    sample = this->samples_last[run_of_j];
 
                     next_pos = j;
                 }
@@ -242,7 +286,7 @@ public:
                 pos = next_pos;
             }
 
-            ms_pointers[m-i-1] = sample;
+            ms_pointers[m - i - 1] = sample;
 
             // Perform one backward step
             pos = LF(pos, c);
@@ -300,11 +344,9 @@ public:
         my_load(this->F, in);
         this->bwt.load(in);
         this->r = this->bwt.number_of_runs();
-        this->pred.load(in);
         this->samples_last.load(in);
-        this->pred_to_run.load(in);
 
-        my_load(thresholds,in);
+        my_load(thresholds, in);
         samples_start.load(in);
         // my_load(samples_start,in);
     }
@@ -315,64 +357,63 @@ public:
     //     return (samples_last[r - 1] + 1) % bwt.size();
     // }
 
-    protected :
+protected:
+    // // From r-index
+    // vector<ulint> build_F(std::ifstream &ifs)
+    // {
+    //     ifs.clear();
+    //     ifs.seekg(0);
+    //     F = vector<ulint>(256, 0);
+    //     uchar c;
+    //     ulint i = 0;
+    //     while (ifs >> c)
+    //     {
+    //         if (c > TERMINATOR)
+    //             F[c]++;
+    //         else
+    //         {
+    //             F[TERMINATOR]++;
+    //             terminator_position = i;
+    //         }
+    //         i++;
+    //     }
+    //     for (ulint i = 255; i > 0; --i)
+    //         F[i] = F[i - 1];
+    //     F[0] = 0;
+    //     for (ulint i = 1; i < 256; ++i)
+    //         F[i] += F[i - 1];
+    //     return F;
+    // }
 
-        // // From r-index
-        // vector<ulint> build_F(std::ifstream &ifs)
-        // {
-        //     ifs.clear();
-        //     ifs.seekg(0);
-        //     F = vector<ulint>(256, 0);
-        //     uchar c;
-        //     ulint i = 0;
-        //     while (ifs >> c)
-        //     {
-        //         if (c > TERMINATOR)
-        //             F[c]++;
-        //         else
-        //         {
-        //             F[TERMINATOR]++;
-        //             terminator_position = i;
-        //         }
-        //         i++;
-        //     }
-        //     for (ulint i = 255; i > 0; --i)
-        //         F[i] = F[i - 1];
-        //     F[0] = 0;
-        //     for (ulint i = 1; i < 256; ++i)
-        //         F[i] += F[i - 1];
-        //     return F;
-        // }
+    // // From r-index
+    // vector<pair<ulint, ulint>> &read_run_starts(std::string fname, ulint n, vector<pair<ulint, ulint>> &ssa)
+    // {
+    //     ssa.clear();
+    //     std::ifstream ifs(fname);
+    //     uint64_t x = 0;
+    //     uint64_t y = 0;
+    //     uint64_t i = 0;
+    //     while (ifs.read((char *)&x, 5) && ifs.read((char *)&y, 5))
+    //     {
+    //         ssa.push_back(pair<ulint, ulint>(y ? y - 1 : n - 1, i));
+    //         i++;
+    //     }
+    //     return ssa;
+    // }
 
-        // // From r-index
-        // vector<pair<ulint, ulint>> &read_run_starts(std::string fname, ulint n, vector<pair<ulint, ulint>> &ssa)
-        // {
-        //     ssa.clear();
-        //     std::ifstream ifs(fname);
-        //     uint64_t x = 0;
-        //     uint64_t y = 0;
-        //     uint64_t i = 0;
-        //     while (ifs.read((char *)&x, 5) && ifs.read((char *)&y, 5))
-        //     {
-        //         ssa.push_back(pair<ulint, ulint>(y ? y - 1 : n - 1, i));
-        //         i++;
-        //     }
-        //     return ssa;
-        // }
-
-        // // From r-index
-        // vector<ulint> &read_run_ends(std::string fname, ulint n, vector<ulint> &esa)
-        // {
-        //     esa.clear();
-        //     std::ifstream ifs(fname);
-        //     uint64_t x = 0;
-        //     uint64_t y = 0;
-        //     while (ifs.read((char *)&x, 5) && ifs.read((char *)&y, 5))
-        //     {
-        //         esa.push_back(y ? y - 1 : n - 1);
-        //     }
-        //     return esa;
-        // }
-    };
+    // // From r-index
+    // vector<ulint> &read_run_ends(std::string fname, ulint n, vector<ulint> &esa)
+    // {
+    //     esa.clear();
+    //     std::ifstream ifs(fname);
+    //     uint64_t x = 0;
+    //     uint64_t y = 0;
+    //     while (ifs.read((char *)&x, 5) && ifs.read((char *)&y, 5))
+    //     {
+    //         esa.push_back(y ? y - 1 : n - 1);
+    //     }
+    //     return esa;
+    // }
+};
 
 #endif /* end of include guard: _MS_POINTERS_HH */

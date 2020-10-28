@@ -78,6 +78,7 @@ class PFPthresholds(threading.Thread):
 
       # if args.s: command += " -s"
       if args.m: command += " -m"
+      command += " -r"
       
       print("==== Computing Thresholds. Command:", command)
       if(execute_command(command,logfile,logfile_name)!=True):
@@ -101,7 +102,7 @@ class bigrepair(threading.Thread):
       print("{} bigrepair started!".format(self.getName()))        # "Thread-x started!"
 
       mem = virtual_memory()
-      repair_mem  = round(mem.total / 1024 / 1024) # total physical memory available
+      repair_mem  = round(mem.total / 1024 / 1024) # total physical memory available in MB
       print("RePair maximum memory: {}".format(repair_mem))
 
       sstart = time.time()

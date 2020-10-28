@@ -4,6 +4,7 @@ target_link_libraries(compress_dictionary common sdsl malloc_count)
 
 FetchContent_GetProperties(r-index)
 FetchContent_GetProperties(shaped_slp)
+FetchContent_GetProperties(ssw)
 
 set(FOLCA_SOURCE_DIR ${shaped_slp_SOURCE_DIR}/folca)
 set(SUX_SOURCE_DIR ${shaped_slp_SOURCE_DIR}/external/sux/sux)
@@ -20,6 +21,17 @@ target_include_directories(ms PUBLIC    "../../include/ms"
                                         )
 target_compile_options(ms PUBLIC "-std=c++17")
 
+add_executable(rlebwt_ms_build rlebwt_ms_build.cpp)
+target_link_libraries(rlebwt_ms_build common sdsl divsufsort divsufsort64 malloc_count ri)
+target_include_directories(rlebwt_ms_build PUBLIC    "../../include/ms" 
+                                        "../../include/common" 
+                                        "${shaped_slp_SOURCE_DIR}" 
+                                        "${FOLCA_SOURCE_DIR}" 
+                                        "${SUX_SOURCE_DIR}/function" 
+                                        "${SUX_SOURCE_DIR}/support"
+                                        )
+target_compile_options(rlebwt_ms_build PUBLIC "-std=c++17")
+
 add_executable(shapedslp_test shapedslp_test.cpp)
 target_link_libraries(shapedslp_test common sdsl divsufsort divsufsort64 malloc_count ri)
 target_include_directories(shapedslp_test PUBLIC    "../../include/ms" 
@@ -30,3 +42,15 @@ target_include_directories(shapedslp_test PUBLIC    "../../include/ms"
                                         "${SUX_SOURCE_DIR}/support"
                                         )
 target_compile_options(shapedslp_test PUBLIC "-std=c++17")
+
+add_executable(align align.cpp)
+target_link_libraries(align common sdsl divsufsort divsufsort64 malloc_count ri ssw)
+target_include_directories(align PUBLIC    "../../include/ms" 
+                                            "../../include/common" 
+                                            "${shaped_slp_SOURCE_DIR}" 
+                                            "${FOLCA_SOURCE_DIR}" 
+                                            "${SUX_SOURCE_DIR}/function" 
+                                            "${SUX_SOURCE_DIR}/support"
+                                            "${ssw_SOURCE_DIR}/src"
+                                        )
+target_compile_options(align PUBLIC "-std=c++17")
