@@ -414,7 +414,7 @@ public:
   }
 
 
-  void align(kseq_t *read)
+  void align(kseq_t *read, FILE* out)
   {
     size_t mem_pos = 0;
     size_t mem_len = 0;
@@ -469,25 +469,7 @@ public:
       alignment.ref_end += left_occ;
       alignment.ref_end_next_best += left_occ;
 
-      ssw_write_sam(alignment,"human",read,strand);
-      // std::string ref(str, str + len);
-
-      // cout << "===== SSW result =====" << endl;
-      // cout << ref << endl;
-      // cout << read->seq.s << endl;
-      // cout << "MEM length:\t" << mem_len << endl;
-      // cout << "MEM position:\t" << mem_pos << endl;
-      // cout << "Best Smith-Waterman score:\t" << alignment.sw_score << endl
-      //      << "Next-best Smith-Waterman score:\t" << alignment.sw_score_next_best << endl
-      //      << "Reference start:\t" << alignment.ref_begin << endl
-      //      << "Reference end:\t" << alignment.ref_end << endl
-      //      << "Query start:\t" << alignment.query_begin << endl
-      //      << "Query end:\t" << alignment.query_end << endl
-      //      << "Next-best reference end:\t" << alignment.ref_end_next_best << endl
-      //      << "Number of mismatches:\t" << alignment.mismatches << endl
-      //      << "Cigar: " << alignment.cigar_string << endl;
-      // cout << endl;
-      // cout << "======================" << endl;
+      ssw_write_sam(alignment,"human",read,strand,out);
 
       aligned_reads++;
 
@@ -504,12 +486,13 @@ public:
   static void ssw_write_sam(StripedSmithWaterman::Alignment &a,
                             const char *ref_seq_name,
                             const kseq_t *read,
-                            int8_t strand) // 0: forward aligned ; 1: reverse complement aligned
+                            int8_t strand,
+                            FILE* out) // 0: forward aligned ; 1: reverse complement aligned
   {
     // Sam format output
-    fprintf(stdout, "%s\t", read->name.s);
+    fprintf(out, "%s\t", read->name.s);
     if (a.sw_score == 0)
-      fprintf(stdout, "4\t*\t0\t255\t*\t*\t0\t0\t*\t*\n");
+      fprintf(out, "4\t*\t0\t255\t*\t*\t0\t0\t*\t*\n");
     else
     {
       int32_t c, p;
@@ -517,37 +500,37 @@ public:
       mapq = (uint32_t)(mapq + 4.99);
       mapq = mapq < 254 ? mapq : 254;
       if (strand)
-        fprintf(stdout, "16\t");
+        fprintf(out, "16\t");
       else
-        fprintf(stdout, "0\t");
+        fprintf(out, "0\t");
       // TODO: Find the correct reference name.
-      fprintf(stdout, "%s\t%d\t%d\t", ref_seq_name, a.ref_begin + 1, mapq);
+      fprintf(out, "%s\t%d\t%d\t", ref_seq_name, a.ref_begin + 1, mapq);
       // mismatch = mark_mismatch(a.ref_begin, a.query_begin, a.query_end, ref_num, read_num, read->seq.l, &a->cigar, &a->cigarLen);
       // for (c = 0; c < a->cigarLen; ++c)
       // {
       //   char letter = cigar_int_to_op(a->cigar[c]);
       //   uint32_t length = cigar_int_to_len(a->cigar[c]);
-      //   fprintf(stdout, "%lu%c", (unsigned long)length, letter);
+      //   fprintf(out, "%lu%c", (unsigned long)length, letter);
       // }
-      fprintf(stdout, "%s", a.cigar_string.c_str());
-      fprintf(stdout, "\t*\t0\t0\t");
-      fprintf(stdout, "%s", read->seq.s);
-      fprintf(stdout, "\t");
+      fprintf(out, "%s", a.cigar_string.c_str());
+      fprintf(out, "\t*\t0\t0\t");
+      fprintf(out, "%s", read->seq.s);
+      fprintf(out, "\t");
       if (read->qual.s && strand)
       {
         for (p = read->qual.l - 1; p >= 0; --p)
-          fprintf(stdout, "%c", read->qual.s[p]);
+          fprintf(out, "%c", read->qual.s[p]);
       }
       else if (read->qual.s)
-        fprintf(stdout, "%s", read->qual.s);
+        fprintf(out, "%s", read->qual.s);
       else
-        fprintf(stdout, "*");
-      fprintf(stdout, "\tAS:i:%d", a.sw_score);
-      fprintf(stdout, "\tNM:i:%d\t", a.mismatches);
+        fprintf(out, "*");
+      fprintf(out, "\tAS:i:%d", a.sw_score);
+      fprintf(out, "\tNM:i:%d\t", a.mismatches);
       if (a.sw_score_next_best > 0)
-        fprintf(stdout, "ZS:i:%d\n", a.sw_score_next_best);
+        fprintf(out, "ZS:i:%d\n", a.sw_score_next_best);
       else
-        fprintf(stdout, "\n");
+        fprintf(out, "\n");
     }
   }
 
@@ -591,7 +574,7 @@ main(int argc, char *const argv[])
   seq = kseq_init(fp);
   while ((l = kseq_read(seq)) >= 0)
   {
-    aligner.align(seq);
+    aligner.align(seq,stdout);
     n_reads++;
   }
 
