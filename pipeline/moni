@@ -31,6 +31,8 @@ parseNT_exe             = os.path.join(bigbwt_dirname, "newscanNT.x")
 pfp_thresholds          = os.path.join(thresholds_dirname, "pfp_thresholds")
 pfp_thresholds64        = os.path.join(thresholds_dirname, "pfp_thresholds64")
 
+rlebwt_ms_exe           = os.path.join(compress_dirname, "rlebwt_ms_build")
+
 compress_exe            = os.path.join(compress_dirname, "compress_dictionary")
 
 repair_exe              = os.path.join(bigrepair_dirname,"repair/irepair")
@@ -61,7 +63,7 @@ class PFPthresholds(threading.Thread):
       args = self.args
       logfile = args.logfile
       logfile_name = args.logfile_name
-      print("{} PFP started!".format(self.getName()))        # "Thread-x started!"
+      print("{} PFP started!".format(self.getName()), flush=True)        # "Thread-x started!"
 
       start = time.time()
       parse_size = os.path.getsize(args.input+".parse")/4
@@ -80,10 +82,10 @@ class PFPthresholds(threading.Thread):
       if args.m: command += " -m"
       command += " -r"
       
-      print("==== Computing Thresholds. Command:", command)
+      print("==== Computing Thresholds. Command:", command, flush=True)
       if(execute_command(command,logfile,logfile_name)!=True):
         return
-      print("Thresholds Elapsed time: {0:.4f}".format(time.time()-start));
+      print("Thresholds Elapsed time: {0:.4f}".format(time.time()-start), flush=True);
 
 
 
@@ -99,11 +101,11 @@ class bigrepair(threading.Thread):
       args = self.args
       logfile = args.logfile
       logfile_name = args.logfile_name
-      print("{} bigrepair started!".format(self.getName()))        # "Thread-x started!"
+      print("{} bigrepair started!".format(self.getName()), flush=True)        # "Thread-x started!"
 
       mem = virtual_memory()
       repair_mem  = round(mem.total / 1024 / 1024) # total physical memory available in MB
-      print("RePair maximum memory: {}".format(repair_mem))
+      print("RePair maximum memory: {}".format(repair_mem), flush=True)
 
       sstart = time.time()
       # ---- compress the dictionary 
@@ -111,11 +113,11 @@ class bigrepair(threading.Thread):
       exe = compress_exe
       command = "{exe} {file} -w {wsize} -p {modulus}".format(
                 exe = os.path.join(bigrepair_dirname, exe), file=args.input, wsize=args.wsize, modulus=args.mod)
-      print("==== Compressing the dictionary.\nCommand:", command)
+      print("==== Compressing the dictionary.\nCommand:", command, flush=True)
       if(execute_command(command,logfile,logfile_name)!=True):
         return
       preprocess_time = time.time()-start
-      print("Compression time: {0:.4f}".format(preprocess_time))
+      print("Compression time: {0:.4f}".format(preprocess_time), flush=True)
   
       # ---- preprocess the dictionary 
       start = time.time()
@@ -123,11 +125,11 @@ class bigrepair(threading.Thread):
       exe = preprocess_exe
       command = "{exe} {file}.dicz".format(
                 exe = os.path.join(bigrepair_dirname, exe), file=args.input)
-      print("==== Preprocessing the dictionary.\nCommand:", command)
+      print("==== Preprocessing the dictionary.\nCommand:", command, flush=True)
       if(execute_command(command,logfile,logfile_name)!=True):
         return
       preprocess_time = time.time()-start
-      print("Preprocess time: {0:.4f}".format(preprocess_time))
+      print("Preprocess time: {0:.4f}".format(preprocess_time), flush=True)
   
       # ---- apply repair to the modified dictionary
       start = time.time()
@@ -137,11 +139,11 @@ class bigrepair(threading.Thread):
       # else:
       command = "{exe} {file}.dicz.int {mb}".format(mb=repair_mem,
               exe = os.path.join(bigrepair_dirname,largerepair_exe), file=args.input)
-      print("==== Repair dictionary.\nCommand:", command)
+      print("==== Repair dictionary.\nCommand:", command, flush=True)
       if(execute_command(command,logfile,logfile_name)!=True):
        return
       repair_time = time.time()-start
-      print("repair(dict) time: {0:.4f}".format(repair_time))
+      print("repair(dict) time: {0:.4f}".format(repair_time), flush=True)
       
       # ---- apply repair to the parse     
       start = time.time()
@@ -151,11 +153,11 @@ class bigrepair(threading.Thread):
       # else:
       command = "{exe} {file}.parse {mb}".format(mb=repair_mem,
               exe = os.path.join(bigrepair_dirname,largerepair_exe), file=args.input)
-      print("==== Repair parse.\nCommand:", command)
+      print("==== Repair parse.\nCommand:", command, flush=True)
       if(execute_command(command,logfile,logfile_name)!=True):
        return
       repair_time = time.time()-start
-      print("repair(parse) time: {0:.4f}".format(repair_time))
+      print("repair(parse) time: {0:.4f}".format(repair_time), flush=True)
 
       # ---- postprocess
       start = time.time()
@@ -163,16 +165,16 @@ class bigrepair(threading.Thread):
       # exe = integer_postprocess_exe if args.i else postprocess_exe
       command = "{exe} {file}".format(
                 exe = os.path.join(bigrepair_dirname,exe), file=args.input)
-      print("==== Postprocessing the dictionary.\nCommand:", command)
+      print("==== Postprocessing the dictionary.\nCommand:", command, flush=True)
       fp = tempfile.TemporaryFile()
       if(execute_command(command,logfile,logfile_name,fp)!=True):
         return
 
       postprocess_time = time.time()-start
-      print("Postprocess time: {0:.4f}".format(postprocess_time))
+      print("Postprocess time: {0:.4f}".format(postprocess_time), flush=True)
 
       total_time = time.time()-sstart
-      print("Elapsed time: {0:.4f}".format(total_time))
+      print("Elapsed time: {0:.4f}".format(total_time), flush=True)
       # get the estimated compressed size
       # fp.seek(0); estimated_compression = int(fp.read().split()[-1]); fp.close()
       
@@ -186,13 +188,13 @@ class bigrepair(threading.Thread):
         return
       # ---- repair done   
 
-      print("==== Done")
+      print("==== Done", flush=True)
 
       
-      print("==== Computing final bigrepair. Command:", command)
+      print("==== Computing final bigrepair. Command:", command, flush=True)
       if(execute_command(command,logfile,logfile_name)!=True):
         return
-      print("bigrepair Elapsed time: {0:.4f}".format(time.time()-sstart))      
+      print("bigrepair Elapsed time: {0:.4f}".format(time.time()-sstart), flush=True)      
 
 class SLP(threading.Thread):
   def __init__(self, name, counter, args):
@@ -206,7 +208,7 @@ class SLP(threading.Thread):
       args = self.args
       logfile = args.logfile
       logfile_name = args.logfile_name
-      print("{} bigrepair started!".format(self.getName()))        # "Thread-x started!"
+      print("{} bigrepair started!".format(self.getName()), flush=True)        # "Thread-x started!"
 
       sstart = time.time()
       # ---- compress the dictionary 
@@ -214,15 +216,15 @@ class SLP(threading.Thread):
       exe = shaped_slp
       command = "{exe} -i {file} -o {file}.slp -e SelfShapedSlp_SdSd_Sd -f Bigrepair".format(
                 exe = os.path.join(bigrepair_dirname, exe), file=args.input)
-      print("==== ShapedSLP construction.\nCommand:", command)
+      print("==== ShapedSLP construction.\nCommand:", command, flush=True)
       if(execute_command(command,logfile,logfile_name)!=True):
         return
       preprocess_time = time.time()-start
-      print("ShapedSLP construction time: {0:.4f}".format(preprocess_time))
+      print("ShapedSLP construction time: {0:.4f}".format(preprocess_time), flush=True)
   
-      print("==== Done")
+      print("==== Done", flush=True)
 
-      print("ShapedSLP Elapsed time: {0:.4f}".format(time.time()-sstart))      
+      print("ShapedSLP Elapsed time: {0:.4f}".format(time.time()-sstart), flush=True)      
 
 
 
@@ -250,7 +252,7 @@ def main():
   args = parser.parse_args()
 
   if args.f and args.t > 0 and (".fq" in args.input or ".fastq" in args.input or ".fnq" in args.input):
-    print("moni does not current support FASTQ format! Exiting...")
+    print("moni does not current support FASTQ format! Exiting...", flush=True)
     return
 
 
@@ -261,7 +263,7 @@ def main():
   logfile_name = args.input + ".moni.log"
   # get main bigbwt directory
   args.bigbwt_dir = os.path.split(sys.argv[0])[0]
-  print("Sending logging messages to file:", logfile_name)
+  print("Sending logging messages to file:", logfile_name, flush=True)
   with open(logfile_name,"a") as logfile:
     args.logfile = logfile
     args.logfile_name = logfile_name
@@ -288,27 +290,27 @@ def main():
     if args.v: command += " -v"
     # if args.f: command += " -f"
     command += " -s"
-    print("==== Parsing. Command:", command)
+    print("==== Parsing. Command:", command, flush=True)
     if(execute_command(command,logfile,logfile_name)!=True):
       return
-    print("Elapsed time: {0:.4f}".format(time.time()-start))
+    print("Elapsed time: {0:.4f}".format(time.time()-start), flush=True)
     if args.parsing:
       # delete temporary parsing files
       command = "rm -f {file}.parse_old {file}.last".format(file=args.input) # check format when -t is used
       if(execute_command(command,logfile,logfile_name)!=True):
         return
-      print("==== Stopping after the parsing phase as requested")
+      print("==== Stopping after the parsing phase as requested", flush=True)
       return
     elif args.compress:
       # save parsing files
       start = time.time()
       command = "tar -cJf {file}.parse.txz {file}.parse {file}.dicz".format(file=args.input)
-      print("==== Compressing. Command:", command)
+      print("==== Compressing. Command:", command, flush=True)
       if(execute_command(command,logfile,logfile_name,env={"XZ_OPT":"-9"})!=True):
         return
-      print("Elapsed time: {0:.4f}".format(time.time()-start))
+      print("Elapsed time: {0:.4f}".format(time.time()-start), flush=True)
       delete_temp_files(args,logfile,logfile_name)
-      print("==== Done: Parsing output xz-compressed as requested")
+      print("==== Done: Parsing output xz-compressed as requested", flush=True)
       return
 
     # ----------- computation of the PFP data structures
@@ -325,7 +327,21 @@ def main():
     SLP_thread.start()                                       # ...Start the thread, invoke the run method
     SLP_thread.join()
 
-    print("Total construction time: {0:.4f}".format(time.time()-start0))
+
+    print("==== Building the RLEBWT. ", flush=True)
+    start = time.time()
+    parse_size = os.path.getsize(args.input+".parse")/4
+    dictionary_size = os.path.getsize(args.input+".dict")
+
+    command = "{exe} {file}".format(exe = os.path.join(args.bigbwt_dir,rlebwt_ms_exe),file=args.input)
+
+    print("==== Building the RLEBWT. Command:", command, flush=True)
+    if(execute_command(command,logfile,logfile_name)!=True):
+      return
+    print("Building the RLEBWT Elapsed time: {0:.4f}".format(time.time()-start), flush=True);
+
+
+    print("Total construction time: {0:.4f}".format(time.time()-start0), flush=True)
     # ---- print elapsed time to file
     command = "echo Total construction time: {0:.4f}".format(time.time()-start0)
     if(execute_command(command,logfile,logfile_name)!=True):
@@ -338,12 +354,12 @@ def main():
  
     # --- end checking ---
 
-  print("==== Done")
+  print("==== Done", flush=True)
 
 # delete intermediate files
 def delete_temp_files(args,logfile,logfile_name):
     if args.k==False:
-      print("==== Deleting temporary files.") # no need to show the command
+      print("==== Deleting temporary files.", flush=True) # no need to show the command
       command = "rm -f {file}.parse_old {file}.last {file}.bwlast {file}.ilist".format(file=args.input)
       #command = "rm -f {file}.parse {file}.parse_old {file}.last {file}.bwlast {file}.dicz {file}.ilist {file}.occ".format(file=args.input)
       if(execute_command(command,logfile,logfile_name)!=True):
@@ -379,9 +395,9 @@ def execute_command(command,logfile,logfile_name,outfile=None,env=None):
       outfile = logfile
     subprocess.check_call(command.split(),stdout=logfile,stderr=logfile,env=env)
   except subprocess.CalledProcessError:
-    print("Error executing command line:")
-    print("\t"+ command)
-    print("Check log file: " + logfile_name)
+    print("Error executing command line:", flush=True)
+    print("\t"+ command, flush=True)
+    print("Check log file: " + logfile_name, flush=True)
     return False
   return True
 

@@ -230,69 +230,12 @@ public:
     {
         size_t m = pattern.size();
 
-        std::vector<size_t> ms_pointers(m);
+        return _query(pattern.data(), m);
+    }
 
-        // Start with the empty string
-        auto pos = this->bwt_size() - 1;
-        auto sample = this->get_last_run_sample();
-
-        for (size_t i = 0; i < pattern.size(); ++i)
-        {
-            auto c = pattern[m - i - 1];
-
-            if (this->bwt.number_of_letter(c) == 0)
-            {
-                sample = 0;
-            }
-            else if (pos < this->bwt.size() && this->bwt[pos] == c)
-            {
-                sample--;
-            }
-            else
-            {
-                // Get threshold
-                ri::ulint rnk = this->bwt.rank(pos, c);
-                size_t thr = this->bwt.size() + 1;
-
-                ulint next_pos = pos;
-
-                // if (rnk < (this->F[c] - this->F[c-1]) // I can use F to compute it
-                if (rnk < this->bwt.number_of_letter(c))
-                {
-                    // j is the first position of the next run of c's
-                    ri::ulint j = this->bwt.select(rnk, c);
-                    ri::ulint run_of_j = this->bwt.run_of_position(j);
-
-                    thr = thresholds[run_of_j]; // If it is the first run thr = 0
-
-                    // Here we should use Phi_inv that is not implemented yet
-                    // sample = this->Phi(this->samples_last[run_of_j - 1]) - 1;
-                    sample = samples_start[run_of_j];
-
-                    next_pos = j;
-                }
-
-                if (pos < thr)
-                {
-
-                    rnk--;
-                    ri::ulint j = this->bwt.select(rnk, c);
-                    ri::ulint run_of_j = this->bwt.run_of_position(j);
-                    sample = this->samples_last[run_of_j];
-
-                    next_pos = j;
-                }
-
-                pos = next_pos;
-            }
-
-            ms_pointers[m - i - 1] = sample;
-
-            // Perform one backward step
-            pos = LF(pos, c);
-        }
-
-        return ms_pointers;
+    std::vector<size_t> query(const char* pattern, const size_t m)
+    {
+        return _query(pattern, m);
     }
 
     /*
@@ -358,6 +301,75 @@ public:
     // }
 
 protected:
+    // Computes the matching statistics pointers for the given pattern
+    template<typename string_t>
+    std::vector<size_t> _query(const string_t &pattern, const size_t m)
+    {
+
+        std::vector<size_t> ms_pointers(m);
+
+        // Start with the empty string
+        auto pos = this->bwt_size() - 1;
+        auto sample = this->get_last_run_sample();
+
+        for (size_t i = 0; i < m; ++i)
+        {
+            auto c = pattern[m - i - 1];
+
+            if (this->bwt.number_of_letter(c) == 0)
+            {
+                sample = 0;
+            }
+            else if (pos < this->bwt.size() && this->bwt[pos] == c)
+            {
+                sample--;
+            }
+            else
+            {
+                // Get threshold
+                ri::ulint rnk = this->bwt.rank(pos, c);
+                size_t thr = this->bwt.size() + 1;
+
+                ulint next_pos = pos;
+
+                // if (rnk < (this->F[c] - this->F[c-1]) // I can use F to compute it
+                if (rnk < this->bwt.number_of_letter(c))
+                {
+                    // j is the first position of the next run of c's
+                    ri::ulint j = this->bwt.select(rnk, c);
+                    ri::ulint run_of_j = this->bwt.run_of_position(j);
+
+                    thr = thresholds[run_of_j]; // If it is the first run thr = 0
+
+                    // Here we should use Phi_inv that is not implemented yet
+                    // sample = this->Phi(this->samples_last[run_of_j - 1]) - 1;
+                    sample = samples_start[run_of_j];
+
+                    next_pos = j;
+                }
+
+                if (pos < thr)
+                {
+
+                    rnk--;
+                    ri::ulint j = this->bwt.select(rnk, c);
+                    ri::ulint run_of_j = this->bwt.run_of_position(j);
+                    sample = this->samples_last[run_of_j];
+
+                    next_pos = j;
+                }
+
+                pos = next_pos;
+            }
+
+            ms_pointers[m - i - 1] = sample;
+
+            // Perform one backward step
+            pos = LF(pos, c);
+        }
+
+        return ms_pointers;
+    }
     // // From r-index
     // vector<ulint> build_F(std::ifstream &ifs)
     // {

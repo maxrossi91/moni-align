@@ -98,18 +98,18 @@ public:
         runs_bv.push_back(false);
 
         //now compact structures
-        assert(runs_bv.size() == n);
+        assert(runs_bv.size() == this->n);
         ulint t = 0;
         for (ulint i = 0; i < 256; ++i)
             t += runs_per_letter_bv[i].size();
-        assert(t == n);
+        assert(t == this->n);
         this->runs = sparse_bitvector_t(runs_bv);
         //a fast direct array: char -> bitvector.
         this->runs_per_letter = vector<sparse_bitvector_t>(256);
         for (ulint i = 0; i < 256; ++i)
             this->runs_per_letter[i] = sparse_bitvector_t(runs_per_letter_bv[i]);
         this->run_heads = string_t(run_heads_s);
-        assert(this->run_heads.size() == R);
+        assert(this->run_heads.size() == this->R);
     }
 
     size_t number_of_runs_of_letter(uint8_t c)
