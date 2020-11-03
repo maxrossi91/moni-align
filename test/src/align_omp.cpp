@@ -159,10 +159,12 @@ public:
       size_t len = mem_len + 200;
       ra.expandSubstr(left_occ, len, str);
 
+      size_t min_score = 20 + 8 * log(read->seq.l);
+
       // Declares a default Aligner
       StripedSmithWaterman::Aligner aligner;
       // Declares a default filter
-      StripedSmithWaterman::Filter filter;
+      StripedSmithWaterman::Filter filter(true, true, min_score, 32767);
       // Declares an alignment that stores the result
       StripedSmithWaterman::Alignment alignment;
       // Aligns the query to the ref
@@ -173,7 +175,8 @@ public:
       alignment.ref_end += left_occ;
       alignment.ref_end_next_best += left_occ;
 
-      ssw_write_sam(alignment,"human",read,strand,out);
+      if(alignment.sw_score >= min_score)
+        ssw_write_sam(alignment,"human",read,strand,out);
 
       aligned_reads++;
 
