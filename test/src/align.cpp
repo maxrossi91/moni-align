@@ -569,17 +569,24 @@ main(int argc, char *const argv[])
 
   size_t n_reads = 0;
 
+  // Open out file
+  std::string filename = args.patterns + ".sam";
+  FILE *sam_fd;
+
+  if ((sam_fd = fopen(filename.c_str(), "w")) == nullptr)
+    error("open() file " + filename + " failed");
 
   fp = gzopen(args.patterns.c_str(), "r");
   seq = kseq_init(fp);
   while ((l = kseq_read(seq)) >= 0)
   {
-    aligner.align(seq,stdout);
+    aligner.align(seq,sam_fd);
     n_reads++;
   }
 
   kseq_destroy(seq);
   gzclose(fp);
+  fclose(sam_fd);
 
   t_insert_end = std::chrono::high_resolution_clock::now();
 
