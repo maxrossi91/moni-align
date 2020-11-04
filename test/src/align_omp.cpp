@@ -86,7 +86,7 @@ public:
 
   aligner_t(std::string filename, size_t min_len_ = 50) : min_len(min_len_)
   {
-    verbose("Building the matching statistics index");
+    verbose("Loading the matching statistics index");
     std::chrono::high_resolution_clock::time_point t_insert_start = std::chrono::high_resolution_clock::now();
 
     std::string filename_ms = filename + ".ms";
@@ -100,7 +100,7 @@ public:
     verbose("Memory peak: ", malloc_count_peak());
     verbose("Elapsed time (s): ", std::chrono::duration<double, std::ratio<1>>(t_insert_end - t_insert_start).count());
 
-    verbose("Building random access");
+    verbose("Loading random access");
     t_insert_start = std::chrono::high_resolution_clock::now();
 
     std::string filename_slp = filename + ".slp";
@@ -112,17 +112,19 @@ public:
 
     t_insert_end = std::chrono::high_resolution_clock::now();
 
-    verbose("Matching statistics index construction complete");
+    verbose("Matching statistics index loading complete");
     verbose("Memory peak: ", malloc_count_peak());
     verbose("Elapsed time (s): ", std::chrono::duration<double, std::ratio<1>>(t_insert_end - t_insert_start).count());
   }
 
 
-  void align(kseq_t *read, FILE* out)
+  bool align(kseq_t *read, FILE* out)
   {
     size_t mem_pos = 0;
     size_t mem_len = 0;
     size_t mem_idx = 0;
+
+    bool aligned = false;
 
     auto pointers = ms.query(read->seq.s, read->seq.l);
     std::vector<size_t> lengths(pointers.size());
@@ -156,7 +158,7 @@ public:
 
       // Extract the context from the reference
       size_t left_occ = (mem_pos > 100 ? mem_pos - 100 : 0);
-      size_t len = mem_len + 200;
+      size_t len = mem_len + 100 + (mem_pos > 100 ? 100 : 100 - mem_pos);
       ra.expandSubstr(left_occ, len, str);
 
       size_t min_score = 20 + 8 * log(read->seq.l);
@@ -164,7 +166,8 @@ public:
       // Declares a default Aligner
       StripedSmithWaterman::Aligner aligner;
       // Declares a default filter
-      StripedSmithWaterman::Filter filter(true, true, min_score, 32767);
+      StripedSmithWaterman::Filter filter;
+      // StripedSmithWaterman::Filter filter(true, true, min_score, 32767);
       // Declares an alignment that stores the result
       StripedSmithWaterman::Alignment alignment;
       // Aligns the query to the ref
@@ -178,10 +181,12 @@ public:
       if(alignment.sw_score >= min_score)
         ssw_write_sam(alignment,"human",read,strand,out);
 
-      aligned_reads++;
+      // aligned_reads++;
+      aligned = true;
 
       delete str;
     }
+    return aligned;
   }
 
   size_t get_aligned_reads()
@@ -270,12 +275,17 @@ main(int argc, char *const argv[])
   verbose("Processing patterns");
   t_insert_start = std::chrono::high_resolution_clock::now();
   
-  std::vector<size_t> n_reads_v(64, 0);
-  std::vector<size_t> aligned_reads_v(64, 0);
+  size_t n_reads = 0;
+  size_t n_aligned_reads = 0;
 
+// #pragma omp parallel
+// {
 #pragma omp parallel for schedule(static)
-  for(size_t i = 0; i < 64; ++i)
+  for(size_t i = 1; i <= 64; ++i)
   {
+    size_t n_reads_p = 0;
+    size_t n_aligned_reads_p = 0;
+
     gzFile fp;
     kseq_t *seq;
     int l;
@@ -293,27 +303,32 @@ main(int argc, char *const argv[])
     seq = kseq_init(fp);
     while ((l = kseq_read(seq)) >= 0)
     {
-      aligner.align(seq,sam_fd);
-      n_reads_v[i]++;
+      if(aligner.align(seq,sam_fd))
+        n_aligned_reads_p ++;
+      n_reads_p++;
+
+      // std::cout << "\rSequenced patterns on block " << i << " : "
+      //           << n_reads_p << std::flush;
     }
 
-    aligned_reads_v[i] = aligner.get_aligned_reads();
-
+    verbose("Number of aligned reads block ", i, " : ", n_aligned_reads_p, "/", n_reads_p);
     kseq_destroy(seq);
     gzclose(fp);
     fclose(sam_fd);
 
   }
 
-  // Count the total number of reads.
-  size_t n_reads = 0;
-  for(auto i:n_reads_v)
-    n_reads += i;
-  
-  // Count the total number of aligned reads
-  size_t aligned_reads = 0;
-  for(auto i:aligned_reads_v)
-    aligned_reads += i;
+// #pragma omp critical
+//   {
+//     // Count the total number of reads.
+//     n_reads += n_reads_p;
+//     // Count the total number of aligned reads
+//     n_aligned_reads += n_aligned_reads_p;
+//   }
+// }
+
+
+
 
   // TODO: Merge the SAM files.
 
@@ -324,7 +339,7 @@ main(int argc, char *const argv[])
 
   auto mem_peak = malloc_count_peak();
   verbose("Memory peak: ", malloc_count_peak());
-  verbose("Number of aligned reads: ", aligner.get_aligned_reads(), "/", n_reads);
+  verbose("Number of aligned reads: ", n_aligned_reads, "/", n_reads);
 
   size_t space = 0;
   if (args.memo)
