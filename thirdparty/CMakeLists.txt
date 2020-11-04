@@ -18,6 +18,21 @@ if(NOT malloc_count_POPULATED)
   target_include_directories(memprofile PUBLIC "${malloc_count_SOURCE_DIR}")
 endif()
 
+  ## Add klib
+FetchContent_Declare(
+  klib
+  GIT_REPOSITORY https://github.com/attractivechaos/klib
+)
+
+FetchContent_GetProperties(klib)
+if(NOT klib_POPULATED)
+  FetchContent_Populate(klib)
+  
+  # add_subdirectory(${klib_SOURCE_DIR} ${klib_BINARY_DIR} EXCLUDE_FROM_ALL)
+  add_library(klib INTERFACE)
+
+  target_include_directories(klib INTERFACE ${klib_SOURCE_DIR})
+endif()
 
 ## Add Big-BWT
 FetchContent_Declare(
@@ -236,26 +251,75 @@ endif()
 
 ## Add SSW
 FetchContent_Declare(
-  ssw
-  GIT_REPOSITORY https://github.com/mengyao/Complete-Striped-Smith-Waterman-Library
-  GIT_TAG master
+    ssw
+    GIT_REPOSITORY https://github.com/mengyao/Complete-Striped-Smith-Waterman-Library
+    GIT_TAG master
   )
   
   FetchContent_GetProperties(ssw)
   if(NOT ssw_POPULATED)
-  FetchContent_Populate(ssw)
-  # execute_process(COMMAND make
-  #       RESULT_VARIABLE result
-  #       WORKING_DIRECTORY ${ssw_SOURCE_DIR} )
-  # if(result)
-  #     message(FATAL_ERROR "CMake step for ssw failed: ${result}")
-  # endif()
+    FetchContent_Populate(ssw)
+    # execute_process(COMMAND make
+    #       RESULT_VARIABLE result
+    #       WORKING_DIRECTORY ${ssw_SOURCE_DIR} )
+    # if(result)
+    #     message(FATAL_ERROR "CMake step for ssw failed: ${result}")
+    # endif()
+    
+    add_library(ssw OBJECT ${ssw_SOURCE_DIR}/src/ssw_cpp.cpp ${ssw_SOURCE_DIR}/src/ssw.c)
+    target_include_directories(ssw PUBLIC ${ssw_SOURCE_DIR}/src)
+  endif()
+
+# ## Add edlib
+# FetchContent_Declare(
+#     edlib
+#     GIT_REPOSITORY https://github.com/Martinsos/edlib.git
+#     GIT_TAG master
+#   )
   
-  add_library(ssw OBJECT ${ssw_SOURCE_DIR}/src/ssw_cpp.cpp ${ssw_SOURCE_DIR}/src/ssw.c)
-  target_include_directories(ssw PUBLIC ${ssw_SOURCE_DIR}/src)
+#   FetchContent_GetProperties(edlib)
+#   if(NOT edlib_POPULATED)
+#     FetchContent_Populate(edlib)
+#     execute_process(COMMAND make
+#           RESULT_VARIABLE result
+#           WORKING_DIRECTORY ${edlib_SOURCE_DIR} )
+#     if(result)
+#         message(FATAL_ERROR "CMake step for edlib failed: ${result}")
+#     endif()
+#   endif()
+
+
+## Add Ksw2
+FetchContent_Declare(
+    ksw2
+    GIT_REPOSITORY https://github.com/lh3/ksw2
+    GIT_TAG master
+  )
+  
+  FetchContent_GetProperties(ksw2)
+  if(NOT ksw2_POPULATED)
+    FetchContent_Populate(ksw2)
+    # execute_process(COMMAND make
+    #       RESULT_VARIABLE result
+    #       WORKING_DIRECTORY ${ksw2_SOURCE_DIR} )
+    # if(result)
+    #     message(FATAL_ERROR "CMake step for ksw2 failed: ${result}")
+    # endif()
+    
+    add_library(ksw2 OBJECT ${ksw2_SOURCE_DIR}/kalloc.c 
+                            ${ksw2_SOURCE_DIR}/ksw2_gg.c 
+                            ${ksw2_SOURCE_DIR}/ksw2_gg2.c 
+                            ${ksw2_SOURCE_DIR}/ksw2_gg2_sse.c 
+                            ${ksw2_SOURCE_DIR}/ksw2_extz.c 
+                            ${ksw2_SOURCE_DIR}/ksw2_extz2_sse.c
+                            ${ksw2_SOURCE_DIR}/ksw2_extd.c 
+                            ${ksw2_SOURCE_DIR}/ksw2_extd2_sse.c 
+                            ${ksw2_SOURCE_DIR}/ksw2_extf2_sse.c 
+                            ${ksw2_SOURCE_DIR}/ksw2_exts2_sse.c)
+    target_include_directories(ksw2 PUBLIC ${ksw2_SOURCE_DIR}/src)
   endif()
   
-  
+
   # ## Add tlx
   # FetchContent_Declare(
   #   tlx

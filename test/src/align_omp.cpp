@@ -179,10 +179,12 @@ public:
       alignment.ref_end_next_best += left_occ;
 
       if(alignment.sw_score >= min_score)
+      {
         ssw_write_sam(alignment,"human",read,strand,out);
+        aligned = true;
+      }
 
       // aligned_reads++;
-      aligned = true;
 
       delete str;
     }
@@ -266,7 +268,7 @@ main(int argc, char *const argv[])
   verbose("Construction of the aligner");
   std::chrono::high_resolution_clock::time_point t_insert_start = std::chrono::high_resolution_clock::now();
 
-  aligner_t aligner(args.filename, 25);
+  aligner_t aligner(args.filename, args.l);
 
   std::chrono::high_resolution_clock::time_point t_insert_end = std::chrono::high_resolution_clock::now();
   verbose("Memory peak: ", malloc_count_peak());
