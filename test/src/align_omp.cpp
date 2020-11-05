@@ -38,6 +38,8 @@
 
 #include <omp.h>
 
+#include <libgen.h>
+
 
 typedef std::pair<std::string, std::vector<uint8_t>> pattern_t;
 
@@ -286,6 +288,8 @@ main(int argc, char *const argv[])
   size_t n_reads = 0;
   size_t n_aligned_reads = 0;
 
+  std::string base_name = basename(args.filename.data());
+
 // #pragma omp parallel
 // {
 #pragma omp parallel for schedule(static)
@@ -301,7 +305,7 @@ main(int argc, char *const argv[])
     std::string file_path = args.patterns + "_" + std::to_string(i) + ".fa";
 
     // Open out file
-    std::string filename = file_path + "_" + args.filename + "_" +std::to_string(args.l) +  ".sam";
+    std::string filename = file_path + "_" + base_name + "_" +std::to_string(args.l) +  ".sam";
     FILE *sam_fd;
 
     if ((sam_fd = fopen(filename.c_str(), "w")) == nullptr)
