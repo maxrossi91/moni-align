@@ -202,6 +202,7 @@ public:
       // aligned_reads++;
 
       delete str;
+      delete seq;
     }
     return aligned;
   }

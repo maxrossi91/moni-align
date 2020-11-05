@@ -87,7 +87,7 @@ target_compile_options(align_omp_mems PUBLIC "-std=c++17")
 target_compile_options(align_omp_mems PUBLIC "-fopenmp")
 
 add_executable(align_ksw2_omp align_ksw2_omp.cpp)
-target_link_libraries(align_ksw2_omp common sdsl divsufsort divsufsort64 ri ksw2 gomp)
+target_link_libraries(align_ksw2_omp common sdsl malloc_count divsufsort divsufsort64 ri ksw2 gomp)
 target_include_directories(align_ksw2_omp PUBLIC    "../../include/ms" 
                                             "../../include/common" 
                                             "${shaped_slp_SOURCE_DIR}" 
