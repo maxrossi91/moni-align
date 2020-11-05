@@ -52,6 +52,7 @@ endif()
 
 add_subdirectory(include)
 add_subdirectory(test/src)
+add_subdirectory(utils)
 # add_subdirectory(benchmarks/src)
 
 configure_file(${PROJECT_SOURCE_DIR}/pipeline/moni ${PROJECT_BINARY_DIR}/moni)

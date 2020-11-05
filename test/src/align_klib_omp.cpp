@@ -154,9 +154,10 @@ public:
 
       size_t min_score = 20 + 8 * log(read->seq.l);
 
+      uint8_t* seq = (uint8_t*)malloc(read->seq.l);
       // Convert A,C,G,T,N into 0,1,2,3,4
       for (i = 0; i < (int)read->seq.l; ++i)
-        read->seq.s[i] = seq_nt4_table[(int)read->seq.s[i]];
+        seq[i] = seq_nt4_table[(int)read->seq.s[i]];
 
       for (i = 0; i < (int)len; ++i)
         str[i] = seq_nt4_table[(int)str[i]];
@@ -169,7 +170,7 @@ public:
       kswq_t *q = 0;
       kswr_t r;
       
-      r = ksw_align(read->seq.l, (uint8_t *)read->seq.s, len, (uint8_t *)str, 5, mat, gapo, gape, xtra, &q);
+      r = ksw_align(read->seq.l, (uint8_t *)seq, len, (uint8_t *)str, 5, mat, gapo, gape, xtra, &q);
       // score = ksw_global(read->seq.l, (uint8_t *)read->seq.s, len, (uint8_t *)str, 5, mat, gapo, gape, w, &n_cigar, &cigar);
 
       // if(r.score > 0)
@@ -188,9 +189,9 @@ public:
       // aligner.Align(read->seq.s, str, len, filter, &alignment, maskLen);
 
       // // Update alignment method
-      // alignment.ref_begin += left_occ;
-      // alignment.ref_end += left_occ;
-      // alignment.ref_end_next_best += left_occ;
+      r.tb += left_occ;
+      r.te += left_occ;
+      r.te2 += left_occ;
 
       if(r.score >= min_score)
       {
