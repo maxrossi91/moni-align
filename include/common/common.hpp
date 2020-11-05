@@ -333,7 +333,7 @@ struct Args
   bool csv   = false; // print stats on stderr in csv format
   bool rle   = false; // outpt RLBWT
   std::string patterns = ""; // path to patterns file
-  size_t l = 75; // minumum MEM length
+  size_t l = 25; // minumum MEM length
   bool is_fasta = false; // read a fasta file
 };
 
@@ -351,7 +351,7 @@ void parseArgs(int argc, char *const argv[], Args &arg)
                     "  fasta: [boolean] - the input file is a fasta file. (def. false)\n" +
                     "    rle: [boolean] - output run length encoded BWT. (def. false)\n" +
                     "pattens: [string]  - path to patterns file.\n" +
-                    "    len: [integer] - minimum MEM lengt (def. 75)\n" +
+                    "    len: [integer] - minimum MEM lengt (def. 25)\n" +
                     "    csv: [boolean] - print the stats in csv form on strerr. (def. false)\n");
 
   std::string sarg;
