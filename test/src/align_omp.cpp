@@ -154,16 +154,17 @@ public:
     if (mem_len >= min_len)
     {
       uint8_t strand = 0;
-      char *str = (char *)malloc(400);
 
       int32_t maskLen = read->seq.l / 2;
       maskLen = maskLen < 15 ? 15 : maskLen;
 
-      size_t ext_l = (read->seq.l - mem_len)*2;
+      size_t ext_l = (read->seq.l - mem_len)*3;
 
       // Extract the context from the reference
       size_t left_occ = (mem_pos > ext_l ? mem_pos - ext_l : 0);
       size_t len = mem_len + ext_l + (mem_pos > ext_l ? ext_l : ext_l - mem_pos);
+
+      char *str = (char *)malloc(len + 10);
       ra.expandSubstr(left_occ, len, str);
 
       size_t min_score = 20 + 8 * log(read->seq.l);
@@ -300,7 +301,7 @@ main(int argc, char *const argv[])
     std::string file_path = args.patterns + "_" + std::to_string(i) + ".fa";
 
     // Open out file
-    std::string filename = file_path + "_" + std::to_string(args.l) +  ".sam";
+    std::string filename = file_path + "_" + args.filename + "_" +std::to_string(args.l) +  ".sam";
     FILE *sam_fd;
 
     if ((sam_fd = fopen(filename.c_str(), "w")) == nullptr)
