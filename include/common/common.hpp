@@ -333,6 +333,7 @@ struct Args
   bool csv   = false; // print stats on stderr in csv format
   bool rle   = false; // outpt RLBWT
   std::string patterns = ""; // path to patterns file
+  size_t l = 75; // minumum MEM length
   bool is_fasta = false; // read a fasta file
 };
 
@@ -342,7 +343,7 @@ void parseArgs(int argc, char *const argv[], Args &arg)
   extern char *optarg;
   extern int optind;
 
-  std::string usage("usage: " + std::string(argv[0]) + " infile [-s store] [-m memo] [-c csv] [-p patterns] [-f fasta] [-r rle]\n\n" +
+  std::string usage("usage: " + std::string(argv[0]) + " infile [-s store] [-m memo] [-c csv] [-p patterns] [-f fasta] [-r rle] [-l len]\n\n" +
                     "Computes the pfp data structures of infile, provided that infile.parse, infile.dict, and infile.occ exists.\n" +
                     "  wsize: [integer] - sliding window size (def. 10)\n" +
                     "  store: [boolean] - store the data structure in infile.pfp.ds. (def. false)\n" +
@@ -350,10 +351,11 @@ void parseArgs(int argc, char *const argv[], Args &arg)
                     "  fasta: [boolean] - the input file is a fasta file. (def. false)\n" +
                     "    rle: [boolean] - output run length encoded BWT. (def. false)\n" +
                     "pattens: [string]  - path to patterns file.\n" +
+                    "    len: [integer] - minimum MEM lengt (def. 75)\n" +
                     "    csv: [boolean] - print the stats in csv form on strerr. (def. false)\n");
 
   std::string sarg;
-  while ((c = getopt(argc, argv, "w:smcfrhp:")) != -1)
+  while ((c = getopt(argc, argv, "w:smcfl:rhp:")) != -1)
   {
     switch (c)
     {
@@ -375,6 +377,10 @@ void parseArgs(int argc, char *const argv[], Args &arg)
       break;
     case 'p':
       arg.patterns.assign(optarg);
+      break;
+    case 'l':
+      sarg.assign(optarg);
+      arg.l = stoi(sarg);
       break;
     case 'f':
       arg.is_fasta = true;
