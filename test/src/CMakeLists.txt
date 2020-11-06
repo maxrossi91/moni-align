@@ -100,14 +100,14 @@ target_compile_options(align_ksw2_omp PUBLIC "-std=c++17")
 target_compile_options(align_ksw2_omp PUBLIC "-fopenmp")
 
 add_executable(align_klib_omp align_klib_omp.cpp ${klib_SOURCE_DIR}/ksw.c)
-target_link_libraries(align_klib_omp common malloc_count sdsl divsufsort divsufsort64 ri klib gomp)
+target_link_libraries(align_klib_omp common malloc_count sdsl divsufsort divsufsort64 ri klib ssw gomp)
 target_include_directories(align_klib_omp PUBLIC    "../../include/ms" 
                                             "../../include/common" 
                                             "${shaped_slp_SOURCE_DIR}" 
                                             "${FOLCA_SOURCE_DIR}" 
                                             "${SUX_SOURCE_DIR}/function" 
                                             "${SUX_SOURCE_DIR}/support"
-                                            "${ssw_SOURCE_DIR}"
+                                            "${ssw_SOURCE_DIR}/src"
                                             "${klib_SOURCE_DIR}"
                                         )
 target_compile_options(align_klib_omp PUBLIC "-std=c++17")

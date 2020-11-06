@@ -35,6 +35,7 @@
 #include <SelectType.hpp>
 
 #include <ksw.h>
+#include <ssw.h>
 
 #include <omp.h>
 
@@ -61,6 +62,7 @@ public:
 
     ifstream fs_ms(filename_ms);
     ms.load(fs_ms);
+    fs_ms.close();
 
     std::chrono::high_resolution_clock::time_point t_insert_end = std::chrono::high_resolution_clock::now();
 
@@ -75,6 +77,7 @@ public:
 
     ifstream fs(filename_slp);
     ra.load(fs);
+    fs.close();
 
     n = ra.getLen();
 
@@ -158,14 +161,14 @@ public:
       // Convert A,C,G,T,N into 0,1,2,3,4
       for (i = 0; i < (int)read->seq.l; ++i)
         seq[i] = seq_nt4_table[(int)read->seq.s[i]];
+      // for (i = 0; i < (int)read->seq.l; ++i)
+      //   read->seq.s[i] = seq_nt4_table[(int)read->seq.s[i]];
 
       for (i = 0; i < (int)len; ++i)
         str[i] = seq_nt4_table[(int)str[i]];
 
       int score;
 
-      int n_cigar;
-      uint32_t * cigar;
 
       kswq_t *q = 0;
       kswr_t r;
@@ -173,11 +176,39 @@ public:
       r = ksw_align(read->seq.l, (uint8_t *)seq, len, (uint8_t *)str, 5, mat, gapo, gape, xtra, &q);
       // score = ksw_global(read->seq.l, (uint8_t *)read->seq.s, len, (uint8_t *)str, 5, mat, gapo, gape, w, &n_cigar, &cigar);
 
+      int n_cigar;
+      uint32_t * cigar;
+
+      size_t new_seq_len = r.qe - r.qb;
+      size_t new_ref_len = r.te - r.tb;
+      uint8_t *new_seq = (uint8_t *)(seq + r.qb);
+      // uint8_t *new_seq = (uint8_t *)(read->seq.s + r.qb);
+      uint8_t *new_ref = (uint8_t *)(str + r.tb);
+
+      score = ksw_global(new_seq_len, (uint8_t *) new_seq, new_ref_len, new_ref, 5, mat, gapo, gape, w, &n_cigar, &cigar);
+
+      std::string cig;
+
+      // for(size_t i = 0; i < n_cigar; ++i)
+      // {
+      //   // for (i = 0; i < ez->n_cigar; ++i)
+      //   //   printf("%d%c", ez->cigar[i] >> 4, "MID"[ez->cigar[i] & 0xf]);
+      //   cig += std::to_string(cigar[i] >> 4) + "MID"[cigar[i] & 0xf];
+      // }
+
+      size_t mismatch = mark_mismatch(r.tb, r.qb, r.qe, (int8_t *)str, (int8_t *)seq, read->seq.l, &cigar, &n_cigar);
+      for (c = 0; c < (n_cigar); ++c)
+      {
+        char letter = cigar_int_to_op(cigar[c]);
+        uint32_t length = cigar_int_to_len(cigar[c]);
+        // fprintf(out, "%lu%c", (unsigned long)length, letter);
+        cig += std::to_string((unsigned long)length) + letter;
+      }
+
       // if(r.score > 0)
       //   printf("%s\t%d\t%d\t%s\t%d\t%d\t%d\t%d\t%d\n", "human", r.tb, r.te + 1, read->name.s, r.qb, r.qe + 1, r.score, r.score2, r.te2);
       //   // std::cout << "\rCurrent score... "<< r.score << std::flush;
 
-      free(q);
       // // Declares a default Aligner
       // StripedSmithWaterman::Aligner aligner;
       // // Declares a default filter
@@ -195,12 +226,13 @@ public:
 
       if(r.score >= min_score)
       {
-        ssw_write_sam(r,"human",read,strand,out);
+        ssw_write_sam(r,"human",read,strand,out,cig,mismatch);
         aligned = true;
       }
 
       // aligned_reads++;
-
+      free(cigar);
+      free(q);
       delete str;
       delete seq;
     }
@@ -217,7 +249,9 @@ public:
                             const char *ref_seq_name,
                             const kseq_t *read,
                             int8_t strand,
-                            FILE *out) // 0: forward aligned ; 1: reverse complement aligned
+                            FILE *out,
+                            std::string cigar,
+                            size_t mismatches) // 0: forward aligned ; 1: reverse complement aligned
   {
     // Sam format output
     fprintf(out, "%s\t", read->name.s);
@@ -235,15 +269,16 @@ public:
         fprintf(out, "0\t");
       // TODO: Find the correct reference name.
       fprintf(out, "%s\t%d\t%d\t", ref_seq_name, a.tb + 1, mapq);
-      // mismatch = mark_mismatch(a.ref_begin, a.query_begin, a.query_end, ref_num, read_num, read->seq.l, &a->cigar, &a->cigarLen);
-      // for (c = 0; c < a->cigarLen; ++c)
+      // size_t mismatch = mark_mismatch(a.tb, a.qb, a.qe, (int8_t*)ref, (int8_t*)read_, read->seq.l, cigar, cigarLen);
+      // for (c = 0; c < (*cigarLen); ++c)
       // {
-      //   char letter = cigar_int_to_op(a->cigar[c]);
-      //   uint32_t length = cigar_int_to_len(a->cigar[c]);
+      //   char letter = cigar_int_to_op((*cigar)[c]);
+      //   uint32_t length = cigar_int_to_len((*cigar)[c]);
       //   fprintf(out, "%lu%c", (unsigned long)length, letter);
       // }
-      fprintf(out, "\t*\t");
+      // fprintf(out, "\t*\t");
       // fprintf(out, "%s", a.cigar_string.c_str());
+      fprintf(out, "%s", cigar.c_str());
       fprintf(out, "\t*\t0\t0\t");
       fprintf(out, "%s", read->seq.s);
       fprintf(out, "\t");
@@ -257,6 +292,7 @@ public:
       else
         fprintf(out, "*");
       fprintf(out, "\tAS:i:%d", a.score);
+      fprintf(out, "\tNM:i:%d\t", mismatches);
       // fprintf(out, "\tNM:i:%d\t", a.mismatches);
       if (a.score2 > 0)
         fprintf(out, "ZS:i:%d\n", a.score2);
@@ -293,7 +329,7 @@ protected:
       4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4};
 
   int c, sa = 2, sb = 2, i, j, k, max_rseq = 0;
-  int w = 400;
+  int w = 4000;
   int8_t mat[25];
   int gapo = 5, gape = 2, minsc = 0, xtra = KSW_XSTART;
   uint8_t *rseq = 0;
@@ -326,7 +362,7 @@ main(int argc, char *const argv[])
 
 // #pragma omp parallel
 // {
-#pragma omp parallel for schedule(static)
+// #pragma omp parallel for schedule(static)
   for(size_t i = 1; i <= 64; ++i)
   {
     size_t n_reads_p = 0;
@@ -349,7 +385,8 @@ main(int argc, char *const argv[])
     seq = kseq_init(fp);
     while ((l = kseq_read(seq)) >= 0)
     {
-      if(aligner.align(seq,sam_fd,0))
+      // if(aligner.align(seq,sam_fd,0))
+      if(aligner.align(seq,stdout,0))
         n_aligned_reads_p ++;
       n_reads_p++;
 
