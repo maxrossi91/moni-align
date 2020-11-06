@@ -337,6 +337,41 @@ protected:
   bool forward_only;
 };
 
+char complement(char n)
+{
+  switch (n)
+  {
+  case 'A':
+    return 'T';
+  case 'T':
+    return 'A';
+  case 'G':
+    return 'C';
+  case 'C':
+    return 'G';
+  default:
+    return n;
+  }
+}
+
+void copy_kstring_t(kstring_t &l, kstring_t &r)
+{
+  l.l = r.l;
+  l.m = r.m;
+  l.s = (char *)malloc(l.m);
+  for(size_t i =0; i < r.l; ++i)
+    l.s[i] = r.s[i];
+}
+void copy_kseq_t(kseq_t *l, kseq_t *r)
+{
+  copy_kstring_t(l->name,r->name);
+  copy_kstring_t(l->comment,r->comment);
+  copy_kstring_t(l->seq,r->seq);
+  copy_kstring_t(l->qual,r->qual);
+  l->last_char = r->last_char;
+}
+
+
 int
 main(int argc, char *const argv[])
 {
@@ -370,6 +405,7 @@ main(int argc, char *const argv[])
 
     gzFile fp;
     kseq_t *seq;
+    kseq_t *rev;
     int l;
 
     std::string file_path = args.patterns + "_" + std::to_string(i) + ".fa";
@@ -386,16 +422,34 @@ main(int argc, char *const argv[])
     while ((l = kseq_read(seq)) >= 0)
     {
       // if(aligner.align(seq,sam_fd,0))
-      if(aligner.align(seq,stdout,0))
-        n_aligned_reads_p ++;
+      bool fwd_align = aligner.align(seq, sam_fd, 0);
+      
+      //copy seq
+      copy_kseq_t(rev,seq);
+
+      for(size_t i = 0; i < seq->seq.l; ++i)
+        rev->seq.s[i] = complement(seq->seq.s[seq->seq.l - i - 1]);
+
+      if (rev->seq.m > rev->seq.l)
+        rev->seq.s[rev->seq.l] = 0;
+
+      bool rev_align = aligner.align(rev, sam_fd, 1);
+
+      if (fwd_align or rev_align)
+        n_aligned_reads_p++;
       n_reads_p++;
 
+      free(rev->name.s);
+      free(rev->comment.s);
+      free(rev->seq.s);
+      free(rev->qual.s);
       // std::cout << "\rSequenced patterns on block " << i << " : "
       //           << n_reads_p << std::flush;
     }
 
     verbose("Number of aligned reads block ", i, " : ", n_aligned_reads_p, "/", n_reads_p);
     kseq_destroy(seq);
+    kseq_destroy(rev);
     gzclose(fp);
     fclose(sam_fd);
 
