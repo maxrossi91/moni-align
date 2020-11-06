@@ -357,7 +357,7 @@ char complement(char n)
 void copy_kstring_t(kstring_t &l, kstring_t &r)
 {
   l.l = r.l;
-  l.m = r.m;
+  l.m = max(r.m,r.l);
   l.s = (char *)malloc(l.m);
   for(size_t i =0; i < r.l; ++i)
     l.s[i] = r.s[i];
@@ -398,17 +398,18 @@ main(int argc, char *const argv[])
 // #pragma omp parallel
 // {
 // #pragma omp parallel for schedule(static)
-  for(size_t i = 1; i <= 64; ++i)
-  {
+  // for(size_t i = 1; i <= 64; ++i)
+  // {
+    size_t i = 0;
     size_t n_reads_p = 0;
     size_t n_aligned_reads_p = 0;
 
     gzFile fp;
     kseq_t *seq;
-    kseq_t *rev;
+    kseq_t rev;
     int l;
 
-    std::string file_path = args.patterns + "_" + std::to_string(i) + ".fa";
+    std::string file_path = args.patterns;// + "_" + std::to_string(i) + ".fa";
 
     // Open out file
     std::string filename = file_path + "_" + base_name + "_" + std::to_string(args.l) + ".sam";
@@ -421,39 +422,45 @@ main(int argc, char *const argv[])
     seq = kseq_init(fp);
     while ((l = kseq_read(seq)) >= 0)
     {
+      // std::cout<< "qui" << std::endl;
       // if(aligner.align(seq,sam_fd,0))
       bool fwd_align = aligner.align(seq, sam_fd, 0);
       
+      // std::cout<< "qui1" << std::endl;
       //copy seq
-      copy_kseq_t(rev,seq);
+      copy_kseq_t(&rev,seq);
+
+      // std::cout<< "qui2" << std::endl;
 
       for(size_t i = 0; i < seq->seq.l; ++i)
-        rev->seq.s[i] = complement(seq->seq.s[seq->seq.l - i - 1]);
+        rev.seq.s[i] = complement(seq->seq.s[seq->seq.l - i - 1]);
 
-      if (rev->seq.m > rev->seq.l)
-        rev->seq.s[rev->seq.l] = 0;
+      if (rev.seq.m > rev.seq.l)
+        rev.seq.s[rev.seq.l] = 0;
 
-      bool rev_align = aligner.align(rev, sam_fd, 1);
+      // std::cout<< "qui3" << std::endl;
+      bool rev_align = aligner.align(&rev, sam_fd, 1);
+
 
       if (fwd_align or rev_align)
         n_aligned_reads_p++;
       n_reads_p++;
 
-      free(rev->name.s);
-      free(rev->comment.s);
-      free(rev->seq.s);
-      free(rev->qual.s);
+      free(rev.name.s);
+      free(rev.comment.s);
+      free(rev.seq.s);
+      free(rev.qual.s);
       // std::cout << "\rSequenced patterns on block " << i << " : "
       //           << n_reads_p << std::flush;
     }
 
     verbose("Number of aligned reads block ", i, " : ", n_aligned_reads_p, "/", n_reads_p);
     kseq_destroy(seq);
-    kseq_destroy(rev);
+    // free(rev);
     gzclose(fp);
     fclose(sam_fd);
 
-  }
+  // }
 
 // #pragma omp critical
 //   {
