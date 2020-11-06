@@ -357,9 +357,9 @@ char complement(char n)
 void copy_kstring_t(kstring_t &l, kstring_t &r)
 {
   l.l = r.l;
-  l.m = max(r.m,r.l);
+  l.m = r.m;
   l.s = (char *)malloc(l.m);
-  for(size_t i =0; i < r.l; ++i)
+  for(size_t i =0; i < r.m; ++i)
     l.s[i] = r.s[i];
 }
 void copy_kseq_t(kseq_t *l, kseq_t *r)
