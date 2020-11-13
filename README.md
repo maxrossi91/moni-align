@@ -1,13 +1,14 @@
 # moni
-A Read Aligner with Multi-Genome References.
+A MEM-finder with Multi-Genome References.
 
 MONI index uses the prefix-free parsing of the text [2][3] to build the Burrows-Wheeler Transform (BWT) of the reference genomes, the suffix array (SA) samples at the beginning and at the end of each run of the BWT, and the threshold positions of [1]. 
 
 
 # Usage
 
+Construction of the index:
 ```
-usage: pfp_ds infile [-w wsize] [-p mod] [-t threads] [-kvfsm]
+usage: moni infile [-w wsize] [-p mod] [-t threads] [-kvfsm]
 infile - input file name.
     -w - sliding window size. (def. 10)
     -p - hash modulus. (def. 100)
@@ -17,6 +18,11 @@ infile - input file name.
     -f - read fasta.
     -s - store ds.
     -m - print memory usage.
+```
+
+Finding MEMs with extensions using the Smith-Waterman algorithm:
+```
+align infile -p reads
 ```
 
 # Example
