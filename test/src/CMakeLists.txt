@@ -127,3 +127,14 @@ target_include_directories(align_klib PUBLIC    "../../include/ms"
                                             "${bigbwt_SOURCE_DIR}"
                                         )
 target_compile_options(align_klib PUBLIC "-std=c++17")
+                                            
+add_executable(ms_stats ms_stats.cpp)
+target_link_libraries(ms_stats common sdsl divsufsort divsufsort64 malloc_count ri ssw)
+target_include_directories(ms_stats PUBLIC    "../../include/ms" 
+                                            "../../include/common" 
+                                            "${shaped_slp_SOURCE_DIR}" 
+                                            "${FOLCA_SOURCE_DIR}" 
+                                            "${SUX_SOURCE_DIR}/function" 
+                                            "${SUX_SOURCE_DIR}/support"
+                                        )
+target_compile_options(ms_stats PUBLIC "-std=c++17")

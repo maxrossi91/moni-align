@@ -238,6 +238,19 @@ public:
         return _query(pattern, m);
     }
 
+    void print_stats()
+    {
+        sdsl::nullstream ns;
+
+        verbose("Memory consumption (bytes).");
+        verbose("   terminator_position: ", sizeof(this->terminator_position));
+        verbose("                     F: ", my_serialize(this->F, ns));
+        verbose("                   bwt: ", this->bwt.serialize(ns));
+        verbose("          samples_last: ", this->samples_last.serialize(ns));
+        verbose("            thresholds: ", my_serialize(thresholds, ns));
+        verbose("         samples_start: ", samples_start.serialize(ns));
+    }
+
     /*
      * \param i position in the BWT
      * \param c character
