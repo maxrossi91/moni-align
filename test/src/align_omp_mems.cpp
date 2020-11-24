@@ -93,6 +93,7 @@ public:
 
     ifstream fs_ms(filename_ms);
     ms.load(fs_ms);
+    fs_ms.close();
 
     std::chrono::high_resolution_clock::time_point t_insert_end = std::chrono::high_resolution_clock::now();
 
@@ -107,7 +108,8 @@ public:
 
     ifstream fs(filename_slp);
     ra.load(fs);
-
+    fs.close();
+    
     n = ra.getLen();
 
     t_insert_end = std::chrono::high_resolution_clock::now();

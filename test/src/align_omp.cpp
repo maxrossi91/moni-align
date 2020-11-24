@@ -204,6 +204,7 @@ public:
     return aligned_reads;
   }
 
+
   // Adapted from SSW
   static void ssw_write_sam(StripedSmithWaterman::Alignment &a,
                             const char *ref_seq_name,

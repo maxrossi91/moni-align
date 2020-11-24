@@ -179,8 +179,8 @@ public:
       int n_cigar;
       uint32_t * cigar;
 
-      size_t new_seq_len = r.qe - r.qb;
-      size_t new_ref_len = r.te - r.tb;
+      size_t new_seq_len = r.qe - r.qb  +1;
+      size_t new_ref_len = r.te - r.tb + 1;
       uint8_t *new_seq = (uint8_t *)(seq + r.qb);
       // uint8_t *new_seq = (uint8_t *)(read->seq.s + r.qb);
       uint8_t *new_ref = (uint8_t *)(str + r.tb);

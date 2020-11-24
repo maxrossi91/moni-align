@@ -138,3 +138,25 @@ target_include_directories(ms_stats PUBLIC    "../../include/ms"
                                             "${SUX_SOURCE_DIR}/support"
                                         )
 target_compile_options(ms_stats PUBLIC "-std=c++17")
+
+add_executable(thr_stats thr_stats.cpp)
+target_link_libraries(thr_stats common sdsl divsufsort divsufsort64 malloc_count ri ssw)
+target_include_directories(thr_stats PUBLIC    "../../include/ms" 
+                                            "../../include/common" 
+                                            "${shaped_slp_SOURCE_DIR}" 
+                                            "${FOLCA_SOURCE_DIR}" 
+                                            "${SUX_SOURCE_DIR}/function" 
+                                            "${SUX_SOURCE_DIR}/support"
+                                        )
+target_compile_options(thr_stats PUBLIC "-std=c++17")
+
+add_executable(thr_test thr_test.cpp)
+target_link_libraries(thr_test common sdsl divsufsort divsufsort64 malloc_count ri ssw)
+target_include_directories(thr_test PUBLIC    "../../include/ms" 
+                                            "../../include/common" 
+                                            "${shaped_slp_SOURCE_DIR}" 
+                                            "${FOLCA_SOURCE_DIR}" 
+                                            "${SUX_SOURCE_DIR}/function" 
+                                            "${SUX_SOURCE_DIR}/support"
+                                        )
+target_compile_options(thr_test PUBLIC "-std=c++17")

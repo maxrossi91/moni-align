@@ -95,7 +95,7 @@ public:
 
             this->n += length;
         }
-        runs_bv.push_back(false);
+        // runs_bv.push_back(false);
 
         //now compact structures
         assert(runs_bv.size() == this->n);
@@ -122,6 +122,23 @@ public:
         return this->runs_per_letter[c].size();
     }
 
+    // i-th run head
+    uint8_t head_of(const size_t i)
+    {
+        assert(i<this->R);
+        return this->run_heads[i];
+    }
+
+    // rank in chracters of the i-th run head
+    size_t head_rank(const size_t i, const uint8_t c)
+    {
+        assert(i < this->R);
+        size_t j = this->run_heads.rank(i, c);
+        if(j < 1)
+            return j;
+        assert(j<=i);
+        return this->runs_per_letter[c].select(j);
+    }
     /* serialize the structure to the ostream
      * \param out     the ostream
      */
