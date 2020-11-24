@@ -1,4 +1,13 @@
-# moni
+# MONI
+```condole
+                           __  __  ____  _   _ _____
+                          |  \/  |/ __ \| \ | |_   _|
+                          | \  / | |  | |  \| | | |
+                          | |\/| | |  | | . ` | | |
+                          | |  | | |__| | |\  |_| |_
+                          |_|  |_|\____/|_| \_|_____|
+                                            ver 0.0.1
+```
 A MEM-finder with Multi-Genome References.
 
 MONI index uses the prefix-free parsing of the text [2][3] to build the Burrows-Wheeler Transform (BWT) of the reference genomes, the suffix array (SA) samples at the beginning and at the end of each run of the BWT, and the threshold positions of [1]. 
@@ -100,6 +109,10 @@ Please, if you use this tool in an academic setting cite the following paper:
 
 * [Marco Oliva](https://github.com/marco-oliva)
 * [Massimiliano Rossi](https://github.com/maxrossi91)
+
+# Why "MONI"?
+
+**Moni** is the Finnish word for *multi*.
 
 # References
 
