@@ -91,7 +91,14 @@ int main(int argc, char *const argv[])
   verbose("Building the matching statistics index");
   std::chrono::high_resolution_clock::time_point t_insert_start = std::chrono::high_resolution_clock::now();
 
-  ms_pointers<> ms(args.filename);
+  // ms_pointers<> ms(args.filename);
+
+  std::string filename_ms = args.filename + ".ms";
+
+  ifstream fs_ms(filename_ms);
+  ms_pointers<> ms;
+  ms.load(fs_ms);
+  fs_ms.close();
 
   std::chrono::high_resolution_clock::time_point t_insert_end = std::chrono::high_resolution_clock::now();
 
