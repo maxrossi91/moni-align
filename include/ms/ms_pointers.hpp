@@ -34,13 +34,15 @@
 #include <r_index.hpp>
 
 #include <ms_rle_string.hpp>
+#include <thresholds_ds.hpp>
 
 template <class sparse_bv_type = ri::sparse_sd_vector,
-          class rle_string_t = ms_rle_string_sd>
+          class rle_string_t = ms_rle_string_sd,
+          class thresholds_t = thr_compressed<rle_string_t> >
 class ms_pointers : ri::r_index<sparse_bv_type, rle_string_t>
 {
 public:
-    std::vector<size_t> thresholds;
+    thresholds_t thresholds;
 
     // std::vector<ulint> samples_start;
     int_vector<> samples_start;
@@ -127,29 +129,31 @@ public:
 
         t_insert_start = std::chrono::high_resolution_clock::now();
 
-        std::string tmp_filename = filename + std::string(".thr_pos");
+        thresholds = thresholds_t(filename,&this->bwt);
 
-        struct stat filestat;
-        FILE *fd;
+        // std::string tmp_filename = filename + std::string(".thr_pos");
 
-        if ((fd = fopen(tmp_filename.c_str(), "r")) == nullptr)
-            error("open() file " + tmp_filename + " failed");
+        // struct stat filestat;
+        // FILE *fd;
 
-        int fn = fileno(fd);
-        if (fstat(fn, &filestat) < 0)
-            error("stat() file " + tmp_filename + " failed");
+        // if ((fd = fopen(tmp_filename.c_str(), "r")) == nullptr)
+        //     error("open() file " + tmp_filename + " failed");
 
-        if (filestat.st_size % THRBYTES != 0)
-            error("invilid file " + tmp_filename);
+        // int fn = fileno(fd);
+        // if (fstat(fn, &filestat) < 0)
+        //     error("stat() file " + tmp_filename + " failed");
 
-        size_t length = filestat.st_size / THRBYTES;
-        thresholds.resize(length);
+        // if (filestat.st_size % THRBYTES != 0)
+        //     error("invilid file " + tmp_filename);
 
-        for (size_t i = 0; i < length; ++i)
-            if ((fread(&thresholds[i], THRBYTES, 1, fd)) != 1)
-                error("fread() file " + tmp_filename + " failed");
+        // size_t length = filestat.st_size / THRBYTES;
+        // thresholds.resize(length);
 
-        fclose(fd);
+        // for (size_t i = 0; i < length; ++i)
+        //     if ((fread(&thresholds[i], THRBYTES, 1, fd)) != 1)
+        //         error("fread() file " + tmp_filename + " failed");
+
+        // fclose(fd);
 
         t_insert_end = std::chrono::high_resolution_clock::now();
 
@@ -247,7 +251,7 @@ public:
         verbose("                     F: ", my_serialize(this->F, ns));
         verbose("                   bwt: ", this->bwt.serialize(ns));
         verbose("          samples_last: ", this->samples_last.serialize(ns));
-        verbose("            thresholds: ", my_serialize(thresholds, ns));
+        verbose("            thresholds: ", thresholds.serialize(ns));
         verbose("         samples_start: ", samples_start.serialize(ns));
     }
 
@@ -282,12 +286,18 @@ public:
         written_bytes += this->bwt.serialize(out);
         written_bytes += this->samples_last.serialize(out);
 
-        written_bytes += my_serialize(thresholds, out, child, "thresholds");
+        written_bytes += thresholds.serialize(out, child, "thresholds");
+        // written_bytes += my_serialize(thresholds, out, child, "thresholds");
         // written_bytes += my_serialize(samples_start, out, child, "samples_start");
         written_bytes += samples_start.serialize(out, child, "samples_start");
 
         sdsl::structure_tree::add_size(child, written_bytes);
         return written_bytes;
+    }
+
+    std::string get_file_extension()
+    {
+        return thresholds.get_file_extension() + ".ms";
     }
 
     /* load the structure from the istream
@@ -302,7 +312,8 @@ public:
         this->r = this->bwt.number_of_runs();
         this->samples_last.load(in);
 
-        my_load(thresholds, in);
+        thresholds.load(in,&this->bwt);
+        // my_load(thresholds, in);
         samples_start.load(in);
         // my_load(samples_start,in);
     }

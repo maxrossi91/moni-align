@@ -74,9 +74,9 @@ int main(int argc, char *const argv[])
   t_insert_start = std::chrono::high_resolution_clock::now();
 
 
-  thr_plain<> plain(args.filename,bwt);
+  thr_plain<> plain(args.filename,&bwt);
   verbose("Plain thresholds construction complete");
-  thr_compressed<> compressed(args.filename,bwt);
+  thr_compressed<> compressed(args.filename,&bwt);
 
   t_insert_end = std::chrono::high_resolution_clock::now();
 

@@ -38,15 +38,18 @@ class thr_plain
 {
 public:
     int_vector<> thresholds;
-    rle_string_t &bwt;
+    rle_string_t *bwt;
 
     typedef size_t size_type;
 
-    thr_plain() {}
-
-    thr_plain(std::string filename, rle_string_t& bwt_):bwt(bwt_)
+    thr_plain()
     {
-        int log_n = bitsize(uint64_t(bwt_.size()));
+        bwt=nullptr;
+    }
+
+    thr_plain(std::string filename, rle_string_t* bwt_):bwt(bwt_)
+    {
+        int log_n = bitsize(uint64_t(bwt->size()));
 
         verbose("Reading thresholds from file");
 
@@ -88,6 +91,42 @@ public:
         verbose("Elapsed time (s): ", std::chrono::duration<double, std::ratio<1>>(t_insert_end - t_insert_start).count());
     }
 
+    // Destructor
+    ~thr_plain() 
+    {
+       // NtD
+    }
+
+    // Copy constructor
+    thr_plain(const thr_plain &other)
+        :thresholds(other.thresholds),
+        bwt(other.bwt)
+    {
+    }
+
+    friend void swap(thr_plain &first, thr_plain &second) // nothrow
+    {
+        using std::swap;
+
+        swap(first.thresholds, second.thresholds);
+        swap(first.bwt, second.bwt);
+    }
+
+    // Copy assignment
+    thr_plain &operator=(thr_plain other) 
+    {
+        swap(*this,other);
+        
+        return *this;
+    }
+
+    // Move constructor
+    thr_plain(thr_plain &&other) noexcept
+        : thr_plain()
+    {
+        swap(*this, other);
+    }
+
     size_t operator[] (size_t& i)
     {
         assert( i < thresholds.size());
@@ -111,10 +150,15 @@ public:
     /* load the structure from the istream
      * \param in the istream
      */
-    void load(std::istream &in, rle_string_t &bwt_)
+    void load(std::istream &in, rle_string_t *bwt_)
     {
         thresholds.load(in);
         bwt = bwt_;
+    }
+
+    std::string get_file_extension()
+    {
+        return ".thrp";
     }
 };
 
@@ -123,17 +167,20 @@ class thr_compressed
 {
 public:
     int_vector<> thresholds;
-    rle_string_t &bwt;
+    rle_string_t *bwt;
     long long min_off;
 
     typedef size_t size_type;
 
-    thr_compressed() {}
-
-    thr_compressed(std::string filename, rle_string_t& bwt_):bwt(bwt_)
+    thr_compressed()
     {
-        int log_n = bitsize(uint64_t(bwt_.size()));
-        size_t n = uint64_t(bwt.size());
+        bwt=nullptr;
+    }
+
+    thr_compressed(std::string filename, rle_string_t* bwt_):bwt(bwt_)
+    {
+        int log_n = bitsize(uint64_t(bwt->size()));
+        size_t n = uint64_t(bwt->size());
 
         verbose("Reading thresholds from file");
 
@@ -171,8 +218,8 @@ public:
 
             if (threshold > 0)
             {
-                uint8_t c = bwt.head_of(i);
-                size_t pred = bwt.select(bwt.rank(pos - 1, c) - 1, c);
+                uint8_t c = bwt->head_of(i);
+                size_t pred = bwt->select(bwt->rank(pos - 1, c) - 1, c);
                 size_t mid_int = (pos - pred + 1) >> 1;
                 assert(threshold > pred);
 
@@ -184,7 +231,7 @@ public:
                 min_off = min(min_off, off);
             }
 
-            pos += bwt.run_at(i);
+            pos += bwt->run_at(i);
         }
 
         // Rewind the file
@@ -205,8 +252,8 @@ public:
 
             if (threshold > 0)
             {
-                uint8_t c = bwt.head_of(i);
-                size_t pred = bwt.select(bwt.rank(pos - 1, c) - 1, c);
+                uint8_t c = bwt->head_of(i);
+                size_t pred = bwt->select(bwt->rank(pos - 1, c) - 1, c);
                 size_t mid_int = (pos - pred + 1) >> 1;
                 assert(threshold > pred);
 
@@ -216,7 +263,7 @@ public:
             }
 
             thresholds[i] = off;
-            pos += bwt.run_at(i);
+            pos += bwt->run_at(i);
         }
 
         fclose(fd);
@@ -229,18 +276,56 @@ public:
         verbose("Elapsed time (s): ", std::chrono::duration<double, std::ratio<1>>(t_insert_end - t_insert_start).count());
     }
 
+    // Destructor
+    ~thr_compressed()
+    {
+        // NtD
+    }
+
+    // Copy constructor
+    thr_compressed(const thr_compressed &other)
+        : thresholds(other.thresholds),
+          bwt(other.bwt),
+          min_off(other.min_off)
+    {
+    }
+
+    friend void swap(thr_compressed &first, thr_compressed &second) // nothrow
+    {
+        using std::swap;
+
+        swap(first.thresholds, second.thresholds);
+        swap(first.bwt, second.bwt);
+        swap(first.min_off, second.min_off);
+    }
+
+    // Copy assignment
+    thr_compressed &operator=(thr_compressed other)
+    {
+        swap(*this, other);
+
+        return *this;
+    }
+
+    // Move constructor
+    thr_compressed(thr_compressed &&other) noexcept 
+        : thr_compressed()
+    {
+        swap(*this, other);
+    }
+
     size_t operator[] (size_t& i)
     {
         assert( i < thresholds.size());
 
         // get mid_interval
-        uint8_t c = bwt.head_of(i);
-        size_t rank = bwt.head_rank(i, c);
+        uint8_t c = bwt->head_of(i);
+        size_t rank = bwt->head_rank(i, c);
         if(rank == 0)
             return 0;
 
-        size_t pred = bwt.select(rank-1, c);
-        size_t pos = bwt.select(rank, c);
+        size_t pred = bwt->select(rank - 1, c);
+        size_t pos = bwt->select(rank, c);
         size_t mid_int = (pos - pred + 1) >> 1;
 
         size_t thr_i = thresholds[i];
@@ -268,11 +353,16 @@ public:
     /* load the structure from the istream
      * \param in the istream
      */
-    void load(std::istream &in, rle_string_t &bwt_)
+    void load(std::istream &in, rle_string_t *bwt_)
     {
         in.read((char *)&min_off, sizeof(min_off));
         thresholds.load(in);
         bwt = bwt_;
+    }
+
+    std::string get_file_extension()
+    {
+        return ".thrc";
     }
 };
 
