@@ -130,6 +130,7 @@ public:
     }
 
     // rank in chracters of the i-th run head
+    // i.e., the number of characters c before the first character of the run.
     size_t head_rank(const size_t i, const uint8_t c)
     {
         assert(i < this->R);
@@ -137,7 +138,7 @@ public:
         if(j < 1)
             return j;
         assert(j<=i);
-        return this->runs_per_letter[c].select(j);
+        return this->runs_per_letter[c].select(j-1) + 1; // j-1 because the select is 0 based
     }
     /* serialize the structure to the ostream
      * \param out     the ostream

@@ -220,7 +220,9 @@ public:
         size_t pos = bwt.select(rank, c);
         size_t mid_int = (pos - pred + 1) >> 1;
 
-        return mid_int + min_off - thresholds[i];
+        size_t thr_i = thresholds[i];
+
+        return mid_int + min_off - thresholds[i] + pred;
     }
 };
 
