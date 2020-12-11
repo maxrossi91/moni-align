@@ -93,6 +93,29 @@ public:
         assert( i < thresholds.size());
         return thresholds[i];
     }
+
+    /* serialize the structure to the ostream
+     * \param out     the ostream
+     */
+    size_type serialize(std::ostream &out, sdsl::structure_tree_node *v = nullptr, std::string name = "") // const
+    {
+        sdsl::structure_tree_node *child = sdsl::structure_tree::add_child(v, name, sdsl::util::class_name(*this));
+        size_type written_bytes = 0;
+
+        written_bytes += thresholds.serialize(out, child, "thresholds");
+
+        sdsl::structure_tree::add_size(child, written_bytes);
+        return written_bytes;
+    }
+
+    /* load the structure from the istream
+     * \param in the istream
+     */
+    void load(std::istream &in, rle_string_t &bwt_)
+    {
+        thresholds.load(in);
+        bwt = bwt_;
+    }
 };
 
 template <class rle_string_t = ms_rle_string_sd>
@@ -223,6 +246,33 @@ public:
         size_t thr_i = thresholds[i];
 
         return mid_int + min_off - thresholds[i] + pred;
+    }
+
+    /* serialize the structure to the ostream
+     * \param out     the ostream
+     */
+    size_type serialize(std::ostream &out, sdsl::structure_tree_node *v = nullptr, std::string name = "") // const
+    {
+        sdsl::structure_tree_node *child = sdsl::structure_tree::add_child(v, name, sdsl::util::class_name(*this));
+        size_type written_bytes = 0;
+
+        out.write((char *)&min_off, sizeof(min_off));
+        written_bytes += sizeof(min_off);
+
+        written_bytes += thresholds.serialize(out, child, "thresholds");
+
+        sdsl::structure_tree::add_size(child, written_bytes);
+        return written_bytes;
+    }
+
+    /* load the structure from the istream
+     * \param in the istream
+     */
+    void load(std::istream &in, rle_string_t &bwt_)
+    {
+        in.read((char *)&min_off, sizeof(min_off));
+        thresholds.load(in);
+        bwt = bwt_;
     }
 };
 
