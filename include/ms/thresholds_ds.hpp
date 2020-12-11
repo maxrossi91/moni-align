@@ -156,7 +156,7 @@ public:
         bwt = bwt_;
     }
 
-    std::string get_file_extension()
+    std::string get_file_extension() const
     {
         return ".thrp";
     }
@@ -360,7 +360,7 @@ public:
         bwt = bwt_;
     }
 
-    std::string get_file_extension()
+    std::string get_file_extension() const
     {
         return ".thrc";
     }

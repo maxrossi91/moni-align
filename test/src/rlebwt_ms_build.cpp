@@ -56,7 +56,7 @@ int main(int argc, char *const argv[])
   verbose("Elapsed time (s): ", std::chrono::duration<double, std::ratio<1>>(t_insert_end - t_insert_start).count());
 
 
-  std::string outfile = args.filename + ".ms";
+  std::string outfile = args.filename + ms.get_file_extension();
   std::ofstream out(outfile);
   ms.serialize(out);
 

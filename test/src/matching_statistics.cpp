@@ -93,10 +93,10 @@ int main(int argc, char *const argv[])
 
   // ms_pointers<> ms(args.filename);
 
-  std::string filename_ms = args.filename + ".ms";
+  ms_pointers<> ms;
+  std::string filename_ms = args.filename + ms.get_file_extension();
 
   ifstream fs_ms(filename_ms);
-  ms_pointers<> ms;
   ms.load(fs_ms);
   fs_ms.close();
 

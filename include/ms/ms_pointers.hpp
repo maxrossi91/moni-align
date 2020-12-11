@@ -295,7 +295,7 @@ public:
         return written_bytes;
     }
 
-    std::string get_file_extension()
+    std::string get_file_extension() const
     {
         return thresholds.get_file_extension() + ".ms";
     }
