@@ -210,7 +210,7 @@ public:
         ulint i = 0;
         while ((c = heads.get()) != EOF)
         {
-            size_t length;
+            size_t length = 0;
             lengths.read((char *)&length, 5);
             if (c > TERMINATOR)
                 this->F[c] += length;
