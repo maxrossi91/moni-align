@@ -7,6 +7,7 @@ FetchContent_GetProperties(shaped_slp)
 FetchContent_GetProperties(ssw)
 FetchContent_GetProperties(ksw2)
 FetchContent_GetProperties(klib)
+FetchContent_GetProperties(bigbwt)
 
 set(FOLCA_SOURCE_DIR ${shaped_slp_SOURCE_DIR}/folca)
 set(SUX_SOURCE_DIR ${shaped_slp_SOURCE_DIR}/external/sux/sux)
@@ -112,3 +113,17 @@ target_include_directories(align_klib_omp PUBLIC    "../../include/ms"
                                         )
 target_compile_options(align_klib_omp PUBLIC "-std=c++17")
 target_compile_options(align_klib_omp PUBLIC "-fopenmp")
+
+add_executable(align_klib align_klib.cpp ${klib_SOURCE_DIR}/ksw.c ${bigbwt_SOURCE_DIR}/xerrors.c)
+target_link_libraries(align_klib common malloc_count sdsl divsufsort divsufsort64 ri klib ssw pthread)
+target_include_directories(align_klib PUBLIC    "../../include/ms" 
+                                            "../../include/common" 
+                                            "${shaped_slp_SOURCE_DIR}" 
+                                            "${FOLCA_SOURCE_DIR}" 
+                                            "${SUX_SOURCE_DIR}/function" 
+                                            "${SUX_SOURCE_DIR}/support"
+                                            "${ssw_SOURCE_DIR}/src"
+                                            "${klib_SOURCE_DIR}"
+                                            "${bigbwt_SOURCE_DIR}"
+                                        )
+target_compile_options(align_klib PUBLIC "-std=c++17")
