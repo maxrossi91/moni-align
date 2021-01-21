@@ -411,6 +411,7 @@ size_t next_start_fastq(gzFile fp)
 static inline bool is_gzipped(std::string filename)
 {
   FILE *fp = fopen(filename.c_str(), "rb");
+  if(fp == NULL) error("Opening file " + filename);
   int byte1 = 0, byte2 = 0;
   fread(&byte1, sizeof(char), 1, fp);
   fread(&byte2, sizeof(char), 1, fp);
@@ -540,11 +541,13 @@ void *mt_align_worker(void *param)
   kseq_destroy(seq);
   gzclose(fp);
   fclose(sam_fd);
+
+  return NULL;
 }
 
 size_t mt_align(aligner_t *aligner, std::string pattern_filename, std::string sam_filename, size_t n_threads)
 {
-  pthread_t t[n_threads];
+  pthread_t t[n_threads] = {0};
   mt_param params[n_threads];
   std::vector<size_t> starts = split_fastq(pattern_filename, n_threads);
   for(size_t i = 0; i < n_threads; ++i)
@@ -564,11 +567,17 @@ size_t mt_align(aligner_t *aligner, std::string pattern_filename, std::string sa
   for(size_t i = 0; i < n_threads; ++i)
   {
     xpthread_join(t[i],NULL,__LINE__,__FILE__);
+  }
+
+  sleep(5);
+  for(size_t i = 0; i < n_threads; ++i)
+  {
     tot_reads += params[i].n_reads;
     tot_aligned_reads += params[i].n_aligned_reads;
   }
 
   verbose("Number of aligned reads: ", tot_aligned_reads, "/", tot_reads);
+  return tot_aligned_reads;
 }
 
 
@@ -645,7 +654,7 @@ int main(int argc, char *const argv[])
   std::string base_name = basename(args.filename.data());
   std::string sam_filename = args.patterns + "_" + base_name + "_" + std::to_string(args.l);
 
-  if (is_gzipped(args.filename))
+  if (is_gzipped(args.patterns))
   {
     verbose("The input is gzipped - forcing single thread alignment.");
     args.th = 1;
