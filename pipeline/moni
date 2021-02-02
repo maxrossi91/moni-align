@@ -6,11 +6,21 @@ import sys, time, argparse, subprocess, os.path, threading, tempfile
 from psutil import virtual_memory
 
 Description = """
-Tool to build the BWT and the Thresholds for higly repetive files using the approach
+                           __  __  ____  _   _ _____
+                          |  \/  |/ __ \| \ | |_   _|
+                          | \  / | |  | |  \| | | |
+                          | |\/| | |  | | . ` | | |
+                          | |  | | |__| | |\  |_| |_
+                          |_|  |_|\____/|_| \_|_____|
+                                            ver 0.0.1
+MEM-finder with Multi-Genome references.
+
+Build the index for higly repetive files using the approach
 described in
 
-   "Constructing thresholds directly from prefix-free parsing"
-   by Christina Boucher, Travis Gagie, and Massimiliano Rossi
+   "MONI: A Pangenomics Index for Finding MEMs"
+   by Massimiliano Rossi, Marco Oliva, Ben Langmead, 
+      Travis Gagie, and Christina Boucher
 
 The input file cannot contain the characters 0, 1 or 2 which are
 used internally by the algorithm.
