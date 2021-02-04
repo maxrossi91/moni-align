@@ -35,6 +35,17 @@ target_include_directories(rlebwt_ms_build PUBLIC    "../../include/ms"
                                         )
 target_compile_options(rlebwt_ms_build PUBLIC "-std=c++17")
 
+add_executable(rlebwt_ms_full_build rlebwt_ms_full_build.cpp)
+target_link_libraries(rlebwt_ms_full_build common sdsl divsufsort divsufsort64 malloc_count ri)
+target_include_directories(rlebwt_ms_full_build PUBLIC    "../../include/ms" 
+                                        "../../include/common" 
+                                        "${shaped_slp_SOURCE_DIR}" 
+                                        "${FOLCA_SOURCE_DIR}" 
+                                        "${SUX_SOURCE_DIR}/function" 
+                                        "${SUX_SOURCE_DIR}/support"
+                                        )
+target_compile_options(rlebwt_ms_full_build PUBLIC "-std=c++17")
+
 add_executable(shapedslp_test shapedslp_test.cpp)
 target_link_libraries(shapedslp_test common sdsl divsufsort divsufsort64 malloc_count ri)
 target_include_directories(shapedslp_test PUBLIC    "../../include/ms" 
@@ -138,6 +149,28 @@ target_include_directories(ms_stats PUBLIC    "../../include/ms"
                                             "${SUX_SOURCE_DIR}/support"
                                         )
 target_compile_options(ms_stats PUBLIC "-std=c++17")
+                                            
+add_executable(ms_full_stats ms_full_stats.cpp)
+target_link_libraries(ms_full_stats common sdsl divsufsort divsufsort64 malloc_count ri ssw)
+target_include_directories(ms_full_stats PUBLIC    "../../include/ms" 
+                                            "../../include/common" 
+                                            "${shaped_slp_SOURCE_DIR}" 
+                                            "${FOLCA_SOURCE_DIR}" 
+                                            "${SUX_SOURCE_DIR}/function" 
+                                            "${SUX_SOURCE_DIR}/support"
+                                        )
+target_compile_options(ms_full_stats PUBLIC "-std=c++17")
+
+add_executable(ms_full_test ms_full_test.cpp)
+target_link_libraries(ms_full_test common sdsl divsufsort divsufsort64 malloc_count ri ssw)
+target_include_directories(ms_full_test PUBLIC    "../../include/ms" 
+                                            "../../include/common" 
+                                            "${shaped_slp_SOURCE_DIR}" 
+                                            "${FOLCA_SOURCE_DIR}" 
+                                            "${SUX_SOURCE_DIR}/function" 
+                                            "${SUX_SOURCE_DIR}/support"
+                                        )
+target_compile_options(ms_full_test PUBLIC "-std=c++17")
 
 add_executable(thr_stats thr_stats.cpp)
 target_link_libraries(thr_stats common sdsl divsufsort divsufsort64 malloc_count ri ssw)
