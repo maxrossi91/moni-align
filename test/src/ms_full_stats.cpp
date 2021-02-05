@@ -26,7 +26,7 @@
 
 #include <sdsl/io.hpp>
 
-#include <ms_thr_full.hpp>
+#include <moni.hpp>
 
 #include <malloc_count.h>
 
