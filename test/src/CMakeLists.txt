@@ -138,6 +138,33 @@ target_include_directories(align_klib PUBLIC    "../../include/ms"
                                             "${bigbwt_SOURCE_DIR}"
                                         )
 target_compile_options(align_klib PUBLIC "-std=c++17")
+
+add_executable(align_full_klib align_full_klib.cpp ${klib_SOURCE_DIR}/ksw.c ${bigbwt_SOURCE_DIR}/xerrors.c)
+target_link_libraries(align_full_klib common malloc_count sdsl divsufsort divsufsort64 ri klib ssw pthread)
+target_include_directories(align_full_klib PUBLIC    "../../include/ms" 
+                                            "../../include/common" 
+                                            "${shaped_slp_SOURCE_DIR}" 
+                                            "${FOLCA_SOURCE_DIR}" 
+                                            "${SUX_SOURCE_DIR}/function" 
+                                            "${SUX_SOURCE_DIR}/support"
+                                            "${ssw_SOURCE_DIR}/src"
+                                            "${klib_SOURCE_DIR}"
+                                            "${bigbwt_SOURCE_DIR}"
+                                        )
+target_compile_options(align_full_klib PUBLIC "-std=c++17")
+
+add_executable(align_full_ksw2 align_full_ksw2.cpp ${bigbwt_SOURCE_DIR}/xerrors.c)
+target_link_libraries(align_full_ksw2 common sdsl malloc_count divsufsort divsufsort64 ri ksw2 pthread)
+target_include_directories(align_full_ksw2 PUBLIC    "../../include/ms" 
+                                            "../../include/common" 
+                                            "${shaped_slp_SOURCE_DIR}" 
+                                            "${FOLCA_SOURCE_DIR}" 
+                                            "${SUX_SOURCE_DIR}/function" 
+                                            "${SUX_SOURCE_DIR}/support"
+                                            "${ksw2_SOURCE_DIR}"
+                                            "${bigbwt_SOURCE_DIR}"
+                                        )
+target_compile_options(align_full_ksw2 PUBLIC "-std=c++17")
                                             
 add_executable(ms_stats ms_stats.cpp)
 target_link_libraries(ms_stats common sdsl divsufsort divsufsort64 malloc_count ri ssw)
