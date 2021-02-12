@@ -379,7 +379,7 @@ protected:
       4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,
       4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4};
 
-  int c, sa = 2, sb = 2, i, j, k, max_rseq = 0;
+  int c, sa = 2, sb = 4, i, j, k, max_rseq = 0;
   int w = 4000;
   int8_t mat[25];
   int gapo = 5, gape = 2, minsc = 0, xtra = KSW_XSTART;
