@@ -340,10 +340,10 @@ public:
         assert(i != this->bwt.size()-1);
         //jr is the rank of the predecessor of i (circular)
         ulint jr = pred_start.predecessor_rank_circular(i);
-        assert(jr<=r-1);
+        assert(jr<=this->r-1);
         //the actual predecessor
         ulint j = pred_start.select(jr);
-        assert(jr<r-1 or j == this->bwt.size()-1);
+        assert(jr<this->r-1 or j == this->bwt.size()-1);
         //distance from predecessor
         ulint delta = j<i ? i-j : i+1;
         //cannot fall on first run: this can happen only if I call Phi(SA[0])

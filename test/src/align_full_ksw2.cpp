@@ -44,6 +44,8 @@ extern "C" {
 
 #include <libgen.h>
 
+#define _REALIGN
+
 // KSEQ_INIT(gzFile, gzread);
 
 class aligner_t
@@ -103,6 +105,22 @@ public:
     verbose("Elapsed time (s): ", std::chrono::duration<double, std::ratio<1>>(t_insert_end - t_insert_start).count());
 
     verbose("Minimum MEM length: ", min_len);
+
+    memset(&ez_lc, 0, sizeof(ksw_extz_t));
+    memset(&ez_rc, 0, sizeof(ksw_extz_t));
+    memset(&ez, 0, sizeof(ksw_extz_t));
+  }
+
+  // Destructor
+  ~aligner_t() 
+  {
+    if(ez_lc.m_cigar > 0)
+      delete ez_lc.cigar;
+    if(ez_rc.m_cigar > 0)
+      delete ez_rc.cigar;
+    if(ez.m_cigar > 0)
+      delete ez.cigar;
+      // NtD
   }
 
 
@@ -184,7 +202,7 @@ public:
       // lcs: left context sequence
       size_t lcs_len = mem_idx;
       uint8_t* lcs = (uint8_t*)malloc(lcs_len);
-      verbose("lcs: " + std::string(read->seq.s).substr(0,lcs_len));
+      // verbose("lcs: " + std::string(read->seq.s).substr(0,lcs_len));
       // Convert A,C,G,T,N into 0,1,2,3,4
       // The left context is reversed
       for (size_t i = 0; i < lcs_len; ++i)
@@ -194,91 +212,107 @@ public:
       size_t rcs_occ = (mem_idx + mem_len); // The first character of the right context
       size_t rcs_len = read->seq.l - rcs_occ;
       uint8_t* rcs = (uint8_t*)malloc(rcs_len);
-      verbose("rcs: " + std::string(read->seq.s).substr(rcs_occ,rcs_len));
+      // verbose("rcs: " + std::string(read->seq.s).substr(rcs_occ,rcs_len));
       // Convert A,C,G,T,N into 0,1,2,3,4
       for (size_t i = 0; i < rcs_len; ++i) 
         rcs[i] = seq_nt4_table[(int)read->seq.s[ rcs_occ + i]];
 
-      verbose("Number of occurrences: " + std::to_string(occs.size()));
+      int32_t min_score = 20 + 8 * log(read->seq.l);
+      // verbose("Number of occurrences: " + std::to_string(occs.size()));
       // For all the occurrences align
       for(auto curr_mem_pos: occs)
       {
-        verbose("Processing occurrence: " + std::to_string(curr_mem_pos));
-        // Extract the context from the reference
-        // lc: left context
-        size_t lc_occ = (curr_mem_pos > 100 ? curr_mem_pos - 100 : 0);
-        size_t lc_len = (curr_mem_pos > 100 ? 100 : 100 - curr_mem_pos);
-        char *lc = (char *)malloc(100);
-        ra.expandSubstr(lc_occ, lc_len, lc);
-        verbose("lc: " + std::string(lc));
-        // Convert A,C,G,T,N into 0,1,2,3,4
-        // The left context is reversed
-        for (size_t i = 0; i < lc_len; ++i)
-          lc[lc_len -i -1] = seq_nt4_table[(int)lc[i]];
+        int32_t score = extend(
+          curr_mem_pos,
+          mem_len,
+          lcs,   // Left context of the read
+          lcs_len, // Left context of the read lngth
+          rcs,   // Right context of the read
+          rcs_len // Right context of the read length
+        );
 
-        // rc: right context
-        size_t rc_occ = curr_mem_pos + mem_len;
-        size_t rc_len = (rc_occ < n-100 ? 100 : n - rc_occ);
-        char *rc = (char *)malloc(100);
-        ra.expandSubstr(rc_occ, rc_len, rc);
-        verbose("rc: " + std::string(rc));
-        // Convert A,C,G,T,N into 0,1,2,3,4
-        for (size_t i = 0; i < rc_len; ++i)
-          rc[i] = seq_nt4_table[(int)rc[i]];
-
-        size_t min_score = 20 + 8 * log(read->seq.l);
-
-        // TODO: Update end_bonus according to the MEM contribution to the score
-
-        // Queries: lcs and rcs
-        // Targets: lc  and rc
-	      ksw_extz_t ez_lc;
-        ksw_reset_extz(&ez_lc);
-        // TODO: Decide if we want only the score or also the CIGAR
-        flag = KSW_EZ_EXTZ_ONLY | KSW_EZ_RIGHT;
-        verbose("aligning lc and lcs");
-        ksw_extz2_sse(km, lcs_len, (uint8_t*)lcs, lc_len, (uint8_t*)lc, m, mat, gapo, gape, w, zdrop, end_bonus, flag, &ez_lc);
-        verbose("lc score: " + std::to_string(ez_lc.mqe));
-
-	      ksw_extz_t ez_rc;
-        ksw_reset_extz(&ez_rc);
-
-        flag = KSW_EZ_EXTZ_ONLY | KSW_EZ_RIGHT;
-        ksw_extz2_sse(km, rcs_len, (uint8_t*)rcs, rc_len, (uint8_t*)rc, m, mat, gapo, gape, w, zdrop, end_bonus, flag, &ez_rc);
-        verbose("rc score: " + std::to_string(ez_rc.mqe));
-        
-        // Check if both left and right extensions reach the end or the query
-        assert(ez_lc.reach_end and ez_rc.reach_end);
-        // Compute the final score
-        int32_t score = mem_len * smatch + ez_lc.mqe + ez_rc.mqe;
-        int32_t score2 = 0;
-
-        // Concatenate the CIGAR strings
-        std::string cigar;
-
-        for(size_t i = 0; i < ez_lc.n_cigar; ++i)
-          cigar += std::to_string(ez_lc.cigar[ez_lc.n_cigar -i -1] >> 4) + "MID"[ez_lc.cigar[ez_lc.n_cigar -i -1] & 0xf];
-        cigar += std::to_string(mem_len) + "M";
-        for(size_t i = 0; i < ez_rc.n_cigar; ++i)
-          cigar += std::to_string(ez_rc.cigar[i] >> 4) + "MID"[ez_rc.cigar[i] & 0xf];
-
-        // TODO: Compute the MD:Z field
-        std::string md = "MD:Z";
-
-        // TODO: Compute number of mismatches
-        size_t mismatch = 0;
-        // Compute starting position in reference
-        size_t ref_pos = curr_mem_pos - ez_lc.mqe_t;
-
-        if(score >= min_score)
+        if(score > min_score)
         {
-          write_sam(score,score2,ref_pos,"human",read,strand,out,cigar,md,mismatch);
+          extend(curr_mem_pos,mem_len,lcs,lcs_len,rcs,rcs_len,false,0,read,strand,out); 
           aligned = true;
         }
 
+        // verbose("Processing occurrence: " + std::to_string(curr_mem_pos));
+        // // Extract the context from the reference
+        // // lc: left context
+        // size_t lc_occ = (curr_mem_pos > 100 ? curr_mem_pos - 100 : 0);
+        // size_t lc_len = (curr_mem_pos > 100 ? 100 : 100 - curr_mem_pos);
+        // char *lc = (char *)malloc(100);
+        // ra.expandSubstr(lc_occ, lc_len, lc);
+        // verbose("lc: " + std::string(lc));
+        // // Convert A,C,G,T,N into 0,1,2,3,4
+        // // The left context is reversed
+        // for (size_t i = 0; i < lc_len; ++i)
+        //   lc[lc_len -i -1] = seq_nt4_table[(int)lc[i]];
 
-        delete lc;
-        delete rc;
+        // // rc: right context
+        // size_t rc_occ = curr_mem_pos + mem_len;
+        // size_t rc_len = (rc_occ < n-100 ? 100 : n - rc_occ);
+        // char *rc = (char *)malloc(100);
+        // ra.expandSubstr(rc_occ, rc_len, rc);
+        // verbose("rc: " + std::string(rc));
+        // // Convert A,C,G,T,N into 0,1,2,3,4
+        // for (size_t i = 0; i < rc_len; ++i)
+        //   rc[i] = seq_nt4_table[(int)rc[i]];
+
+
+
+        // // TODO: Update end_bonus according to the MEM contribution to the score
+
+        // // Queries: lcs and rcs
+        // // Targets: lc  and rc
+	      // ksw_extz_t ez_lc;
+        // ksw_reset_extz(&ez_lc);
+        // // TODO: Decide if we want only the score or also the CIGAR
+        // flag = KSW_EZ_EXTZ_ONLY | KSW_EZ_RIGHT;
+        // verbose("aligning lc and lcs");
+        // ksw_extz2_sse(km, lcs_len, (uint8_t*)lcs, lc_len, (uint8_t*)lc, m, mat, gapo, gape, w, zdrop, end_bonus, flag, &ez_lc);
+        // verbose("lc score: " + std::to_string(ez_lc.mqe));
+
+	      // ksw_extz_t ez_rc;
+        // ksw_reset_extz(&ez_rc);
+
+        // flag = KSW_EZ_EXTZ_ONLY | KSW_EZ_RIGHT;
+        // ksw_extz2_sse(km, rcs_len, (uint8_t*)rcs, rc_len, (uint8_t*)rc, m, mat, gapo, gape, w, zdrop, end_bonus, flag, &ez_rc);
+        // verbose("rc score: " + std::to_string(ez_rc.mqe));
+        
+        // // Check if both left and right extensions reach the end or the query
+        // assert(ez_lc.reach_end and ez_rc.reach_end);
+        // // Compute the final score
+        // int32_t score = mem_len * smatch + ez_lc.mqe + ez_rc.mqe;
+        // int32_t score2 = 0;
+
+        // // Concatenate the CIGAR strings
+        // std::string cigar;
+
+        // for(size_t i = 0; i < ez_lc.n_cigar; ++i)
+        //   cigar += std::to_string(ez_lc.cigar[ez_lc.n_cigar -i -1] >> 4) + "MID"[ez_lc.cigar[ez_lc.n_cigar -i -1] & 0xf];
+        // cigar += std::to_string(mem_len) + "M";
+        // for(size_t i = 0; i < ez_rc.n_cigar; ++i)
+        //   cigar += std::to_string(ez_rc.cigar[i] >> 4) + "MID"[ez_rc.cigar[i] & 0xf];
+
+        // // TODO: Compute the MD:Z field
+        // std::string md = "MD:Z";
+
+        // // TODO: Compute number of mismatches
+        // size_t mismatch = 0;
+        // // Compute starting position in reference
+        // size_t ref_pos = curr_mem_pos - ez_lc.mqe_t;
+
+        // if(score >= min_score)
+        // {
+        //   write_sam(score,score2,ref_pos,"human",read,strand,out,cigar,md,mismatch);
+        //   aligned = true;
+        // }
+
+
+        // delete lc;
+        // delete rc;
       }
       delete lcs;
       delete rcs;
@@ -291,38 +325,254 @@ public:
     return aligned_reads;
   }
 
-// Readapted from https://github.com/lh3/minimap2/blob/c9874e2dc50e32bbff4ded01cf5ec0e9be0a53dd/format.c
-// tmp is a string of length max(reference length, query length)
-static void write_MD_core(const uint8_t *tseq, const uint8_t *qseq, const ksw_extz_t *ez, char *tmp, int write_tag)
-{
-	int i, q_off, t_off, l_MD = 0;
-	if (write_tag) printf("\tMD:Z:");
-	for (i = q_off = t_off = 0; i < (int)ez->n_cigar; ++i) {
-		int j, op = ez->cigar[i]&0xf, len = ez->cigar[i]>>4;
-		assert((op >= 0 && op <= 3) || op == 7 || op == 8);
-		if (op == 0 || op == 7 || op == 8) { // match
-			for (j = 0; j < len; ++j) {
-				if (qseq[q_off + j] != tseq[t_off + j]) {
-					printf("%d%c", l_MD, "ACGTN"[tseq[t_off + j]]);
-					l_MD = 0;
-				} else ++l_MD;
-			}
-			q_off += len, t_off += len;
-		} else if (op == 1) { // insertion to ref
-			q_off += len;
-		} else if (op == 2) { // deletion from ref
-			for (j = 0, tmp[len] = 0; j < len; ++j)
-				tmp[j] = "ACGTN"[tseq[t_off + j]];
-			printf("%d^%s", l_MD, tmp);
-			l_MD = 0;
-			t_off += len;
-		} else if (op == 3) { // reference skip
-			t_off += len;
-		}
-	}
-	if (l_MD > 0) printf("%d", l_MD);
-	// assert(t_off == r->re - r->rs && q_off == r->qe - r->qs);
-}
+  // If score_only is true we compute the score of the alignment. 
+  // If score_only is false, we extend again the read and we write the result
+  // in the SAM file, so we need to give the second best score. 
+  int32_t extend(
+    const size_t mem_pos,
+    const size_t mem_len,
+    const uint8_t* lcs,   // Left context of the read
+    const size_t lcs_len, // Left context of the read lngth
+    const uint8_t* rcs,   // Right context of the read
+    const size_t rcs_len, // Right context of the read length
+    const bool score_only = true, // Report only the score
+    const int32_t score2 = 0,    // The score of the second best alignment
+    const kseq_t *read = nullptr, // The read that has been aligned
+    int8_t strand = 0,    // 0: forward aligned ; 1: reverse complement aligned
+    FILE *out = nullptr,   // The SAM file pointer
+    const bool realign = false   // Realign globally the read
+  )
+  {
+    flag = KSW_EZ_EXTZ_ONLY | KSW_EZ_RIGHT;
+
+    if(score_only) 
+      flag = KSW_EZ_SCORE_ONLY;
+
+    int score_lc = 0;
+    int score_rc = 0;
+
+    // TODO: Update end_bonus according to the MEM contribution to the score
+    
+    // Extract the context from the reference
+    // lc: left context
+    if(lcs_len > 0)
+    {
+      size_t lc_occ = (mem_pos > 100 ? mem_pos - 100 : 0);
+      size_t lc_len = (mem_pos > 100 ? 100 : 100 - mem_pos);
+      char *tmp_lc = (char *)malloc(100);
+      ra.expandSubstr(lc_occ, lc_len, tmp_lc);
+      // verbose("lc: " + std::string(lc));
+      // Convert A,C,G,T,N into 0,1,2,3,4
+      // The left context is reversed
+      uint8_t *lc = (uint8_t *)malloc(100);
+      for (size_t i = 0; i < lc_len; ++i)
+        lc[lc_len -i -1] = seq_nt4_table[(int)tmp_lc[i]];
+      
+      delete tmp_lc;
+
+      // Query: lcs
+      // Target: lc
+      ksw_reset_extz(&ez_lc);
+      // verbose("aligning lc and lcs");
+      ksw_extz2_sse(km, lcs_len, (uint8_t*)lcs, lc_len, (uint8_t*)lc, m, mat, gapo, gape, w, zdrop, end_bonus, flag, &ez_lc);
+      score_lc =  ez_lc.mqe;
+      // verbose("lc score: " + std::to_string(score_lc));
+      // Check if the extension reached the end or the query
+      assert(score_only or ez_lc.reach_end);
+
+      // std::string blc = print_BLAST_like((uint8_t*)lc,(uint8_t*)lcs,ez_lc.cigar,ez_lc.n_cigar);
+      // std::cout<<blc;
+
+      delete lc;
+    }
+
+    // rc: right context
+    if(rcs_len > 0)
+    {
+      size_t rc_occ = mem_pos + mem_len;
+      size_t rc_len = (rc_occ < n-100 ? 100 : n - rc_occ);
+      char *rc = (char *)malloc(100);
+      ra.expandSubstr(rc_occ, rc_len, rc);
+      // verbose("rc: " + std::string(rc));
+      // Convert A,C,G,T,N into 0,1,2,3,4
+      for (size_t i = 0; i < rc_len; ++i)
+        rc[i] = seq_nt4_table[(int)rc[i]];
+
+      // Query: rcs
+      // Target: rc
+      ksw_reset_extz(&ez_rc);
+      // verbose("aligning rc and rcs");
+      ksw_extz2_sse(km, rcs_len, (uint8_t*)rcs, rc_len, (uint8_t*)rc, m, mat, gapo, gape, w, zdrop, end_bonus, flag, &ez_rc);
+      score_rc = ez_rc.mqe;
+      // verbose("rc score: " + std::to_string(score_rc));
+      // Check if the extension reached the end or the query
+      assert(score_only or ez_rc.reach_end);
+
+      // std::string brc = print_BLAST_like((uint8_t*)rc,(uint8_t*)rcs,ez_rc.cigar,ez_rc.n_cigar);
+      // std::cout<<brc;
+      delete rc;
+    }
+
+
+    // Compute the final score
+    int32_t score = mem_len * smatch + score_lc + score_rc;
+
+    if(not score_only)
+    {
+      // Compute starting position in reference
+      size_t ref_pos = mem_pos - (lcs_len > 0 ? ez_lc.mqe_t + 1 : 0);
+      size_t ref_len = (lcs_len > 0 ? ez_lc.mqe_t + 1 : 0) + mem_len + (rcs_len > 0 ? ez_rc.mqe_t + 1: 0);
+      char *ref = (char *)malloc(ref_len);
+      ra.expandSubstr(ref_pos, ref_len, ref);
+      // Convert A,C,G,T,N into 0,1,2,3,4
+      for (size_t i = 0; i < ref_len; ++i)
+        ref[i] = seq_nt4_table[(int)ref[i]];
+
+      // Convert the read
+      size_t seq_len = read->seq.l;
+      uint8_t* seq = (uint8_t*) malloc(seq_len);
+      for (size_t i = 0; i < seq_len; ++i)
+        seq[i] = seq_nt4_table[(int)read->seq.s[i]];
+
+      char* tmp = (char*)calloc(max(ref_len,seq_len),1);
+
+      if(realign)
+      {
+        // Realign the whole sequence globally
+        flag = KSW_EZ_RIGHT;
+        ksw_reset_extz(&ez);
+        ksw_extz2_sse(km, seq_len, (uint8_t*)seq, ref_len, (uint8_t*)ref, m, mat, gapo, gape, w, zdrop, end_bonus, flag, &ez);
+
+
+        // std::string bfull = print_BLAST_like((uint8_t*)ref,seq,ez.cigar,ez.n_cigar);
+        // std::cout << bfull;
+
+        // Example were ez.score is lrger than score:
+        // Left context alignment
+        // 22333022233022233302223302223
+        // ||||  ||||||||| ||||||*|||||*
+        // 2233  222330222 3302220302220
+        // Right context alignment
+        // 33022233022233022233022233022233      0222334
+        // *||||||||||||||||*||||||||||||||      ||||||*
+        // 130222330222330220330222330222332222330222330
+        // [INFO] 16:26:16 - Message: old score:  130  new score:  140
+        // Global alignment
+        // 2233    3022233022233302223  30222330222330222330222330222  330222  330222330222330222330222330222330222334
+        // ||||    |||||||||||*| ||||*  |||||||||||||||||||||||||||||  *|||||  |||||||||||*||||||||||||||*|||||||||||*
+        // 223322233022233022203 02220  30222330222330222330222330222  130222  330222330220330222330222332222330222330
+        // The original occurrence of the MEM has been shifted to the left by 6 positions, 
+        // reducing the gap in the right context, and moving in to the left context.
+
+        assert(ez.score >= score);
+
+        // Concatenate the CIGAR strings
+        
+        std::string cigar_s;
+        for(size_t i = 0; i < ez.n_cigar; ++i)
+          cigar_s += std::to_string(ez.cigar[i] >> 4) + "MID"[ez.cigar[i] & 0xf];
+
+        // Compute the MD:Z field and thenumber of mismatches
+        std::pair<std::string,size_t> md_nm = write_MD_core((uint8_t*)ref,seq,ez.cigar,ez.n_cigar,tmp,1);
+
+        write_sam(ez.score,score2,ref_pos,"human",read,strand,out,cigar_s,md_nm.first,md_nm.second);
+      }
+      else
+      {
+        // Concatenate the CIGAR strings
+        size_t n_cigar = ez_lc.n_cigar + ez_rc.n_cigar + 1;
+        uint32_t *cigar = (uint32_t*)calloc(n_cigar,sizeof(uint32_t));
+        size_t i = 0;
+
+        for(size_t j = 0; j < ez_lc.n_cigar; ++j)
+          cigar[i++] = ez_lc.cigar[ez_lc.n_cigar -j -1];
+
+
+        if(ez_lc.n_cigar > 0 and (cigar[i-1]& 0xf == 0))
+        { // If the previous operation is also an M then merge the two operations
+          cigar[i-1] += (((uint32_t)mem_len) << 4);
+          --n_cigar;
+        }
+        else
+          cigar[i++] = (((uint32_t)mem_len) << 4);
+
+
+        if(ez_rc.n_cigar > 0)
+        {
+          if(ez_rc.cigar[0]& 0xf == 0)
+          { // If the next operation is also an M then merge the two operations
+            cigar[i-1] += ez_rc.cigar[0];
+            --n_cigar;
+          }
+          else
+            cigar[i++] = ez_rc.cigar[0];
+        }
+
+        for(size_t j = 1; j < ez_rc.n_cigar; ++j)
+          cigar[i++] = ez_rc.cigar[j];
+        
+        assert(i <= n_cigar);
+
+        std::string cigar_s;
+        for(size_t i = 0; i < n_cigar; ++i)
+          cigar_s += std::to_string(cigar[i] >> 4) + "MID"[cigar[i] & 0xf];
+
+
+        // Compute the MD:Z field and thenumber of mismatches
+        std::pair<std::string,size_t> md_nm = write_MD_core((uint8_t*)ref,seq,cigar,n_cigar,tmp,1);
+
+        write_sam(score,score2,ref_pos,"human",read,strand,out,cigar_s,md_nm.first,md_nm.second);
+
+        delete cigar;
+      }
+      delete tmp;
+      delete ref;
+      delete seq;
+    }
+
+
+    return score;
+  }
+
+  // Readapted from https://github.com/lh3/minimap2/blob/c9874e2dc50e32bbff4ded01cf5ec0e9be0a53dd/format.c
+  // tmp is a string of length max(reference length, query length)
+  static std::pair<std::string,size_t> write_MD_core(const uint8_t *tseq, const uint8_t *qseq, const uint32_t *cigar, const size_t n_cigar, char *tmp, int write_tag)
+  {
+    std::string mdz;
+    int i, q_off, t_off, l_MD = 0, NM = 0;
+    if (write_tag) mdz += "MD:Z:"; //printf("MD:Z:");
+    for (i = q_off = t_off = 0; i < (int)n_cigar; ++i) {
+      int j, op = cigar[i]&0xf, len = cigar[i]>>4;
+      assert((op >= 0 && op <= 3) || op == 7 || op == 8);
+      if (op == 0 || op == 7 || op == 8) { // match
+        for (j = 0; j < len; ++j) {
+          if (qseq[q_off + j] != tseq[t_off + j]) {
+            mdz += std::to_string(l_MD) + "ACGTN"[tseq[t_off + j]];
+            // printf("%d%c", l_MD, "ACGTN"[tseq[t_off + j]]);
+            l_MD = 0; 
+            ++NM;
+          } else ++l_MD;
+        }
+        q_off += len, t_off += len;
+      } else if (op == 1) { // insertion to ref
+        q_off += len;
+        NM += len;
+      } else if (op == 2) { // deletion from ref
+        for (j = 0, tmp[len] = 0; j < len; ++j)
+          tmp[j] = "ACGTN"[tseq[t_off + j]];
+        mdz += std::to_string(l_MD) + std::string(tmp);
+        // printf("%d^%s", l_MD, tmp);
+        l_MD = 0;
+        t_off += len;
+        NM += len;
+      } else if (op == 3) { // reference skip
+        t_off += len;
+      }
+    }
+    if (l_MD > 0) mdz += std::to_string(l_MD);//printf("%d", l_MD);
+    // assert(t_off == r->re - r->rs && q_off == r->qe - r->qs);
+    return make_pair(mdz,NM);
+  }
 
   // From https://github.com/lh3/ksw2/blob/master/cli.c
   static void ksw_gen_simple_mat(int m, int8_t *mat, int8_t a, int8_t b)
@@ -348,8 +598,8 @@ static void write_MD_core(const uint8_t *tseq, const uint8_t *qseq, const ksw_ex
                         const kseq_t *read,
                         int8_t strand,      // 0: forward aligned ; 1: reverse complement aligned
                         FILE *out,
-                        std::string cigar,
-                        std::string md,
+                        std::string &cigar,
+                        std::string &md,
                         size_t mismatches) 
   {
     // Sam format output
@@ -382,13 +632,60 @@ static void write_MD_core(const uint8_t *tseq, const uint8_t *qseq, const ksw_ex
       else
         fprintf(out, "*");
       fprintf(out, "\tAS:i:%d", score);
-      fprintf(out, "\tNM:i:%d\t", mismatches);
+      fprintf(out, "\tNM:i:%d", mismatches);
       if (score2 > 0)
-        fprintf(out, "ZS:i:%d", score2);
-      fprintf(out, "\t%s\n", md.c_str());
+        fprintf(out, "\tZS:i:%d", score2);
+      fprintf(out, "\tMD:Z:%s\n", md.c_str());
     }
   }
 
+  static std::string print_BLAST_like(const uint8_t *tseq, const uint8_t *qseq, const uint32_t *cigar, const size_t n_cigar)
+  {
+    std::string target_o;
+    std::string bars_o;
+    std::string seq_o;
+
+
+    int i, q_off, t_off, l_MD = 0;
+    for (i = q_off = t_off = 0; i < (int)n_cigar; ++i) {
+      int j, op = cigar[i]&0xf, len = cigar[i]>>4;
+      assert((op >= 0 && op <= 3) || op == 7 || op == 8);
+      if (op == 0 || op == 7 || op == 8) { // match
+        for (j = 0; j < len; ++j) {
+          if (qseq[q_off + j] != tseq[t_off + j]) {
+            bars_o +="*";
+          } else {
+            bars_o +="|";
+          }
+          target_o += std::to_string(tseq[t_off + j]);
+          seq_o += std::to_string(qseq[q_off + j]);
+        }
+        q_off += len, t_off += len;
+      } else if (op == 1) { // insertion to ref
+        for (j = 0; j < len; ++j) {
+          target_o += " ";
+          bars_o += " ";
+          seq_o += std::to_string(qseq[q_off + j]);
+        }
+        q_off += len;
+      } else if (op == 2) { // deletion from ref
+        for (j = 0; j < len; ++j) {
+          seq_o += " ";
+          bars_o += " ";
+          target_o += std::to_string(tseq[t_off + j]);
+        }
+        t_off += len;
+      } else if (op == 3) { // reference skip
+        for (j = 0; j < len; ++j) {
+          seq_o += " ";
+          bars_o += " ";
+          target_o += std::to_string(tseq[t_off + j]);
+        }
+        t_off += len;
+      }
+    }
+    return target_o + "\n" + bars_o + "\n" + seq_o + "\n";
+  }
 
 protected:
   ms_pointers<> ms;
@@ -422,7 +719,7 @@ protected:
   int8_t gapo2 = 13;      // Gap open penalty
   int8_t gape = 2;        // Gap extension penalty
   int8_t gape2 = 1;       // Gap extension penalty
-  int end_bonus = 100;    // Bonus to add at the extension score to declare the alignment
+  int end_bonus = 400;    // Bonus to add at the extension score to declare the alignment
   
   int w = -1;             // Band width
   int flag = 0;
@@ -438,6 +735,10 @@ protected:
   // uint8_t *rseq = 0;
 
   bool forward_only;
+
+  ksw_extz_t ez_lc;
+  ksw_extz_t ez_rc;
+  ksw_extz_t ez;
 };
 
 ////////////////////////////////////////////////////////////////////////////////
