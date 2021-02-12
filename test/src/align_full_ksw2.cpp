@@ -355,6 +355,7 @@ public:
     
     // Extract the context from the reference
     // lc: left context
+    ksw_reset_extz(&ez_lc);
     if(lcs_len > 0)
     {
       size_t lc_occ = (mem_pos > 100 ? mem_pos - 100 : 0);
@@ -372,7 +373,6 @@ public:
 
       // Query: lcs
       // Target: lc
-      ksw_reset_extz(&ez_lc);
       // verbose("aligning lc and lcs");
       ksw_extz2_sse(km, lcs_len, (uint8_t*)lcs, lc_len, (uint8_t*)lc, m, mat, gapo, gape, w, zdrop, end_bonus, flag, &ez_lc);
       score_lc =  ez_lc.mqe;
@@ -387,6 +387,7 @@ public:
     }
 
     // rc: right context
+    ksw_reset_extz(&ez_rc);
     if(rcs_len > 0)
     {
       size_t rc_occ = mem_pos + mem_len;
@@ -400,7 +401,6 @@ public:
 
       // Query: rcs
       // Target: rc
-      ksw_reset_extz(&ez_rc);
       // verbose("aligning rc and rcs");
       ksw_extz2_sse(km, rcs_len, (uint8_t*)rcs, rc_len, (uint8_t*)rc, m, mat, gapo, gape, w, zdrop, end_bonus, flag, &ez_rc);
       score_rc = ez_rc.mqe;
@@ -473,7 +473,7 @@ public:
           cigar_s += std::to_string(ez.cigar[i] >> 4) + "MID"[ez.cigar[i] & 0xf];
 
         // Compute the MD:Z field and thenumber of mismatches
-        std::pair<std::string,size_t> md_nm = write_MD_core((uint8_t*)ref,seq,ez.cigar,ez.n_cigar,tmp,1);
+        std::pair<std::string,size_t> md_nm = write_MD_core((uint8_t*)ref,seq,ez.cigar,ez.n_cigar,tmp,0);
 
         write_sam(ez.score,score2,ref_pos,"human",read,strand,out,cigar_s,md_nm.first,md_nm.second);
       }
@@ -488,7 +488,7 @@ public:
           cigar[i++] = ez_lc.cigar[ez_lc.n_cigar -j -1];
 
 
-        if(ez_lc.n_cigar > 0 and (cigar[i-1]& 0xf == 0))
+        if(ez_lc.n_cigar > 0 and ((cigar[i-1]& 0xf) == 0))
         { // If the previous operation is also an M then merge the two operations
           cigar[i-1] += (((uint32_t)mem_len) << 4);
           --n_cigar;
@@ -499,7 +499,7 @@ public:
 
         if(ez_rc.n_cigar > 0)
         {
-          if(ez_rc.cigar[0]& 0xf == 0)
+          if((ez_rc.cigar[0]& 0xf) == 0)
           { // If the next operation is also an M then merge the two operations
             cigar[i-1] += ez_rc.cigar[0];
             --n_cigar;
@@ -513,13 +513,16 @@ public:
         
         assert(i <= n_cigar);
 
+        // std::string bfull = print_BLAST_like((uint8_t*)ref,seq,cigar,n_cigar);
+        // std::cout << bfull;
+
         std::string cigar_s;
         for(size_t i = 0; i < n_cigar; ++i)
           cigar_s += std::to_string(cigar[i] >> 4) + "MID"[cigar[i] & 0xf];
 
 
         // Compute the MD:Z field and thenumber of mismatches
-        std::pair<std::string,size_t> md_nm = write_MD_core((uint8_t*)ref,seq,cigar,n_cigar,tmp,1);
+        std::pair<std::string,size_t> md_nm = write_MD_core((uint8_t*)ref,seq,cigar,n_cigar,tmp,0);
 
         write_sam(score,score2,ref_pos,"human",read,strand,out,cigar_s,md_nm.first,md_nm.second);
 
@@ -560,7 +563,7 @@ public:
       } else if (op == 2) { // deletion from ref
         for (j = 0, tmp[len] = 0; j < len; ++j)
           tmp[j] = "ACGTN"[tseq[t_off + j]];
-        mdz += std::to_string(l_MD) + std::string(tmp);
+        mdz += std::to_string(l_MD) + "^" + std::string(tmp);
         // printf("%d^%s", l_MD, tmp);
         l_MD = 0;
         t_off += len;
