@@ -13,14 +13,15 @@ set(FOLCA_SOURCE_DIR ${shaped_slp_SOURCE_DIR}/folca)
 set(SUX_SOURCE_DIR ${shaped_slp_SOURCE_DIR}/external/sux/sux)
 
 
-add_executable(ms matching_statistics.cpp)
-target_link_libraries(ms common sdsl divsufsort divsufsort64 malloc_count ri)
+add_executable(ms matching_statistics.cpp ${bigbwt_SOURCE_DIR}/xerrors.c)
+target_link_libraries(ms common sdsl divsufsort divsufsort64 malloc_count ri pthread)
 target_include_directories(ms PUBLIC    "../../include/ms" 
                                         "../../include/common" 
                                         "${shaped_slp_SOURCE_DIR}" 
                                         "${FOLCA_SOURCE_DIR}" 
                                         "${SUX_SOURCE_DIR}/function" 
                                         "${SUX_SOURCE_DIR}/support"
+                                        "${bigbwt_SOURCE_DIR}"
                                         )
 target_compile_options(ms PUBLIC "-std=c++17")
 
