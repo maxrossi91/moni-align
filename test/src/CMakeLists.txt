@@ -25,6 +25,14 @@ target_include_directories(ms PUBLIC    "../../include/ms"
                                         )
 target_compile_options(ms PUBLIC "-std=c++17")
 
+add_executable(run_spumoni run_spumoni.cpp ${bigbwt_SOURCE_DIR}/xerrors.c)
+target_link_libraries(run_spumoni common sdsl divsufsort divsufsort64 malloc_count ri pthread)
+target_include_directories(run_spumoni PUBLIC    "../../include/ms" 
+                                        "../../include/common" 
+                                        "${bigbwt_SOURCE_DIR}"
+                                        )
+target_compile_options(run_spumoni PUBLIC "-std=c++17")
+
 add_executable(rlebwt_ms_build rlebwt_ms_build.cpp)
 target_link_libraries(rlebwt_ms_build common sdsl divsufsort divsufsort64 malloc_count ri)
 target_include_directories(rlebwt_ms_build PUBLIC    "../../include/ms" 
@@ -46,6 +54,13 @@ target_include_directories(rlebwt_ms_full_build PUBLIC    "../../include/ms"
                                         "${SUX_SOURCE_DIR}/support"
                                         )
 target_compile_options(rlebwt_ms_full_build PUBLIC "-std=c++17")
+
+add_executable(build_spumoni build_spumoni.cpp)
+target_link_libraries(build_spumoni common sdsl divsufsort divsufsort64 malloc_count ri)
+target_include_directories(build_spumoni PUBLIC    "../../include/ms" 
+                                        "../../include/common" 
+                                        )
+target_compile_options(build_spumoni PUBLIC "-std=c++17")
 
 add_executable(shapedslp_test shapedslp_test.cpp)
 target_link_libraries(shapedslp_test common sdsl divsufsort divsufsort64 malloc_count ri)
