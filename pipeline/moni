@@ -360,7 +360,19 @@ class build_moni_ms(threading.Thread):
         return
       print("Building the RLEBWT Elapsed time: {0:.4f}".format(
           time.time()-start), flush=True)
+      
+      # This is a manual hack
+      if args.output != ".":
 
+        if not os.path.exists(args.output):
+          os.makedirs(args.output)
+
+        command = "cp {ref}.thrc.ms {out}/{name}.thrc.ms".format(ref=args.reference, out=args.output, name=os.path.basename(args.reference))
+        if(execute_command(command, logfile, logfile_name) != True):
+          return
+        command = "cp {ref}.slp {out}/{name}.slp".format(ref=args.reference, out=args.output, name=os.path.basename(args.reference))
+        if(execute_command(command, logfile, logfile_name) != True):
+          return
 
 class build_moni(threading.Thread):
   def __init__(self, name, counter, args):
