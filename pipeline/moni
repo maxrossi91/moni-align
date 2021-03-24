@@ -15,7 +15,7 @@ Description = """
                                   ver 0.1.0
 MEM-finder with Multi-Genome references.
 
-Build the index for higly repetive files using the approach
+Build the index for highly repetive files using the approach
 described in
 
    "MONI: A Pangenomics Index for Finding MEMs"
@@ -596,66 +596,82 @@ class run_helper(threading.Thread):
       exe_name = self.name
       logfile = args.logfile
       logfile_name = args.logfile_name
-      # "Thread-x started!"
-      print("{N} {name} started!".format(N = self.getName(), name = exe_name))
-
       # ----------- computation of the BWT of the parsing
-      print("==== Building {name}}. ".format(name = exe_name), flush=True)
+      # print("==== Computing {name}. ".format(name=exe_name), flush=True)
       start = time.time()
-      parse_size = os.path.getsize(args.reference+".parse")/4
-      dictionary_size = os.path.getsize(args.reference+".dict")
 
       command = "{exe} {file} -p {query} -t {th}".format(exe=os.path.join(
-          args.exe_dir, build_spumoni_exe), file=args.index,
+          args.exe_dir, exe), file=args.index,
           query=args.pattern, th=args.threads)
 
-      print("==== Building {name}. Command:".format(
+      print("==== Running {name}. Command:".format(
           name=exe_name), command, flush=True)
       if(execute_command(command, logfile, logfile_name) != True):
         return
-      print("Building {name} Elapsed time: {0:.4f}".format(
-          time.time()-start, name = exe_name), flush=True)
-
-      print("Total construction time: {0:.4f}".format(
-          time.time()-start0), flush=True)
+      print("==== Running {name} Elapsed time: {0:.4f}".format(
+          time.time()-start, name=exe_name), flush=True)
       # ---- print elapsed time to file
-      command = "echo Total construction time: {0:.4f}".format(
-          time.time()-start0)
+      command = "echo Total query time: {0:.4f}".format(
+          time.time()-start)
       if(execute_command(command, logfile, logfile_name) != True):
         return
 
 
 def run(args):
-  if args.which == 'ms':
-    if args.moni_ms:
-      run_moni_ms = run_helper(
-              name="MONI-MS", args=args, counter=2,exe=run_moni_ms_exe)
-      run_moni_ms.start()
-      run_moni_ms.join()
-    elif args.phoni_ms:
-      run_phoni_ms = run_helper(
-              name="PHONI-MS", args=args, counter=2,exe=run_phoni_ms_exe)
-      run_phoni_ms.start()
-      run_phoni_ms.join()
-      
+  logfile_name = args.pattern + "." + args.which + ".log"
+  # get main bigbwt directory
+  args.exe_dir = os.path.split(sys.argv[0])[0]
+  print("Sending logging messages to file:", logfile_name, flush=True)
+  with open(logfile_name, "a") as logfile:
+    args.logfile = logfile
+    args.logfile_name = logfile_name
+    if args.which == 'ms':
+      if args.moni_ms:
+        run_moni_ms = run_helper(
+                name="MONI-MS", args=args, counter=2,exe=run_moni_ms_exe)
+        run_moni_ms.start()
+        run_moni_ms.join()
+      elif args.phoni_ms:
+        run_phoni_ms = run_helper(
+                name="PHONI-MS", args=args, counter=2,exe=run_phoni_ms_exe)
+        run_phoni_ms.start()
+        run_phoni_ms.join()
+        
 
-  if args.which == 'pseudo_ms':
-    run_spumoni = run_helper(
-        name="SPUMONI", args=args, counter=2, exe=run_spumoni_exe)
-    run_spumoni.start()
-    run_spumoni.join()
+    if args.which == 'pseudo_ms':
+      run_spumoni = run_helper(
+          name="SPUMONI", args=args, counter=2, exe=run_spumoni_exe)
+      run_spumoni.start()
+      run_spumoni.join()
 
-  if args.which == 'align':
-    if args.moni:
-      run_moni = run_helper(
-              name="MONI", args=args, counter=2,exe=run_moni_exe)
-      run_moni.start()
-      run_moni.join()
-    elif args.phoni:
-      run_phoni = run_helper(
-              name="PHONI", args=args, counter=2,exe=run_phoni_exe)
-      run_phoni.start()
-      run_phoni.join()
+    if args.which == 'align':
+      if args.moni:
+        run_moni = run_helper(
+                name="MONI", args=args, counter=2,exe=run_moni_exe)
+        run_moni.start()
+        run_moni.join()
+      elif args.phoni:
+        run_phoni = run_helper(
+                name="PHONI", args=args, counter=2,exe=run_phoni_exe)
+        run_phoni.start()
+        run_phoni.join()
+
+def getGitDesc():
+  branch = subprocess.check_output(
+      'git rev-parse --abbrev-ref HEAD', shell=True).strip().decode("utf-8")
+  commit = subprocess.check_output(
+      'git rev-parse HEAD', shell=True).strip().decode("utf-8")
+  try:
+    tag = subprocess.check_output('git describe --exact-match {commit_id}'.format(commit_id=commit),
+                                  shell=True).strip().decode("utf-8")
+  except subprocess.CalledProcessError as e:
+    tag = ""
+  return "branch: {branch}\n   tag: {tag}\ncommit: {commit}".format(branch=branch, tag=tag, commit=commit)
+
+
+def base(args):
+  if args.version:
+    print(getGitDesc())
 
 
 def main():
@@ -665,13 +681,15 @@ def main():
   ms_parser = subparsers.add_parser('ms', help='build help', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
   pseudo_ms_parser = subparsers.add_parser('pseudo-ms', help='build help', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
   align_parser = subparsers.add_parser('align', help='build help', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+
+  parser.add_argument('--version', help='print the version number', action='store_true')
   parser.set_defaults(which='base')
 
   build_parser.add_argument('-r', '--reference', help='reference file name', type = str, required=True)
   build_parser.add_argument('-o', '--output', help='output directory path', type = str, default='.')
-  build_parser.add_argument('-w', '--wsize', help='sliding window size (def. 10)', default=10, type=int)
-  build_parser.add_argument('-p', '--mod', help='hash modulus (def. 100)', default=100, type=int)
-  build_parser.add_argument('-t', '--threads', help='number of helper threads (def. None)', default=0, type=int)
+  build_parser.add_argument('-w', '--wsize', help='sliding window size', default=10, type=int)
+  build_parser.add_argument('-p', '--mod', help='hash modulus', default=100, type=int)
+  build_parser.add_argument('-t', '--threads', help='number of helper threads', default=0, type=int)
   build_parser.add_argument('-k', help='keep temporary files',action='store_true')
   build_parser.add_argument('-v', help='verbose',action='store_true')
   build_parser.add_argument('-f', help='read fasta',action='store_true')
@@ -686,22 +704,22 @@ def main():
   build_parser.set_defaults(which='build')
 
   ms_parser.add_argument('-i', '--index', help='reference index folder', type=str, required=True)
+  ms_parser.add_argument('-p', '--pattern', help='the input query', type=str, required=True)
   ms_parser.add_argument('-o', '--output', help='output directory path', type=str, default='.')
-  ms_parser.add_argument('-p', '--pattern', help='the input query', default=100, type=int)
   ms_parser.add_argument('-t', '--threads', help='number of helper threads', default=1, type=int)
   ms_parser.add_argument('--moni-ms', help='run moni index for matching statistics only',action='store_true')
   ms_parser.add_argument('--phoni-ms', help='run phoni index for matching statistics only', action='store_true')
   ms_parser.set_defaults(which='ms')
 
   pseudo_ms_parser.add_argument('-i', '--index', help='reference index folder', type=str, required=True)
+  pseudo_ms_parser.add_argument('-p', '--pattern', help='the input query', type=str, required=True)
   pseudo_ms_parser.add_argument('-o', '--output', help='output directory path', type=str, default='.')
-  pseudo_ms_parser.add_argument('-p', '--pattern', help='the input query', default=100, type=int)
   pseudo_ms_parser.add_argument('-t', '--threads', help='number of helper threads', default=1, type=int)
   pseudo_ms_parser.set_defaults(which='pseudo_ms')
 
   align_parser.add_argument('-i', '--index', help='reference index folder', type=str, required=True)
+  align_parser.add_argument('-p', '--pattern', help='the input query', type=str, required=True)
   align_parser.add_argument('-o', '--output', help='output directory path', type=str, default='.')
-  align_parser.add_argument('-p', '--pattern', help='the input query', default=100, type=int)
   align_parser.add_argument('-t', '--threads', help='number of helper threads', default=1, type=int)
   align_parser.add_argument('--moni', help='run moni index',action='store_true')
   align_parser.add_argument('--phoni', help='run phoni index', action='store_true')
@@ -717,7 +735,9 @@ def main():
   if args.which == 'align':
     args.moni = args.moni or not args.phoni
 
-  if args.which == 'build':
+  if args.which == 'base':
+    base(args)
+  elif args.which == 'build':
     build(args)
   elif args.which == 'ms' or args.which == 'pseudo_ms' or args.which == 'align':
     run(args)
