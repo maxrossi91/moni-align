@@ -62,7 +62,7 @@ public:
     verbose("Loading the matching statistics index");
     std::chrono::high_resolution_clock::time_point t_insert_start = std::chrono::high_resolution_clock::now();
 
-    std::string filename_ms = filename + ".ms";
+    std::string filename_ms = filename  + ms.get_file_extension();
 
     ifstream fs_ms(filename_ms);
     ms.load(fs_ms);

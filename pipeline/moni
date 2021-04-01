@@ -71,7 +71,7 @@ build_moni_exe          = os.path.join(compress_dirname, "rlebwt_ms_full_build")
 build_phoni_ms_exe         = os.path.join(compress_dirname, "build_phoni")
 build_spumoni_exe       = os.path.join(compress_dirname, "build_spumoni")
 
-run_moni_exe            = os.path.join(compress_dirname, "align_klib_ksw2")
+run_moni_exe            = os.path.join(compress_dirname, "align_full_ksw2")
 run_moni_ms_exe         = os.path.join(compress_dirname, "ms")
 run_phoni_ms_exe        = os.path.join(compress_dirname, "run_phoni")
 run_spumoni_exe         = os.path.join(compress_dirname, "run_spumoni")
