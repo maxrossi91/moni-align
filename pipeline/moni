@@ -397,7 +397,11 @@ class build_moni(threading.Thread):
 
       command = "{exe} {file}".format(exe=os.path.join(
           args.exe_dir, build_moni_exe), file=args.reference)
-
+      print("==== Building MONI. Command:", command, flush=True)
+      if(execute_command(command, logfile, logfile_name) != True):
+        return
+      print("Building MONI Elapsed time: {0:.4f}".format(
+          time.time()-start), flush=True)
 
 
 class build_phoni_ms(threading.Thread):
