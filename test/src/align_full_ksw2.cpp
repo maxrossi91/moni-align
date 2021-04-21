@@ -599,7 +599,7 @@ public:
     }
 
     std::vector< std::pair< size_t, size_t > > anchors;
-    std::vector<std::pair<size_t, std::vector<size_t>>> chains;
+    std::vector<std::pair<ll, std::vector<size_t>>> chains;
 
     if(!find_chains(mems,anchors,chains))
       return false;
@@ -630,7 +630,7 @@ public:
     }
 
     std::vector< std::pair< size_t, size_t > > anchors_rev;
-    std::vector<std::pair<size_t, std::vector<size_t>>> chains_rev;
+    std::vector<std::pair<ll, std::vector<size_t>>> chains_rev;
 
     if(!find_chains(mems_rev,anchors_rev,chains_rev))
       return false;
@@ -647,6 +647,7 @@ public:
     std::sort(top4.begin(), top4.end(),std::greater<std::pair<size_t,size_t>>());
 
     int32_t score2 = 0;
+    int32_t score = 0;
 
     //TODO: Rewrite this part that is so ugly
     if(top4.size() > 1)
@@ -674,14 +675,16 @@ public:
       // Reverse the chain order
       std::reverse(chain.second.begin(), chain.second.end());
       // Compute the score of a chain.
-      score2 = chain_score(chain,anchors_rev, mems_rev, min_score,false,score2,read,strand,out);
+      score = chain_score(chain,anchors_rev, mems_rev, min_score,false,score2,read,strand,out);
     }else{
       auto chain = chains[top4[0].second];
       // Reverse the chain order
       std::reverse(chain.second.begin(), chain.second.end());
       // Compute the score of a chain.
-      score2 = chain_score(chain,anchors, mems, min_score,false,score2,read,strand,out);
+      score = chain_score(chain,anchors, mems, min_score,false,score2,read,strand,out);
+      
     }
+    if(score > min_score) aligned = true;
     
 
 
@@ -959,7 +962,7 @@ public:
   bool find_chains(
     const   std::vector<mem_t>& mems,
             std::vector< std::pair< size_t, size_t > >& anchors,
-            std::vector<std::pair<size_t, std::vector<size_t>>>& chains        
+            std::vector<std::pair<ll, std::vector<size_t>>>& chains        
     )
   {
     /************* minimap2 dynamic programming for mem chaining ***************/
@@ -1009,7 +1012,9 @@ public:
     {
       // Get anchor i
       const auto a_i = anchors[i];
+      const ll k_i = mems[a_i.first].occs[a_i.second];
       const ll x_i = mems[a_i.first].occs[a_i.second] + mems[a_i.first].len - 1;
+      const ll z_i = mems[a_i.first].idx;
       const ll y_i = mems[a_i.first].idx + mems[a_i.first].len - 1;
       const ll w_i = mems[a_i.first].len;
 
@@ -1031,6 +1036,8 @@ public:
           j = lb + 1;
           continue;
         }
+        // skip if incompatible
+        if(k_i < x_j or z_i < y_j) continue;
 
         const ll x_d = x_i - x_j;
         const ll y_d = y_i - y_j;
@@ -1080,7 +1087,7 @@ public:
       return false;
 
     // TODO: replace the vector of pairs with a lambda for the sort
-    std::vector<std::pair<size_t,size_t>> chain_starts(n_chains); // Stores uniqe chains and their index of uniqe chains in anchors
+    std::vector<std::pair<ll,size_t>> chain_starts(n_chains); // Stores uniqe chains and their index of uniqe chains in anchors
     size_t k = 0;
     for(size_t i = 0; i < n_chains; ++i)
     {
@@ -1095,7 +1102,7 @@ public:
 
     chain_starts.resize(k), chain_starts.shrink_to_fit();
     n_chains = chain_starts.size();
-    std::sort(chain_starts.begin(), chain_starts.end(), std::greater<std::pair<size_t,size_t>>());
+    std::sort(chain_starts.begin(), chain_starts.end(), std::greater<std::pair<ll,size_t>>());
     
     // std::vector<std::pair<size_t, std::vector<size_t>>> chains;
 
@@ -1103,7 +1110,7 @@ public:
     memset(t.data(),0,sizeof(size_t) * t.size());
     for(size_t i = 0; i < n_chains; ++i)
     {
-      size_t j = chain_starts[i].second;
+      ll j = chain_starts[i].second;
       std::vector<size_t> chain;
       do {
         chain.push_back(j); // stores th reverse of the chain
@@ -1120,7 +1127,7 @@ public:
     }
 
     // Sort the chains by max scores.
-    std::sort(chains.begin(), chains.end(), std::greater<std::pair<size_t,std::vector<size_t>>>());
+    std::sort(chains.begin(), chains.end(), std::greater<std::pair<ll,std::vector<size_t>>>());
 
     // Clear space
     p.resize(0), p.shrink_to_fit();
