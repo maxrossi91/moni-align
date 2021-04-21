@@ -1,6 +1,7 @@
 
 add_executable(compress_dictionary compress_dictionary.cpp)
-target_link_libraries(compress_dictionary common sdsl malloc_count)
+target_link_libraries(compress_dictionary sdsl malloc_count)
+target_include_directories(compress_dictionary PUBLIC "../../include/common")
 
 FetchContent_GetProperties(r-index)
 FetchContent_GetProperties(shaped_slp)

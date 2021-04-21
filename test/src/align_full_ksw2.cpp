@@ -63,7 +63,54 @@ static inline int ilog2_32(uint32_t v)
 	return (t = v>>8) ? 8 + LogTable256[t] : LogTable256[v];
 }
 //******************************************************************************
+////////////////////////////////////////////////////////////////////////////////
+/// kseq extra
+////////////////////////////////////////////////////////////////////////////////
 
+static inline size_t ks_tell(kseq_t *seq)
+{
+  return gztell(seq->f->f) - seq->f->end + seq->f->begin;
+}
+
+void copy_kstring_t(kstring_t &l, kstring_t &r)
+{
+  l.l = r.l;
+  l.m = r.m;
+  l.s = (char *)malloc(l.m);
+  for (size_t i = 0; i < r.m; ++i)
+    l.s[i] = r.s[i];
+}
+void copy_kseq_t(kseq_t *l, kseq_t *r)
+{
+  copy_kstring_t(l->name, r->name);
+  copy_kstring_t(l->comment, r->comment);
+  copy_kstring_t(l->seq, r->seq);
+  copy_kstring_t(l->qual, r->qual);
+  l->last_char = r->last_char;
+}
+////////////////////////////////////////////////////////////////////////////////
+
+////////////////////////////////////////////////////////////////////////////////
+/// helper functions
+////////////////////////////////////////////////////////////////////////////////
+
+char complement(char n)
+{
+  switch (n)
+  {
+  case 'A':
+    return 'T';
+  case 'T':
+    return 'A';
+  case 'G':
+    return 'C';
+  case 'C':
+    return 'G';
+  default:
+    return n;
+  }
+}
+////////////////////////////////////////////////////////////////////////////////
 
 class aligner_t
 {
@@ -143,8 +190,8 @@ public:
 
   bool align(kseq_t *read, FILE* out, uint8_t strand, bool mem_chaining = true)
   {
-    if(mem_chaining) 
-      return align_chain(read,out,strand);
+    if(mem_chaining) // TODO: fix the no chaining alignment
+      return (strand == 0? align_chain(read,out,strand):false);
     else
       return align_no_chain(read,out,strand);
   }
@@ -286,6 +333,7 @@ public:
   } mem_t;
 
   // Fill the vector of occurrences of the mem_t data structure
+  // TODO: remove the checks for the lengths once Dominik fix the lce queries
   void find_MEM_occs(mem_t& mem)
   {
     mem.occs.push_back(mem.pos);
@@ -293,27 +341,39 @@ public:
     // Phi direction
     size_t curr = mem.pos;
     size_t next = ms.Phi(curr);
-    size_t lcp =  lceToRBounded(ra,curr,next,mem.len);
-    while(lcp >= mem.len)
+    if((n-curr) >= mem.len and (n-next) >= mem.len)
     {
-      mem.occs.push_back(next);
-      
-      curr = next;
-      next = ms.Phi(curr);
-      lcp  = lceToRBounded(ra,curr,next,mem.len);
+      size_t lcp =  lceToRBounded(ra,curr,next,mem.len);
+      while(lcp >= mem.len)
+      {
+        mem.occs.push_back(next);
+        
+        curr = next;
+        next = ms.Phi(curr);
+        if((n-curr) >= mem.len and (n-next) >= mem.len)
+          lcp  = lceToRBounded(ra,curr,next,mem.len);
+        else
+          lcp = 0;
+      }
     }
 
     // Phi_inv direction
     curr = mem.pos;
     next = ms.Phi_inv(curr);
-    lcp =  lceToRBounded(ra,curr,next,mem.len);
-    while(lcp >= mem.len)
+    if((n-curr) >= mem.len and (n-next) >= mem.len)
     {
-      mem.occs.push_back(next);
-      
-      curr = next;
-      next = ms.Phi_inv(curr);
-      lcp  = lceToRBounded(ra,curr,next,mem.len);
+      size_t lcp =  lceToRBounded(ra,curr,next,mem.len);
+      while(lcp >= mem.len)
+      {
+        mem.occs.push_back(next);
+        
+        curr = next;
+        next = ms.Phi_inv(curr);
+        if((n-curr) >= mem.len and (n-next) >= mem.len)
+          lcp  = lceToRBounded(ra,curr,next,mem.len);
+        else
+          lcp = 0;
+      }
     }
 
   }
@@ -322,41 +382,41 @@ public:
   // bool align_chains(kseq_t *read, FILE* out, uint8_t strand)
   bool align_chain(kseq_t *read, FILE* out, uint8_t strand)
   {
-    std::vector<mem_t> mems;
+    // std::vector<mem_t> mems;
 
 
     bool aligned = false;
 
-    // Find MEMs.
-    auto pointers = ms.query(read->seq.s, read->seq.l);
-    size_t l = 0;   // Current match length
-    size_t pl = 0;  // Previous match length
-    size_t n_Ns = 0;
-    for (size_t i = 0; i < pointers.size(); ++i)
-    {
-      size_t pos = pointers[i];
-      while ((i + l) < read->seq.l && (pos + l) < n && read->seq.s[i + l] == ra.charAt(pos + l))
-      {
-        if(read->seq.s[i + l] == 'N') n_Ns++;
-        else n_Ns = 0;
-        ++l;
-      }
+    // // Find MEMs.
+    // auto pointers = ms.query(read->seq.s, read->seq.l);
+    // size_t l = 0;   // Current match length
+    // size_t pl = 0;  // Previous match length
+    // size_t n_Ns = 0;
+    // for (size_t i = 0; i < pointers.size(); ++i)
+    // {
+    //   size_t pos = pointers[i];
+    //   while ((i + l) < read->seq.l && (pos + l) < n && read->seq.s[i + l] == ra.charAt(pos + l))
+    //   {
+    //     if(read->seq.s[i + l] == 'N') n_Ns++;
+    //     else n_Ns = 0;
+    //     ++l;
+    //   }
 
 
-      // Update MEMs
-      if (l >= pl and n_Ns < l and l >= min_len)
-      {
-        mems.push_back(mem_t(pointers[i],l,i));
-        find_MEM_occs(mems.back());
-      }
+    //   // Update MEMs
+    //   if (l >= pl and n_Ns < l and l >= min_len)
+    //   {
+    //     mems.push_back(mem_t(pointers[i],l,i));
+    //     find_MEM_occs(mems.back());
+    //   }
 
-      // Compute next match length
-      pl = l;
-      l = (l == 0 ? 0 : (l - 1));
-    }
+    //   // Compute next match length
+    //   pl = l;
+    //   l = (l == 0 ? 0 : (l - 1));
+    // }
 
-    if( mems.size() <= 0)
-      return false;
+    // if( mems.size() <= 0)
+    //   return false;
 
     // /************* minimap2 dynamic programming for mem chaining ***************/
     // /* https://github.com/lh3/minimap2/blob/master/chain.c */
@@ -524,66 +584,205 @@ public:
     // f.resize(0), f.shrink_to_fit();
     // msc.resize(0), msc.shrink_to_fit();
 
+
+    // Find MEMs in the forward direction
+    std::vector<mem_t> mems;
+
+    find_mems(read,mems);
+
+    for(size_t i = 0; i < mems.size(); ++i){
+      std::cout << "MEM[" << i <<"]: \n";
+      std::cout << "    len:" << mems[i].len <<"\n";
+      std::cout << "    pos:" << mems[i].pos <<"\n";
+      std::cout << "    idx:" << mems[i].idx <<"\n";
+      std::cout << "   occs:" << mems[i].occs.size() <<"\n";
+    }
+
     std::vector< std::pair< size_t, size_t > > anchors;
     std::vector<std::pair<size_t, std::vector<size_t>>> chains;
 
     if(!find_chains(mems,anchors,chains))
       return false;
 
+    // Find MEMs in reverse direction
+    std::vector<mem_t> mems_rev;
+
+    //copy seq
+    kseq_t read_rev;
+    copy_kseq_t(&read_rev, read);
+
+    for (size_t i = 0; i < read->seq.l; ++i)
+      read_rev.seq.s[i] = complement(read->seq.s[read->seq.l - i - 1]);
+
+    if (read_rev.seq.m > read_rev.seq.l)
+      read_rev.seq.s[read_rev.seq.l] = 0;
+
+
+    find_mems(&read_rev,mems_rev);
+
+    for (size_t i = 0; i < mems_rev.size(); ++i)
+    {
+      std::cout << "MEM[" << i << "]: \n";
+      std::cout << "    len:" << mems_rev[i].len << "\n";
+      std::cout << "    pos:" << mems_rev[i].pos << "\n";
+      std::cout << "    idx:" << mems_rev[i].idx << "\n";
+      std::cout << "   occs:" << mems_rev[i].occs.size() << "\n";
+    }
+
+    std::vector< std::pair< size_t, size_t > > anchors_rev;
+    std::vector<std::pair<size_t, std::vector<size_t>>> chains_rev;
+
+    if(!find_chains(mems_rev,anchors_rev,chains_rev))
+      return false;
+
+    int32_t min_score = 20 + 8 * log(read->seq.l);
+
+    // Compute the second best score
+    std::vector<std::pair<size_t,size_t>> top4;
+    for(size_t i = 0; i < min(chains.size(),(size_t)2); ++i)
+      top4.push_back(std::make_pair(chains[i].first,i));
+    for(size_t i = 0; i < min(chains_rev.size(),(size_t)2); ++i)
+      top4.push_back(std::make_pair(chains_rev[i].first,2 + i));
+
+    std::sort(top4.begin(), top4.end(),std::greater<std::pair<size_t,size_t>>());
+
+    int32_t score2 = 0;
+
+    //TODO: Rewrite this part that is so ugly
+    if(top4.size() > 1)
+    {
+      if(top4[1].second > 1)
+      {
+        auto chain = chains_rev[top4[1].second-2];
+        // Reverse the chain order
+        std::reverse(chain.second.begin(), chain.second.end());
+        // Compute the score of a chain.
+        score2 = chain_score(chain,anchors_rev, mems_rev, min_score,(not (top_k > 1)),-1,read,strand,out);
+      }else{
+        auto chain = chains[top4[1].second];
+        // Reverse the chain order
+        std::reverse(chain.second.begin(), chain.second.end());
+        // Compute the score of a chain.
+        score2 = chain_score(chain,anchors, mems, min_score,(not (top_k > 1)),-1,read,strand,out);
+      }
+    }
+
+    // Report the high-score chain
+    if(top4[0].second > 1)
+    {
+      auto chain = chains_rev[top4[0].second-2];
+      // Reverse the chain order
+      std::reverse(chain.second.begin(), chain.second.end());
+      // Compute the score of a chain.
+      score2 = chain_score(chain,anchors_rev, mems_rev, min_score,false,score2,read,strand,out);
+    }else{
+      auto chain = chains[top4[0].second];
+      // Reverse the chain order
+      std::reverse(chain.second.begin(), chain.second.end());
+      // Compute the score of a chain.
+      score2 = chain_score(chain,anchors, mems, min_score,false,score2,read,strand,out);
+    }
+    
+
+
+
     // Compute the alignment score for the top_k chains
     // NOTE: for seconadry alignments the MAPQ score is set to 255 (as in Bowtie2)
     // QUESTION: Should I compute the scores for all the chains?
-    for(size_t i = 0; i < min(chains.size(),top_k); ++i)
+    size_t j = 0;
+    size_t j_rev = 0;
+    for(size_t i = 0; i < min(chains.size() + chains_rev.size(),top_k); ++i)
     {
       // QUESTION: Should I compute the score for the top_k distinct alignments?
 
-      // Compute the score of a chain.
-      auto chain = chains[i];
-      // Reverse the chain order
-      std::reverse(chain.second.begin(), chain.second.end());
-      // Extract the anchors
-      std::vector<std::pair<size_t,size_t>> chain_anchors(chain.second.size());
-      for(size_t i = 0; i < chain_anchors.size(); ++i)
-        chain_anchors[i] = anchors[chain.second[i]];
-      // Extracting left and right context of the read
-      // lcs: left context sequence
-      size_t lcs_len = mems[chain_anchors[0].first].idx;
-      uint8_t* lcs = (uint8_t*)malloc(lcs_len);
-      // verbose("lcs: " + std::string(read->seq.s).substr(0,lcs_len));
-      // Convert A,C,G,T,N into 0,1,2,3,4
-      // The left context is reversed
-      for (size_t i = 0; i < lcs_len; ++i)
-        lcs[lcs_len -i -1] = seq_nt4_table[(int)read->seq.s[i]];
-
-      // rcs: right context sequence
-      size_t rcs_occ = (mems[chain_anchors.back().first].idx + mems[chain_anchors.back().first].len); // The first character of the right context
-      size_t rcs_len = read->seq.l - rcs_occ;
-      uint8_t* rcs = (uint8_t*)malloc(rcs_len);
-      // verbose("rcs: " + std::string(read->seq.s).substr(rcs_occ,rcs_len));
-      // Convert A,C,G,T,N into 0,1,2,3,4
-      for (size_t i = 0; i < rcs_len; ++i) 
-        rcs[i] = seq_nt4_table[(int)read->seq.s[ rcs_occ + i]];
-
-      int32_t min_score = 20 + 8 * log(read->seq.l);
-      // Fill between MEMs
-      int32_t score = fill_chain(
-          mems,
-          chain_anchors,
-          lcs,   // Left context of the read
-          lcs_len, // Left context of the read lngth
-          rcs,   // Right context of the read
-          rcs_len, // Right context of the read length
-          read
-        );
-
-        if(score > min_score)
+      if(j < chains.size() and j_rev < chains_rev.size())
+      {
+        if(chains[j].first > chains_rev[j_rev].first)
         {
-          fill_chain(mems,chain_anchors,lcs,lcs_len,rcs,rcs_len,read,false,0,strand,out); 
-          aligned = true;
+          if(i > 1){
+            auto chain = chains[j];
+            // Reverse the chain order
+            std::reverse(chain.second.begin(), chain.second.end());
+            // Compute the score of a chain.
+            chain_score(chain,anchors, mems, min_score,false,-1,read,0,out);
+          }
+          j++;
+        }else{
+          if(i > 1){
+            auto chain = chains_rev[j_rev];
+            // Reverse the chain order
+            std::reverse(chain.second.begin(), chain.second.end());
+            // Compute the score of a chain.
+            score2 = chain_score(chain,anchors_rev, mems_rev, min_score,false,-1,read,16,out);
+          }
+          j_rev++;
         }
+      }else if(j < chains.size()){
+        if(i > 1)
+        {
+            auto chain = chains[j];
+            // Reverse the chain order
+            std::reverse(chain.second.begin(), chain.second.end());
+            // Compute the score of a chain.
+            chain_score(chain,anchors, mems, min_score,false,-1,read,0,out);
+        }
+        j++;
+      }else if(j_rev < chains_rev.size()){
+        if(i > 1)
+        {
+          auto chain = chains_rev[j_rev];
+          // Reverse the chain order
+          std::reverse(chain.second.begin(), chain.second.end());
+          // Compute the score of a chain.
+          chain_score(chain,anchors_rev, mems_rev, min_score,false,-1,read,16,out);
+          
+        }
+        j_rev++;
+      }
 
-        delete rcs;
-        delete lcs;
+      // // Extract the anchors
+      // std::vector<std::pair<size_t,size_t>> chain_anchors(chain.second.size());
+      // for(size_t i = 0; i < chain_anchors.size(); ++i)
+      //   chain_anchors[i] = anchors[chain.second[i]];
+      // // Extracting left and right context of the read
+      // // lcs: left context sequence
+      // size_t lcs_len = mems[chain_anchors[0].first].idx;
+      // uint8_t* lcs = (uint8_t*)malloc(lcs_len);
+      // // verbose("lcs: " + std::string(read->seq.s).substr(0,lcs_len));
+      // // Convert A,C,G,T,N into 0,1,2,3,4
+      // // The left context is reversed
+      // for (size_t i = 0; i < lcs_len; ++i)
+      //   lcs[lcs_len -i -1] = seq_nt4_table[(int)read->seq.s[i]];
+
+      // // rcs: right context sequence
+      // size_t rcs_occ = (mems[chain_anchors.back().first].idx + mems[chain_anchors.back().first].len); // The first character of the right context
+      // size_t rcs_len = read->seq.l - rcs_occ;
+      // uint8_t* rcs = (uint8_t*)malloc(rcs_len);
+      // // verbose("rcs: " + std::string(read->seq.s).substr(rcs_occ,rcs_len));
+      // // Convert A,C,G,T,N into 0,1,2,3,4
+      // for (size_t i = 0; i < rcs_len; ++i) 
+      //   rcs[i] = seq_nt4_table[(int)read->seq.s[ rcs_occ + i]];
+
+      // int32_t min_score = 20 + 8 * log(read->seq.l);
+      // // Fill between MEMs
+      // int32_t score = fill_chain(
+      //     mems,
+      //     chain_anchors,
+      //     lcs,   // Left context of the read
+      //     lcs_len, // Left context of the read lngth
+      //     rcs,   // Right context of the read
+      //     rcs_len, // Right context of the read length
+      //     read
+      //   );
+
+      //   if(score > min_score)
+      //   {
+      //     fill_chain(mems,chain_anchors,lcs,lcs_len,rcs,rcs_len,read,false,0,strand,out); 
+      //     aligned = true;
+      //   }
+
+      //   delete rcs;
+      //   delete lcs;
       
     }
 
@@ -757,10 +956,11 @@ public:
   }
 
   // Given a set of mems, find the chains
-  bool find_chains(const  std::vector<mem_t>& mems,
-                          std::vector< std::pair< size_t, size_t > >& anchors,
-                          std::vector<std::pair<size_t, std::vector<size_t>>>& chains        
-                  )
+  bool find_chains(
+    const   std::vector<mem_t>& mems,
+            std::vector< std::pair< size_t, size_t > >& anchors,
+            std::vector<std::pair<size_t, std::vector<size_t>>>& chains        
+    )
   {
     /************* minimap2 dynamic programming for mem chaining ***************/
     /* https://github.com/lh3/minimap2/blob/master/chain.c */
@@ -790,8 +990,8 @@ public:
 
     // TODO: Parameters to be defined
     const ll G = LLONG_MAX;
-    const ll max_dist_x = 1000000;//LLONG_MAX;
-    const ll max_dist_y = 1000000;//LLONG_MAX;
+    const ll max_dist_x = 100;//LLONG_MAX;
+    const ll max_dist_y = 100;//LLONG_MAX;
     const ll max_iter = 50;
     const ll max_pred = 50;
     const ll min_chain_score = 1;
@@ -809,9 +1009,9 @@ public:
     {
       // Get anchor i
       const auto a_i = anchors[i];
-      const size_t x_i = mems[a_i.first].occs[a_i.second] + mems[a_i.first].len - 1;
-      const size_t y_i = mems[a_i.first].idx + mems[a_i.first].len - 1;
-      const size_t w_i = mems[a_i.first].len;
+      const ll x_i = mems[a_i.first].occs[a_i.second] + mems[a_i.first].len - 1;
+      const ll y_i = mems[a_i.first].idx + mems[a_i.first].len - 1;
+      const ll w_i = mems[a_i.first].len;
 
       ll max_f = w_i;
       ll max_j = -1;
@@ -822,8 +1022,8 @@ public:
       for(ll j = i-1; j > lb; --j)
       {
         const auto a_j = anchors[j];
-        const size_t x_j = mems[a_j.first].occs[a_j.second] + mems[a_j.first].len - 1;
-        const size_t y_j = mems[a_j.first].idx + mems[a_j.first].len - 1;
+        const ll x_j = mems[a_j.first].occs[a_j.second] + mems[a_j.first].len - 1;
+        const ll y_j = mems[a_j.first].idx + mems[a_j.first].len - 1;
 
         // If the current anchor is too far, exit.
         if(x_i > x_j + max_dist_x)
@@ -832,9 +1032,9 @@ public:
           continue;
         }
 
-        const size_t x_d = x_i - x_j;
-        const size_t y_d = y_i - y_j;
-        const size_t l = (y_d > x_d ? (y_d - x_d) : (x_d - y_d));
+        const ll x_d = x_i - x_j;
+        const ll y_d = y_i - y_j;
+        const int32_t l = (y_d > x_d ? (y_d - x_d) : (x_d - y_d));
         const uint32_t ilog_l = (l > 0? ilog2_32(l): 0);
 
         if(y_j >= y_i or max(y_d, x_d) > G)
@@ -929,6 +1129,97 @@ public:
     msc.resize(0), msc.shrink_to_fit();
 
     return true;
+  }
+
+  void find_mems(
+    const kseq_t *read,
+    std::vector<mem_t>& mems
+    ) 
+  {
+    auto pointers = ms.query(read->seq.s, read->seq.l);
+    size_t l = 0;   // Current match length
+    size_t pl = 0;  // Previous match length
+    size_t n_Ns = 0;
+    for (size_t i = 0; i < pointers.size(); ++i)
+    {
+      size_t pos = pointers[i];
+      while ((i + l) < read->seq.l && (pos + l) < n && read->seq.s[i + l] == ra.charAt(pos + l))
+      {
+        if(read->seq.s[i + l] == 'N') n_Ns++;
+        else n_Ns = 0;
+        ++l;
+      }
+
+      // Update MEMs
+      if (l >= pl and n_Ns < l and l >= min_len)
+      {
+        mems.push_back(mem_t(pointers[i],l,i));
+        find_MEM_occs(mems.back());
+      }
+
+      // Compute next match length
+      pl = l;
+      l = (l == 0 ? 0 : (l - 1));
+    }
+
+  }
+
+  int32_t chain_score(
+    const std::pair<size_t, std::vector<size_t>>& chain,
+    const std::vector< std::pair< size_t, size_t > >& anchors,
+    const std::vector<mem_t>& mems,
+    const int32_t min_score,
+    const bool score_only = true,
+    const int32_t score2 = 0,
+    const kseq_t* read = nullptr,
+    const uint8_t strand = 0,
+    FILE* out = nullptr
+  )
+  {
+    bool aligned = false;
+    // Extract the anchors
+    std::vector<std::pair<size_t,size_t>> chain_anchors(chain.second.size());
+    for(size_t i = 0; i < chain_anchors.size(); ++i)
+      chain_anchors[i] = anchors[chain.second[i]];
+    // Extracting left and right context of the read
+    // lcs: left context sequence
+    size_t lcs_len = mems[chain_anchors[0].first].idx;
+    uint8_t* lcs = (uint8_t*)malloc(lcs_len);
+    // verbose("lcs: " + std::string(read->seq.s).substr(0,lcs_len));
+    // Convert A,C,G,T,N into 0,1,2,3,4
+    // The left context is reversed
+    for (size_t i = 0; i < lcs_len; ++i)
+      lcs[lcs_len -i -1] = seq_nt4_table[(int)read->seq.s[i]];
+
+    // rcs: right context sequence
+    size_t rcs_occ = (mems[chain_anchors.back().first].idx + mems[chain_anchors.back().first].len); // The first character of the right context
+    size_t rcs_len = read->seq.l - rcs_occ;
+    uint8_t* rcs = (uint8_t*)malloc(rcs_len);
+    // verbose("rcs: " + std::string(read->seq.s).substr(rcs_occ,rcs_len));
+    // Convert A,C,G,T,N into 0,1,2,3,4
+    for (size_t i = 0; i < rcs_len; ++i) 
+      rcs[i] = seq_nt4_table[(int)read->seq.s[ rcs_occ + i]];
+
+    // Fill between MEMs
+    int32_t score = fill_chain(
+        mems,
+        chain_anchors,
+        lcs,   // Left context of the read
+        lcs_len, // Left context of the read lngth
+        rcs,   // Right context of the read
+        rcs_len, // Right context of the read length
+        read
+      );
+
+      if(!score_only and score > min_score)
+      {
+        fill_chain(mems,chain_anchors,lcs,lcs_len,rcs,rcs_len,read,score_only,0,strand,out); 
+      }
+
+      delete rcs;
+      delete lcs;
+
+      return score;
   }
 
   size_t get_aligned_reads()
@@ -1724,31 +2015,6 @@ protected:
 
 };
 
-////////////////////////////////////////////////////////////////////////////////
-/// kseq extra
-////////////////////////////////////////////////////////////////////////////////
-
-static inline size_t ks_tell(kseq_t *seq)
-{
-  return gztell(seq->f->f) - seq->f->end + seq->f->begin;
-}
-
-void copy_kstring_t(kstring_t &l, kstring_t &r)
-{
-  l.l = r.l;
-  l.m = r.m;
-  l.s = (char *)malloc(l.m);
-  for (size_t i = 0; i < r.m; ++i)
-    l.s[i] = r.s[i];
-}
-void copy_kseq_t(kseq_t *l, kseq_t *r)
-{
-  copy_kstring_t(l->name, r->name);
-  copy_kstring_t(l->comment, r->comment);
-  copy_kstring_t(l->seq, r->seq);
-  copy_kstring_t(l->qual, r->qual);
-  l->last_char = r->last_char;
-}
 
 ////////////////////////////////////////////////////////////////////////////////
 /// Parallel computation
@@ -1841,22 +2107,6 @@ std::vector<size_t> split_fastq(std::string filename, size_t n_threads)
   return starts;
 }
 
-char complement(char n)
-{
-  switch (n)
-  {
-  case 'A':
-    return 'T';
-  case 'T':
-    return 'A';
-  case 'G':
-    return 'C';
-  case 'C':
-    return 'G';
-  default:
-    return n;
-  }
-}
 
 typedef struct{
   // Parameters
@@ -2018,6 +2268,95 @@ size_t st_align(aligner_t *aligner, std::string pattern_filename, std::string sa
 
   return n_aligned_reads;
 }
+
+//*********************** Argument options ***************************************
+// struct containing command line parameters and other globals
+struct Args
+{
+  std::string filename = "";
+  size_t w = 10; // sliding window size and its default
+  bool store = false; // store the data structure in the file
+  bool memo  = false; // print the memory usage
+  bool csv   = false; // print stats on stderr in csv format
+  bool rle   = false; // outpt RLBWT
+  std::string patterns = ""; // path to patterns file
+  size_t l = 25; // minumum MEM length
+  size_t th = 1; // number of threads
+  bool is_fasta = false; // read a fasta file
+};
+
+void parseArgs(int argc, char *const argv[], Args &arg)
+{
+  int c;
+  extern char *optarg;
+  extern int optind;
+
+  std::string usage("usage: " + std::string(argv[0]) + " infile [-s store] [-m memo] [-c csv] [-p patterns] [-f fasta] [-r rle] [-t threads] [-l len]\n\n" +
+                    "Computes the pfp data structures of infile, provided that infile.parse, infile.dict, and infile.occ exists.\n" +
+                    "  wsize: [integer] - sliding window size (def. 10)\n" +
+                    "  store: [boolean] - store the data structure in infile.pfp.ds. (def. false)\n" +
+                    "   memo: [boolean] - print the data structure memory usage. (def. false)\n" +
+                    "  fasta: [boolean] - the input file is a fasta file. (def. false)\n" +
+                    "    rle: [boolean] - output run length encoded BWT. (def. false)\n" +
+                    "pattens: [string]  - path to patterns file.\n" +
+                    "    len: [integer] - minimum MEM lengt (def. 25)\n" +
+                    " thread: [integer] - number of threads (def. 1)\n" +
+                    "    csv: [boolean] - print the stats in csv form on strerr. (def. false)\n");
+
+  std::string sarg;
+  while ((c = getopt(argc, argv, "w:smcfl:rhp:t:")) != -1)
+  {
+    switch (c)
+    {
+    case 'w':
+      sarg.assign(optarg);
+      arg.w = stoi(sarg);
+      break;
+    case 's':
+      arg.store = true;
+      break;
+    case 'm':
+      arg.memo = true;
+      break;
+    case 'c':
+      arg.csv = true;
+      break;
+    case 'r':
+      arg.rle = true;
+      break;
+    case 'p':
+      arg.patterns.assign(optarg);
+      break;
+    case 'l':
+      sarg.assign(optarg);
+      arg.l = stoi(sarg);
+      break;
+    case 't':
+      sarg.assign(optarg);
+      arg.th = stoi(sarg);
+      break;
+    case 'f':
+      arg.is_fasta = true;
+      break;
+    case 'h':
+      error(usage);
+    case '?':
+      error("Unknown option.\n", usage);
+      exit(1);
+    }
+  }
+  // the only input parameter is the file name
+  if (argc == optind + 1)
+  {
+    arg.filename.assign(argv[optind]);
+  }
+  else
+  {
+    error("Invalid number of arguments\n", usage);
+  }
+}
+
+//********** end argument options ********************
 
 int main(int argc, char *const argv[])
 {
