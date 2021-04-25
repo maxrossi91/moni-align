@@ -234,17 +234,22 @@ class SLP(threading.Thread):
       print("{} shaped_slp started!".format(self.getName()), flush=True)        # "Thread-x started!"
 
       grammars = {
-        'naive' : 'Naive',
+        'naive' : 'PlainSlp_FblcFblc',
         'ssslp': 'SelfShapedSlp_SdSd_Sd'
+      }
+
+      grammar_extensions = {
+        'naive' : 'naive.slp',
+        'ssslp': 'slp'
       }
 
       sstart = time.time()
       # ---- compress the dictionary 
       start = time.time()
       exe = shaped_slp
-      command = "{exe} -i {file} -o {file}.slp -e {grammar} -f Bigrepair".format(
+      command = "{exe} -i {file} -o {file}.{ext} -e {grammar} -f Bigrepair".format(
                 exe = os.path.join(bigrepair_dirname, exe), file=args.reference,
-                grammar = grammars[args.grammar])
+                ext = grammar_extensions[args.grammar], grammar = grammars[args.grammar])
       print("==== ShapedSLP construction.\nCommand:", command, flush=True)
       if(execute_command(command,logfile,logfile_name)!=True):
         return
