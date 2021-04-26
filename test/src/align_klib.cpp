@@ -37,6 +37,8 @@ extern "C" {
 #include <SelfShapedSlp.hpp>
 #include <DirectAccessibleGammaCode.hpp>
 #include <SelectType.hpp>
+#include <PlainSlp.hpp>
+#include <FixedBitLenCode.hpp>
 
 #include <ksw.h>
 #include <ssw.h>
@@ -47,13 +49,41 @@ extern "C" {
 
 // KSEQ_INIT(gzFile, gzread);
 
-class aligner_t
+////////////////////////////////////////////////////////////////////////////////
+/// SLP definitions
+////////////////////////////////////////////////////////////////////////////////
+
+using SelSd = SelectSdvec<>;
+using DagcSd = DirectAccessibleGammaCode<SelSd>;
+using Fblc = FixedBitLenCode<>;
+
+using shaped_slp_t = SelfShapedSlp<uint32_t, DagcSd, DagcSd, SelSd>;
+using plain_slp_t = PlainSlp<uint32_t, Fblc, Fblc>;
+
+template <typename slp_t>
+std::string get_slp_file_extension()
+{
+  return std::string(".slp");
+}
+
+template <>
+std::string get_slp_file_extension<shaped_slp_t>()
+{
+  return std::string(".slp");
+}
+
+template <>
+std::string get_slp_file_extension<plain_slp_t>()
+{
+  return std::string(".plain.slp");
+}
+////////////////////////////////////////////////////////////////////////////////
+
+template <typename slp_t>
+class aligner
 {
 public:
-  using SelSd = SelectSdvec<>;
-  using DagcSd = DirectAccessibleGammaCode<SelSd>;
-
-  aligner_t(std::string filename, 
+  aligner(std::string filename, 
             size_t min_len_ = 50, 
             bool forward_only_ = true): 
                 min_len(min_len_), 
@@ -77,7 +107,7 @@ public:
     verbose("Loading random access");
     t_insert_start = std::chrono::high_resolution_clock::now();
 
-    std::string filename_slp = filename + ".slp";
+    std::string filename_slp = filename + get_slp_file_extension<slp_t>();
 
     ifstream fs(filename_slp);
     ra.load(fs);
@@ -308,7 +338,7 @@ public:
 
 protected:
   ms_pointers<> ms;
-  SelfShapedSlp<uint32_t, DagcSd, DagcSd, SelSd> ra;
+  slp_t ra;
 
   size_t min_len = 0;
   size_t aligned_reads = 0;
@@ -475,7 +505,9 @@ char complement(char n)
   }
 }
 
-typedef struct{
+template <typename aligner_t>
+struct mt_param_t
+{
   // Parameters
   aligner_t *aligner;
   std::string pattern_filename;
@@ -486,11 +518,12 @@ typedef struct{
   // Return values
   size_t n_reads;
   size_t n_aligned_reads;
-} mt_param;
+};
 
+template <typename aligner_t>
 void *mt_align_worker(void *param)
 {
-  mt_param *p = (mt_param*) param;
+  mt_param_t<aligner_t> *p = (mt_param_t<aligner_t> *)param;
   size_t n_reads = 0;
   size_t n_aligned_reads = 0;
 
@@ -545,10 +578,11 @@ void *mt_align_worker(void *param)
   return NULL;
 }
 
+template <typename aligner_t>
 size_t mt_align(aligner_t *aligner, std::string pattern_filename, std::string sam_filename, size_t n_threads)
 {
   pthread_t t[n_threads] = {0};
-  mt_param params[n_threads];
+  mt_param_t<aligner_t> params[n_threads];
   std::vector<size_t> starts = split_fastq(pattern_filename, n_threads);
   for(size_t i = 0; i < n_threads; ++i)
   {
@@ -558,7 +592,7 @@ size_t mt_align(aligner_t *aligner, std::string pattern_filename, std::string sa
     params[i].start = starts[i];
     params[i].end = starts[i+1];
     params[i].wk_id = i;
-    xpthread_create(&t[i], NULL, &mt_align_worker, &params[i], __LINE__, __FILE__);
+    xpthread_create(&t[i], NULL, &mt_align_worker<aligner_t>, &params[i], __LINE__, __FILE__);
   }
 
   size_t tot_reads = 0;
@@ -584,7 +618,7 @@ size_t mt_align(aligner_t *aligner, std::string pattern_filename, std::string sa
 ////////////////////////////////////////////////////////////////////////////////
 /// Single Thread
 ////////////////////////////////////////////////////////////////////////////////
-
+template <typename aligner_t>
 size_t st_align(aligner_t *aligner, std::string pattern_filename, std::string sam_filename)
 {
   size_t n_reads = 0;
@@ -646,6 +680,7 @@ struct Args
   size_t l = 25;             // minumum MEM length
   size_t th = 1;             // number of threads
   bool is_fasta = false;     // read a fasta file
+  bool shaped_slp = false;   // use shaped slp
 };
 
 void parseArgs(int argc, char *const argv[], Args &arg)
@@ -654,17 +689,18 @@ void parseArgs(int argc, char *const argv[], Args &arg)
   extern char *optarg;
   extern int optind;
 
-  std::string usage("usage: " + std::string(argv[0]) + " infile [-s store] [-m memo] [-c csv] [-p patterns] [-f fasta] [-r rle] [-t threads] [-l len]\n\n" +
+  std::string usage("usage: " + std::string(argv[0]) + " infile [-s store] [-m memo] [-c csv] [-p patterns] [-f fasta] [-r rle] [-t threads] [-l len] [-q shaped_slp]\n\n" +
                     "Computes the pfp data structures of infile, provided that infile.parse, infile.dict, and infile.occ exists.\n" +
-                    "  wsize: [integer] - sliding window size (def. 10)\n" +
-                    "  store: [boolean] - store the data structure in infile.pfp.ds. (def. false)\n" +
-                    "   memo: [boolean] - print the data structure memory usage. (def. false)\n" +
-                    "  fasta: [boolean] - the input file is a fasta file. (def. false)\n" +
-                    "    rle: [boolean] - output run length encoded BWT. (def. false)\n" +
-                    "pattens: [string]  - path to patterns file.\n" +
-                    "    len: [integer] - minimum MEM lengt (def. 25)\n" +
-                    " thread: [integer] - number of threads (def. 1)\n" +
-                    "    csv: [boolean] - print the stats in csv form on strerr. (def. false)\n");
+                    "     wsize: [integer] - sliding window size (def. 10)\n" +
+                    "     store: [boolean] - store the data structure in infile.pfp.ds. (def. false)\n" +
+                    "      memo: [boolean] - print the data structure memory usage. (def. false)\n" +
+                    "     fasta: [boolean] - the input file is a fasta file. (def. false)\n" +
+                    "       rle: [boolean] - output run length encoded BWT. (def. false)\n" +
+                    "shaped_slp: [boolean] - use shaped slp. (def. false)\n" +
+                    "   pattens: [string]  - path to patterns file.\n" +
+                    "       len: [integer] - minimum MEM lengt (def. 25)\n" +
+                    "    thread: [integer] - number of threads (def. 1)\n" +
+                    "       csv: [boolean] - print the stats in csv form on strerr. (def. false)\n");
 
   std::string sarg;
   while ((c = getopt(argc, argv, "w:smcfl:rhp:t:")) != -1)
@@ -701,6 +737,9 @@ void parseArgs(int argc, char *const argv[], Args &arg)
     case 'f':
       arg.is_fasta = true;
       break;
+    case 'q':
+      arg.shaped_slp = true;
+      break;
     case 'h':
       error(usage);
     case '?':
@@ -721,12 +760,9 @@ void parseArgs(int argc, char *const argv[], Args &arg)
 
 //********** end argument options ********************
 
-int main(int argc, char *const argv[])
-{
 
-  Args args;
-  parseArgs(argc, argv, args);
-
+template<typename aligner_t>
+void dispatcher(Args &args){
   verbose("Construction of the aligner");
   std::chrono::high_resolution_clock::time_point t_insert_start = std::chrono::high_resolution_clock::now();
 
@@ -738,7 +774,6 @@ int main(int argc, char *const argv[])
 
   verbose("Processing patterns");
   t_insert_start = std::chrono::high_resolution_clock::now();
-  
 
   std::string base_name = basename(args.filename.data());
   std::string sam_filename = args.patterns + "_" + base_name + "_" + std::to_string(args.l);
@@ -749,10 +784,10 @@ int main(int argc, char *const argv[])
     args.th = 1;
   }
 
-  if(args.th == 1)
-    st_align(&aligner,args.patterns,sam_filename);
+  if (args.th == 1)
+    st_align<aligner_t>(&aligner, args.patterns, sam_filename);
   else
-    mt_align(&aligner,args.patterns,sam_filename,args.th);
+    mt_align<aligner_t>(&aligner, args.patterns, sam_filename, args.th);
 
   // TODO: Merge the SAM files.
 
@@ -775,6 +810,22 @@ int main(int argc, char *const argv[])
 
   if (args.csv)
     std::cerr << csv(args.filename.c_str(), time, space, mem_peak) << std::endl;
+}
+
+int main(int argc, char *const argv[])
+{
+
+  Args args;
+  parseArgs(argc, argv, args);
+
+  if (args.shaped_slp)
+  {
+    dispatcher<aligner<shaped_slp_t>>(args);
+  }
+  else
+  {
+    dispatcher<aligner<plain_slp_t>>(args);
+  }
 
   return 0;
 }
