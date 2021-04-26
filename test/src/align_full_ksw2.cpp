@@ -174,10 +174,10 @@ public:
     verbose("Memory peak: ", malloc_count_peak());
     verbose("Elapsed time (s): ", std::chrono::duration<double, std::ratio<1>>(t_insert_end - t_insert_start).count());
 
-    verbose("Loading random access");
+    std::string filename_slp = filename + get_slp_file_extension<slp_t>();
+    verbose("Loading random access file: " + filename_slp);
     t_insert_start = std::chrono::high_resolution_clock::now();
 
-    std::string filename_slp = filename + get_slp_file_extension<slp_t>();
 
     ifstream fs(filename_slp);
     ra.load(fs);
@@ -371,41 +371,56 @@ public:
   {
     mem.occs.push_back(mem.pos);
 
+    const auto sa_first = ms.get_first_run_sample();
+    const auto sa_last = ms.get_last_run_sample();
+
     // Phi direction
     size_t curr = mem.pos;
-    size_t next = ms.Phi(curr);
-    if((n-curr) >= mem.len and (n-next) >= mem.len)
+    if(curr != sa_first)
     {
-      size_t lcp =  lceToRBounded(ra,curr,next,mem.len);
-      while(lcp >= mem.len)
+      size_t next = ms.Phi(curr);
+      if((n-curr) >= mem.len and (n-next) >= mem.len)
       {
-        mem.occs.push_back(next);
-        
-        curr = next;
-        next = ms.Phi(curr);
-        if((n-curr) >= mem.len and (n-next) >= mem.len)
-          lcp  = lceToRBounded(ra,curr,next,mem.len);
-        else
-          lcp = 0;
+        size_t lcp =  lceToRBounded(ra,curr,next,mem.len);
+        while(lcp >= mem.len)
+        {
+          mem.occs.push_back(next);
+          
+          curr = next;
+          if(curr != sa_first)
+          {
+            next = ms.Phi(curr);
+            if((n-curr) >= mem.len and (n-next) >= mem.len)
+              lcp  = lceToRBounded(ra,curr,next,mem.len);
+            else
+              lcp = 0;
+          }else lcp = 0;
+        }
       }
     }
 
     // Phi_inv direction
     curr = mem.pos;
-    next = ms.Phi_inv(curr);
-    if((n-curr) >= mem.len and (n-next) >= mem.len)
+    if(curr != sa_last)
     {
-      size_t lcp =  lceToRBounded(ra,curr,next,mem.len);
-      while(lcp >= mem.len)
+      size_t next = ms.Phi_inv(curr);
+      if((n-curr) >= mem.len and (n-next) >= mem.len)
       {
-        mem.occs.push_back(next);
-        
-        curr = next;
-        next = ms.Phi_inv(curr);
-        if((n-curr) >= mem.len and (n-next) >= mem.len)
-          lcp  = lceToRBounded(ra,curr,next,mem.len);
-        else
-          lcp = 0;
+        size_t lcp =  lceToRBounded(ra,curr,next,mem.len);
+        while(lcp >= mem.len)
+        {
+          mem.occs.push_back(next);
+          
+          curr = next;
+          if(curr != sa_last)
+          {
+            next = ms.Phi_inv(curr);
+            if((n-curr) >= mem.len and (n-next) >= mem.len)
+              lcp  = lceToRBounded(ra,curr,next,mem.len);
+            else
+              lcp = 0;
+          }else lcp = 0;
+        }
       }
     }
 
