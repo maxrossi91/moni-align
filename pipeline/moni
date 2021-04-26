@@ -234,13 +234,13 @@ class SLP(threading.Thread):
       print("{} shaped_slp started!".format(self.getName()), flush=True)        # "Thread-x started!"
 
       grammars = {
-        'naive' : 'PlainSlp_FblcFblc',
-        'ssslp': 'SelfShapedSlp_SdSd_Sd'
+        'plain' : 'PlainSlp_FblcFblc',
+        'shaped': 'SelfShapedSlp_SdSd_Sd'
       }
 
       grammar_extensions = {
-        'naive' : 'naive.slp',
-        'ssslp': 'slp'
+        'plain' : 'plain.slp',
+        'shaped': 'slp'
       }
 
       sstart = time.time()
@@ -609,9 +609,15 @@ class run_helper(threading.Thread):
       # print("==== Computing {name}. ".format(name=exe_name), flush=True)
       start = time.time()
 
-      command = "{exe} {file} -p {query} -t {th}".format(exe=os.path.join(
-          args.exe_dir, exe), file=args.index,
-          query=args.pattern, th=args.threads)
+      command = ""
+      if exe_name == "SPUMONI":
+        command = "{exe} {file} -p {query} -t {th}".format(exe=os.path.join(
+            args.exe_dir, exe), file=args.index,
+            query=args.pattern, th=args.threads)
+      else:
+        command = "{exe} {file} -p {query} -t {th} -g {grammar}".format(exe=os.path.join(
+            args.exe_dir, exe), file=args.index,
+            query=args.pattern, th=args.threads, grammar= args.grammar)
 
       print("==== Running {name}. Command:".format(
           name=exe_name), command, flush=True)
@@ -707,7 +713,7 @@ def main():
   build_parser.add_argument('--moni-ms', help='build moni index for matching statistics only',action='store_true')
   build_parser.add_argument('--phoni-ms', help='build phoni index for matching statistics only', action='store_true')
   build_parser.add_argument('--spumoni', help='build spumoni index',action='store_true')
-  build_parser.add_argument('-g', '--grammar', help='select the grammar (only for moni and phoni) [naive, ssslp]', type=str, default='ssslp')
+  build_parser.add_argument('-g', '--grammar', help='select the grammar (only for moni and phoni) [plain, shaped]', type=str, default='plain')
   build_parser.add_argument('--parsing',  help='stop after the parsing phase (debug only)',action='store_true')
   build_parser.add_argument('--compress',  help='compress output of the parsing phase (debug only)',action='store_true')
   build_parser.set_defaults(which='build')
@@ -730,6 +736,7 @@ def main():
   align_parser.add_argument('-p', '--pattern', help='the input query', type=str, required=True)
   align_parser.add_argument('-o', '--output', help='output directory path', type=str, default='.')
   align_parser.add_argument('-t', '--threads', help='number of helper threads', default=1, type=int)
+  align_parser.add_argument('-g', '--grammar', help='select the grammar (only for moni and phoni) [plain, shaped]', type=str, default='plain')
   align_parser.add_argument('--moni', help='run moni index',action='store_true')
   align_parser.add_argument('--phoni', help='run phoni index', action='store_true')
   align_parser.set_defaults(which='align')
