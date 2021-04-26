@@ -609,15 +609,11 @@ class run_helper(threading.Thread):
       # print("==== Computing {name}. ".format(name=exe_name), flush=True)
       start = time.time()
 
-      command = ""
-      if exe_name == "SPUMONI":
-        command = "{exe} {file} -p {query} -t {th}".format(exe=os.path.join(
-            args.exe_dir, exe), file=args.index,
-            query=args.pattern, th=args.threads)
-      else:
-        command = "{exe} {file} -p {query} -t {th} -g {grammar}".format(exe=os.path.join(
-            args.exe_dir, exe), file=args.index,
-            query=args.pattern, th=args.threads, grammar= args.grammar)
+      command = "{exe} {file} -p {query} -t {th}".format(exe=os.path.join(
+          args.exe_dir, exe), file=args.index,
+          query=args.pattern, th=args.threads)
+      if exe_name != "SPUMONI" and args.grammar == "shaped":
+        command += " -q"
 
       print("==== Running {name}. Command:".format(
           name=exe_name), command, flush=True)

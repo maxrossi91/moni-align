@@ -334,7 +334,7 @@ public:
 
 
     /*
-     * Phi function. Phi_inv(SA[0]) is undefined
+     * Phi function. Phi_inv(SA[n-1]) is undefined
      */
     ulint Phi_inv(ulint i){
         assert(i != this->bwt.size()-1);
@@ -346,7 +346,7 @@ public:
         assert(jr<this->r-1 or j == this->bwt.size()-1);
         //distance from predecessor
         ulint delta = j<i ? i-j : i+1;
-        //cannot fall on first run: this can happen only if I call Phi(SA[0])
+        //cannot fall on first run: this can happen only if I call Phi(SA[n-1])
         assert(pred_start_to_run[jr] < samples_start.size() - 1);
         //sample at the end of previous run
         assert(pred_start_to_run[jr]+1 < samples_start.size());

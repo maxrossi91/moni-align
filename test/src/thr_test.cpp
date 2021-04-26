@@ -165,7 +165,7 @@ int main(int argc, char *const argv[])
 
   thr_plain<> plain(args.filename,&bwt);
   verbose("Plain thresholds construction complete");
-  thr_compressed<> compressed(args.filename,&bwt);
+  thr_bv<> bv(args.filename,&bwt);
 
   t_insert_end = std::chrono::high_resolution_clock::now();
 
@@ -178,8 +178,8 @@ int main(int argc, char *const argv[])
 
   for (size_t i = 0; i < bwt.number_of_runs(); ++i)
   {
-    if(plain[i] != compressed[i])
-      error("Plain and compressed are different in position ", i , " . Plain: ", plain[i], " Compressed: ", compressed[i]);
+    if(plain[i] != bv[i])
+      error("Plain and bv are different in position ", i , " . Plain: ", plain[i], " Compressed: ", bv[i]);
   }
 
   t_insert_end = std::chrono::high_resolution_clock::now();

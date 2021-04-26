@@ -141,6 +141,14 @@ public:
         assert(j<=i);
         return this->runs_per_letter[c].select(j-1) + 1; // j-1 because the select is 0 based
     }
+    // number of runs of character c in in position i
+    size_t run_head_rank(const size_t i, const uint8_t c)
+    {
+        assert(i < this->R);
+        size_t j = this->run_heads.rank(i, c);
+        return j;
+    }
+    
     /* serialize the structure to the ostream
      * \param out     the ostream
      */
