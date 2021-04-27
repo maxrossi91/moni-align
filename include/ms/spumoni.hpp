@@ -38,7 +38,7 @@
 
 template <class sparse_bv_type = ri::sparse_sd_vector,
           class rle_string_t = ms_rle_string_sd,
-          class thresholds_t = thr_compressed<rle_string_t> >
+          class thresholds_t = thr_bv<rle_string_t> >
 class ms_pointers : ri::r_index<sparse_bv_type, rle_string_t>
 {
 public:
@@ -352,5 +352,61 @@ protected:
     }
 
 };
+
+// Computes the matching statistics pointers for the given pattern
+template <>
+template <typename string_t>
+std::vector<size_t> ms_pointers<ri::sparse_sd_vector, ms_rle_string_sd, thr_bv<ms_rle_string_sd>>::_query(const string_t &pattern, const size_t m)
+{
+
+    std::vector<size_t> lengths(m);
+
+    // Start with the empty string
+    auto pos = this->bwt_size() - 1;
+    auto length = 0;
+
+    for (size_t i = 0; i < m; ++i)
+    {
+        auto c = pattern[m - i - 1];
+        const auto n_c = this->bwt.number_of_letter(c);
+        if (n_c == 0)
+        {
+            length = 0;
+            // Perform one backward step
+            pos = LF(pos, c);
+        }
+        else if (pos < this->bwt.size() && this->bwt[pos] == c)
+        {
+            length++;
+            // Perform one backward step
+            pos = LF(pos, c);
+        }
+        else
+        {
+            // Get threshold
+            ri::ulint run_of_pos = this->bwt.run_of_position(pos);
+            auto rnk_c = this->bwt.run_and_head_rank(run_of_pos, c);
+            size_t thr_c = thresholds.rank(pos + 1, c); // +1 because the rank count the thresiold in pos
+
+            if (rnk_c.first > thr_c)
+            {
+                // Jump up
+                // Perform one backward step
+                pos = this->F[c] + rnk_c.second - 1;
+            }
+            else
+            {
+                // Jump down
+                // Perform one backward step
+                pos = this->F[c] + rnk_c.second;
+            }
+            length = 0;
+        }
+        // Store the sample
+        lengths[m - i - 1] = length;
+    }
+
+    return lengths;
+}
 
 #endif /* end of include guard: _MS_POINTERS_HH */

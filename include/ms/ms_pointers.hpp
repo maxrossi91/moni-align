@@ -38,7 +38,7 @@
 
 template <class sparse_bv_type = ri::sparse_sd_vector,
           class rle_string_t = ms_rle_string_sd,
-          class thresholds_t = thr_compressed<rle_string_t> >
+          class thresholds_t = thr_bv<rle_string_t> >
 class ms_pointers : ri::r_index<sparse_bv_type, rle_string_t>
 {
 public:
@@ -452,5 +452,64 @@ protected:
     //     return esa;
     // }
 };
+
+// Computes the matching statistics pointers for the given pattern
+template <>
+template <typename string_t>
+std::vector<size_t> ms_pointers<ri::sparse_sd_vector, ms_rle_string_sd, thr_bv<ms_rle_string_sd>>::_query(const string_t &pattern, const size_t m)
+{
+
+    std::vector<size_t> ms_pointers(m);
+
+    // Start with the empty string
+    auto pos = this->bwt_size() - 1;
+    auto sample = this->get_last_run_sample();
+
+    for (size_t i = 0; i < m; ++i)
+    {
+        auto c = pattern[m - i - 1];
+        const auto n_c = this->bwt.number_of_letter(c);
+        if (n_c == 0)
+        {
+            sample = 0;
+            // Perform one backward step
+            pos = LF(pos, c);
+        }
+        else if (pos < this->bwt.size() && this->bwt[pos] == c)
+        {
+            sample--;
+            // Perform one backward step
+            pos = LF(pos, c);
+        }
+        else
+        {
+            // Get threshold
+            ri::ulint run_of_pos = this->bwt.run_of_position(pos);
+            auto rnk_c = this->bwt.run_and_head_rank(run_of_pos, c);
+            size_t thr_c = thresholds.rank(pos + 1, c); // +1 because the rank count the thresiold in pos
+
+            if (rnk_c.first > thr_c)
+            {
+                // Jump up
+                size_t run_of_j = this->bwt.run_head_select(rnk_c.first, c);
+                sample = samples_last[run_of_j];
+                // Perform one backward step
+                pos = this->F[c] + rnk_c.second - 1;
+            }
+            else
+            {
+                // Jump down
+                size_t run_of_j = this->bwt.run_head_select(rnk_c.first + 1, c);
+                sample = samples_start[run_of_j];
+                // Perform one backward step
+                pos = this->F[c] + rnk_c.second;
+            }
+        }
+        // Store the sample
+        ms_pointers[m - i - 1] = sample;
+    }
+
+    return ms_pointers;
+}
 
 #endif /* end of include guard: _MS_POINTERS_HH */
