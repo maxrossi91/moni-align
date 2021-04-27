@@ -460,7 +460,6 @@ public:
 
         swap(first.thresholds_per_letter, second.thresholds_per_letter);
         swap(first.bwt, second.bwt);
-        swap(first.min_off, second.min_off);
     }
 
     // Copy assignment
@@ -491,6 +490,12 @@ public:
         size_t thr_i = thresholds_per_letter[c].select(rank-1);
 
         return thr_i;
+    }
+
+    // number of thresholds for the character c before position i 
+    size_t rank(const size_t i, const uint8_t c)
+    {
+        return thresholds_per_letter[c].rank(i); // j-1 because the select is 0 based
     }
 
     /* serialize the structure to the ostream

@@ -125,7 +125,7 @@ using Fblc = FixedBitLenCode<>;
 using shaped_slp_t = SelfShapedSlp<uint32_t, DagcSd, DagcSd, SelSd>;
 using plain_slp_t = PlainSlp<uint32_t, Fblc, Fblc>;
 
-template<typename slp_t>
+template< typename slp_t>
 std::string get_slp_file_extension()
 {
   return std::string(".slp");
@@ -144,7 +144,8 @@ std::string get_slp_file_extension<plain_slp_t>()
 }
 ////////////////////////////////////////////////////////////////////////////////
 
-template<typename slp_t>
+template <typename slp_t,
+          typename ms_t>
 class aligner
 {
 public:
@@ -2128,7 +2129,7 @@ public:
   }
 
 protected:
-  ms_pointers<> ms;
+  ms_t ms;
   slp_t ra;
   // SelfShapedSlp<uint32_t, DagcSd, DagcSd, SelSd> ra;
 
@@ -2638,9 +2639,9 @@ int main(int argc, char *const argv[])
   parseArgs(argc, argv, args);
 
   if(args.shaped_slp){
-    dispatcher<aligner<shaped_slp_t>>(args);
+    dispatcher<aligner<shaped_slp_t, ms_pointers<>>>(args);
   }else{
-    dispatcher<aligner<plain_slp_t>>(args);
+    dispatcher<aligner<plain_slp_t, ms_pointers<>>>(args);
   }
   
 

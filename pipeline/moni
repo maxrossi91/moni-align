@@ -718,6 +718,7 @@ def main():
   ms_parser.add_argument('-p', '--pattern', help='the input query', type=str, required=True)
   ms_parser.add_argument('-o', '--output', help='output directory path', type=str, default='.')
   ms_parser.add_argument('-t', '--threads', help='number of helper threads', default=1, type=int)
+  ms_parser.add_argument('-g', '--grammar', help='select the grammar (only for moni and phoni) [plain, shaped]', type=str, default='plain')
   ms_parser.add_argument('--moni-ms', help='run moni index for matching statistics only',action='store_true')
   ms_parser.add_argument('--phoni-ms', help='run phoni index for matching statistics only', action='store_true')
   ms_parser.set_defaults(which='ms')
