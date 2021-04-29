@@ -146,6 +146,7 @@ add_executable(align_klib align_klib.cpp ${klib_SOURCE_DIR}/ksw.c ${bigbwt_SOURC
 target_link_libraries(align_klib common malloc_count sdsl divsufsort divsufsort64 ri klib ssw pthread)
 target_include_directories(align_klib PUBLIC    "../../include/ms" 
                                             "../../include/common" 
+                                            "../../include/aligner" 
                                             "${shaped_slp_SOURCE_DIR}" 
                                             "${FOLCA_SOURCE_DIR}" 
                                             "${SUX_SOURCE_DIR}/function" 
