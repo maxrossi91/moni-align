@@ -205,20 +205,14 @@ public:
 
     verbose("Minimum MEM length: ", min_len);
 
-    memset(&ez_lc, 0, sizeof(ksw_extz_t));
-    memset(&ez_rc, 0, sizeof(ksw_extz_t));
-    memset(&ez, 0, sizeof(ksw_extz_t));
+    // memset(&ez_lc, 0, sizeof(ksw_extz_t));
+    // memset(&ez_rc, 0, sizeof(ksw_extz_t));
+    // memset(&ez, 0, sizeof(ksw_extz_t));
   }
 
   // Destructor
   ~aligner() 
   {
-    if(ez_lc.m_cigar > 0)
-      delete ez_lc.cigar;
-    if(ez_rc.m_cigar > 0)
-      delete ez_rc.cigar;
-    if(ez.m_cigar > 0)
-      delete ez.cigar;
       // NtD
   }
 
@@ -1431,7 +1425,7 @@ public:
       const bool realign = false    // Realign globally the read
   )
   {
-    flag = KSW_EZ_EXTZ_ONLY | KSW_EZ_RIGHT;
+    int flag = KSW_EZ_EXTZ_ONLY | KSW_EZ_RIGHT;
 
     if(score_only) 
       flag = KSW_EZ_SCORE_ONLY;
@@ -1440,7 +1434,13 @@ public:
     int score_rc = 0;
 
     // TODO: Update end_bonus according to the MEM contribution to the score
-    
+    ksw_extz_t ez_lc;
+    ksw_extz_t ez_rc;
+    ksw_extz_t ez;
+    memset(&ez_lc, 0, sizeof(ksw_extz_t));
+    memset(&ez_rc, 0, sizeof(ksw_extz_t));
+    memset(&ez, 0, sizeof(ksw_extz_t));
+
     // Extract the context from the reference
     // lc: left context
     ksw_reset_extz(&ez_lc);
@@ -1621,6 +1621,12 @@ public:
       delete seq;
     }
 
+    if (ez_lc.m_cigar > 0)
+      delete ez_lc.cigar;
+    if (ez_rc.m_cigar > 0)
+      delete ez_rc.cigar;
+    if (ez.m_cigar > 0)
+      delete ez.cigar;
 
     return score;
   }
@@ -1645,7 +1651,7 @@ public:
     // const bool realign = false   // Realign globally the read
   )
   {
-    flag = KSW_EZ_EXTZ_ONLY | KSW_EZ_RIGHT;
+    int flag = KSW_EZ_EXTZ_ONLY | KSW_EZ_RIGHT;
 
     if(score_only) 
       flag = KSW_EZ_SCORE_ONLY;
@@ -1653,6 +1659,12 @@ public:
     int score_lc = 0;
     int score_rc = 0;
 
+    ksw_extz_t ez_lc;
+    ksw_extz_t ez_rc;
+    ksw_extz_t ez;
+    memset(&ez_lc, 0, sizeof(ksw_extz_t));
+    memset(&ez_rc, 0, sizeof(ksw_extz_t));
+    memset(&ez, 0, sizeof(ksw_extz_t));
     // TODO: Update end_bonus according to the MEM contribution to the score
     
     // Extract the context from the reference
@@ -1937,6 +1949,12 @@ public:
     delete ref;
     delete seq;
 
+    if (ez_lc.m_cigar > 0)
+      delete ez_lc.cigar;
+    if (ez_rc.m_cigar > 0)
+      delete ez_rc.cigar;
+    if (ez.m_cigar > 0)
+      delete ez.cigar;
 
     return score;
   }
@@ -2165,7 +2183,6 @@ protected:
   int end_bonus = 400;    // Bonus to add at the extension score to declare the alignment
   
   int w = -1;             // Band width
-  int flag = 0;
   int zdrop = -1;
 
 	void *km = 0;           // Kalloc
@@ -2179,9 +2196,6 @@ protected:
 
   bool forward_only;
 
-  ksw_extz_t ez_lc;
-  ksw_extz_t ez_rc;
-  ksw_extz_t ez;
 
   // From https://github.com/BenLangmead/bowtie2/blob/4512b199768e562e8627ffdfd9253affc96f6fc6/unique.cpp
   // There is no valid second-best alignment and the best alignment has a

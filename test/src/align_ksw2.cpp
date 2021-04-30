@@ -1,4 +1,4 @@
-/* align_ksw2 - Align the reads to the reference
+/* align - Align the reads to the reference
     Copyright (C) 2020 Massimiliano Rossi
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -12,10 +12,10 @@
     along with this program.  If not, see http://www.gnu.org/licenses/ .
 */
 /*!
-   \file align_ksw2.cpp
-   \brief align_ksw2.cpp Align the reads to the reference.
+   \file align.cpp
+   \brief align.cpp Align the reads to the reference.
    \author Massimiliano Rossi
-   \date 30/04/2021
+   \date 13/07/2020
 */
 
 extern "C" {
@@ -31,7 +31,7 @@ extern "C" {
 #include <sdsl/io.hpp>
 
 #include <ms_pointers.hpp>
-#include <aligner_klib.hpp>
+#include <aligner_ksw2.hpp>
 #include <aligner_reads_dispatcher.hpp>
 
 #include <malloc_count.h>
@@ -42,10 +42,8 @@ extern "C" {
 #include <PlainSlp.hpp>
 #include <FixedBitLenCode.hpp>
 
-#include <ksw.h>
-#include <ssw.h>
-
 #include <libgen.h>
+
 
 //*********************** Argument options ***************************************
 // struct containing command line parameters and other globals
@@ -207,11 +205,11 @@ int main(int argc, char *const argv[])
 
   if (args.shaped_slp)
   {
-    dispatcher<aligner<shaped_slp_t>>(args);
+    dispatcher<aligner<shaped_slp_t, ms_pointers<>>>(args);
   }
   else
   {
-    dispatcher<aligner<plain_slp_t>>(args);
+    dispatcher<aligner<plain_slp_t, ms_pointers<>>>(args);
   }
 
   return 0;
