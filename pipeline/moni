@@ -669,12 +669,12 @@ def run(args):
 
 def getGitDesc():
   branch = subprocess.check_output(
-      'git rev-parse --abbrev-ref HEAD', shell=True).strip().decode("utf-8")
+      'git rev-parse --abbrev-ref HEAD', shell=True, cwd=dirname).strip().decode("utf-8")
   commit = subprocess.check_output(
-      'git rev-parse HEAD', shell=True).strip().decode("utf-8")
+      'git rev-parse HEAD', shell=True, cwd=dirname).strip().decode("utf-8")
   try:
     tag = subprocess.check_output('git describe --exact-match {commit_id}'.format(commit_id=commit),
-                                  shell=True).strip().decode("utf-8")
+                                  shell=True, cwd=dirname).strip().decode("utf-8")
   except subprocess.CalledProcessError as e:
     tag = ""
   return "branch: {branch}\n   tag: {tag}\ncommit: {commit}".format(branch=branch, tag=tag, commit=commit)
