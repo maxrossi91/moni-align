@@ -28,6 +28,7 @@ extern "C" {
 
 #include <common.hpp>
 
+
 #include <sdsl/io.hpp>
 
 #include <moni.hpp>
@@ -45,7 +46,7 @@ extern "C" {
 #include <omp.h>
 
 #include <libgen.h>
-
+#include <kpbseq.h>
 #define _REALIGN
 
 // KSEQ_INIT(gzFile, gzread);
@@ -65,32 +66,32 @@ static inline int ilog2_32(uint32_t v)
 	return (t = v>>8) ? 8 + LogTable256[t] : LogTable256[v];
 }
 //******************************************************************************
-////////////////////////////////////////////////////////////////////////////////
-/// kseq extra
-////////////////////////////////////////////////////////////////////////////////
+// ////////////////////////////////////////////////////////////////////////////////
+// /// kseq extra
+// ////////////////////////////////////////////////////////////////////////////////
 
-static inline size_t ks_tell(kseq_t *seq)
-{
-  return gztell(seq->f->f) - seq->f->end + seq->f->begin;
-}
+// static inline size_t ks_tell(kseq_t *seq)
+// {
+//   return gztell(seq->f->f) - seq->f->end + seq->f->begin;
+// }
 
-void copy_kstring_t(kstring_t &l, kstring_t &r)
-{
-  l.l = r.l;
-  l.m = r.m;
-  l.s = (char *)malloc(l.m);
-  for (size_t i = 0; i < r.m; ++i)
-    l.s[i] = r.s[i];
-}
-void copy_kseq_t(kseq_t *l, kseq_t *r)
-{
-  copy_kstring_t(l->name, r->name);
-  copy_kstring_t(l->comment, r->comment);
-  copy_kstring_t(l->seq, r->seq);
-  copy_kstring_t(l->qual, r->qual);
-  l->last_char = r->last_char;
-}
-////////////////////////////////////////////////////////////////////////////////
+// void copy_kstring_t(kstring_t &l, kstring_t &r)
+// {
+//   l.l = r.l;
+//   l.m = r.m;
+//   l.s = (char *)malloc(l.m);
+//   for (size_t i = 0; i < r.m; ++i)
+//     l.s[i] = r.s[i];
+// }
+// void copy_kseq_t(kseq_t *l, kseq_t *r)
+// {
+//   copy_kstring_t(l->name, r->name);
+//   copy_kstring_t(l->comment, r->comment);
+//   copy_kstring_t(l->seq, r->seq);
+//   copy_kstring_t(l->qual, r->qual);
+//   l->last_char = r->last_char;
+// }
+// ////////////////////////////////////////////////////////////////////////////////
 
 ////////////////////////////////////////////////////////////////////////////////
 /// helper functions
@@ -346,16 +347,24 @@ public:
   }
 
   typedef struct mem_t{
-    size_t pos = 0; // Position in the reference
-    size_t len = 0; // Length
-    size_t idx = 0; // Position in the pattern
+    size_t pos = 0;  // Position in the reference
+    size_t len = 0;  // Length
+    size_t idx = 0;  // Position in the pattern
+    size_t mate = 0; // Left mate (0) or Right mate (1)
     std::vector<size_t> occs; // List of occurrences of the MEM
 
     mem_t(size_t p, size_t l, size_t i)
     {
-      pos = p; // Position in the reference
-      len = l; // Length of the MEM
-      idx = i; // Position in the read
+      pos = p;  // Position in the reference
+      len = l;  // Length of the MEM
+      idx = i;  // Position in the read
+    }
+    mem_t(size_t p, size_t l, size_t i, size_t m)
+    {
+      pos = p;  // Position in the reference
+      len = l;  // Length of the MEM
+      idx = i;  // Position in the read
+      mate = m; // Left mate (0) or Right mate (1)
     }
 
   } mem_t;
@@ -429,204 +438,6 @@ public:
 
 
     bool aligned = false;
-
-    // // Find MEMs.
-    // auto pointers = ms.query(read->seq.s, read->seq.l);
-    // size_t l = 0;   // Current match length
-    // size_t pl = 0;  // Previous match length
-    // size_t n_Ns = 0;
-    // for (size_t i = 0; i < pointers.size(); ++i)
-    // {
-    //   size_t pos = pointers[i];
-    //   while ((i + l) < read->seq.l && (pos + l) < n && read->seq.s[i + l] == ra.charAt(pos + l))
-    //   {
-    //     if(read->seq.s[i + l] == 'N') n_Ns++;
-    //     else n_Ns = 0;
-    //     ++l;
-    //   }
-
-
-    //   // Update MEMs
-    //   if (l >= pl and n_Ns < l and l >= min_len)
-    //   {
-    //     mems.push_back(mem_t(pointers[i],l,i));
-    //     find_MEM_occs(mems.back());
-    //   }
-
-    //   // Compute next match length
-    //   pl = l;
-    //   l = (l == 0 ? 0 : (l - 1));
-    // }
-
-    // if( mems.size() <= 0)
-    //   return false;
-
-    // /************* minimap2 dynamic programming for mem chaining ***************/
-    // /* https://github.com/lh3/minimap2/blob/master/chain.c */
-
-    // // Sort anchors
-    // // Lamda helper to sort the anchors
-    // auto cmp = [&] (std::pair<size_t, size_t> i, std::pair<size_t, size_t> j) -> bool {
-    //   return (mems[i.first].occs[i.second] + mems[i.first].len - 1) > (mems[j.first].occs[j.second] + mems[j.first].len - 1);
-    // };
-
-    // // TODO: improve this initialization
-    // size_t tot_mem_length = 0;
-
-    // std::vector< std::pair< size_t, size_t > > anchors;
-    // for(size_t i = 0; i < mems.size(); ++i)
-    // {
-    //   for(size_t j = 0; j < mems[i].occs.size(); ++j)
-    //     anchors.push_back(make_pair(i,j));
-    //   tot_mem_length +=  mems[i].len * mems[i].occs.size();
-    // }
-
-    // float avg_mem_length = (float)tot_mem_length / anchors.size();
-
-    // std::sort(anchors.begin(),anchors.end(),cmp);
-
-    // // Dynamic programming
-
-    // // TODO: Parameters to be defined
-    // const ll G = LLONG_MAX;
-    // const ll max_dist_x = 1000000;//LLONG_MAX;
-    // const ll max_dist_y = 1000000;//LLONG_MAX;
-    // const ll max_iter = 50;
-    // const ll max_pred = 50;
-    // const ll min_chain_score = 1;
-    // const ll min_chain_length = 1;
-
-
-    // std::vector<ll> f(anchors.size(),0); // Score ending in position i
-    // std::vector<ll> p(anchors.size(),0); // Position of the next anchor giving the max when chained with the one in position i
-    // std::vector<ll> msc(anchors.size(),0); // Max score up to position i
-    // std::vector<ll> t(anchors.size(),0); // Stores i in position p[j], if i is chained with j. See heuristics in minimap2
-
-    // ll lb = 0;
-    // // For all the anchors
-    // for(size_t i = 0 ; i < anchors.size(); ++i)
-    // {
-    //   // Get anchor i
-    //   const auto a_i = anchors[i];
-    //   const size_t x_i = mems[a_i.first].occs[a_i.second] + mems[a_i.first].len - 1;
-    //   const size_t y_i = mems[a_i.first].idx + mems[a_i.first].len - 1;
-    //   const size_t w_i = mems[a_i.first].len;
-
-    //   ll max_f = w_i;
-    //   ll max_j = -1;
-    //   size_t n_pred = 0;
-    //   // For all previous anchors
-    //   // Heuristics from minimap2 -> do not try more than 50 anchors
-    //   if(i - lb > max_iter) lb = i - max_iter;
-    //   for(ll j = i-1; j > lb; --j)
-    //   {
-    //     const auto a_j = anchors[j];
-    //     const size_t x_j = mems[a_j.first].occs[a_j.second] + mems[a_j.first].len - 1;
-    //     const size_t y_j = mems[a_j.first].idx + mems[a_j.first].len - 1;
-
-    //     // If the current anchor is too far, exit.
-    //     if(x_i > x_j + max_dist_x)
-    //     {
-    //       j = lb + 1;
-    //       continue;
-    //     }
-
-    //     const size_t x_d = x_i - x_j;
-    //     const size_t y_d = y_i - y_j;
-    //     const size_t l = (y_d > x_d ? (y_d - x_d) : (x_d - y_d));
-    //     const uint32_t ilog_l = (l > 0? ilog2_32(l): 0);
-
-    //     if(y_j >= y_i or max(y_d, x_d) > G)
-    //       continue;
-
-    //     const ll alpha = min(min(y_d,x_d),w_i);
-    //     const ll beta = (l > 0? (ll)(.01 * l * avg_mem_length) + ilog_l >> 1 : 0); 
-
-    //     ll score = f[j] + (alpha - beta);
-
-    //     if( score > max_f )
-    //     {
-    //       max_f = score;
-    //       max_j = j;
-    //       if( n_pred > 0) --n_pred;
-    //     }
-    //     else // minimap2: If i is chained wth j, than chaining i with a predecessor of j does not improve the score
-    //       if (t[j] == i and (++n_pred > max_pred))            
-    //         break;
-          
-    //     if(p[j] > 0) t[p[j]] = i;
-    //   }
-
-    //   f[i] = max_f;
-    //   p[i] = max_j;
-    //   if( max_j >= 0 and msc[max_j] > max_f)
-    //     msc[i] = msc[max_j];
-    //   else
-    //     msc[i] = max_f;
-    // }
-
-    // // Find the end positions of chains
-    // memset(t.data(),0,sizeof(size_t) * t.size());
-    // for(size_t i = 0; i < anchors.size(); ++i)
-    //   if(p[i] >= 0) t[p[i]] = 1;
-    
-    // size_t n_chains = 0;
-    // for(size_t i = 0; i < anchors.size(); ++i)
-    //   if(t[i] == 0 and msc[i] > min_chain_score) n_chains ++;
-    
-    // // TODO: check if we want to report also non aligned reads
-    // if(n_chains == 0)
-    //   return false;
-
-    // // TODO: replace the vector of pairs with a lambda for the sort
-    // std::vector<std::pair<size_t,size_t>> chain_starts(n_chains); // Stores uniqe chains and their index of uniqe chains in anchors
-    // size_t k = 0;
-    // for(size_t i = 0; i < n_chains; ++i)
-    // {
-    //   if(t[i] == 0 and  msc[i] > min_chain_score)
-    //   {
-    //     size_t j = i;
-    //     while(j >= 0 and f[j] < msc[j]) j = p[j]; // Find teh peak that maximizes f
-    //     if (j < 0) i = 0;
-    //     chain_starts[k++] = make_pair(f[j],j);
-    //   }
-    // }
-
-    // chain_starts.resize(k), chain_starts.shrink_to_fit();
-    // n_chains = chain_starts.size();
-    // std::sort(chain_starts.begin(), chain_starts.end(), std::greater<std::pair<size_t,size_t>>());
-    
-    // std::vector<std::pair<size_t, std::vector<size_t>>> chains;
-
-    // // Backtrack
-    // memset(t.data(),0,sizeof(size_t) * t.size());
-    // for(size_t i = 0; i < n_chains; ++i)
-    // {
-    //   size_t j = chain_starts[i].second;
-    //   std::vector<size_t> chain;
-    //   do {
-    //     chain.push_back(j); // stores th reverse of the chain
-    //     t[j] = 1;
-    //     j = p[j];
-    //   } while (j >= 0 && t[j] == 0);
-    //   if (j < 0) { // l - prev_l is the length of the chain
-    //     if (chain.size() >= min_chain_length)
-    //       chains.push_back(std::make_pair(chain_starts[i].first, chain));     
-    //   } else if (chain_starts[i].first - f[j] >= min_chain_score) { // Two chains share a common prefix
-    //     if (chain.size() >= min_chain_length)
-    //       chains.push_back(std::make_pair((chain_starts[i].first - f[j]), chain));
-    //   }
-    // }
-
-    // // Sort the chains by max scores.
-    // std::sort(chains.begin(), chains.end(), std::greater<std::pair<size_t,std::vector<size_t>>>());
-
-    // // Clear space
-    // p.resize(0), p.shrink_to_fit();
-    // t.resize(0), t.shrink_to_fit();
-    // f.resize(0), f.shrink_to_fit();
-    // msc.resize(0), msc.shrink_to_fit();
-
 
     // Find MEMs in the forward direction
     std::vector<mem_t> mems;
@@ -1130,6 +941,22 @@ public:
     return aligned;
   }
 
+  // Aligning pair-ended sequences
+  bool align(kseq_t *mate1, kseq_t *mate2, FILE *out)
+  {
+    // Find MEMs of mate1 and reverse of mate2
+
+    // Chain MEMs of mate1 and reverse of mate2
+
+    // Find MEMs of mate2 and reverse of mate1
+
+    // Chain MEMs of mate2 and reverse of mate1
+
+    //
+
+  }
+
+
   // Given a set of mems, find the chains
   bool find_chains(
     const   std::vector<mem_t>& mems,
@@ -1313,7 +1140,8 @@ public:
 
   void find_mems(
     const kseq_t *read,
-    std::vector<mem_t>& mems
+    std::vector<mem_t>& mems,
+    size_t mate = 0
     ) 
   {
     auto pointers = ms.query(read->seq.s, read->seq.l);
@@ -1333,7 +1161,7 @@ public:
       // Update MEMs
       if (l >= pl and n_Ns < l and l >= min_len)
       {
-        mems.push_back(mem_t(pointers[i],l,i));
+        mems.push_back(mem_t(pointers[i],l,i,mate));
         find_MEM_occs(mems.back());
       }
 
@@ -2244,96 +2072,73 @@ protected:
 
 };
 
+////////////////////////////////////////////////////////////////////////////////
+/// Merge SAMs
+////////////////////////////////////////////////////////////////////////////////
+
+// Merges te file in filename in the file pointed by fp
+void append_file(const std::string filename, FILE *fp)
+{
+  const size_t buff_size = 16384;
+
+  uint8_t buff[buff_size];
+  size_t size = 0;
+
+  struct stat filestat;
+  FILE *fd;
+
+  if ((fd = fopen(filename.c_str(), "r")) == nullptr)
+    error("open() file " + std::string(filename) + " failed");
+
+  // int fn = fileno(fd);
+  // if (fstat(fn, &filestat) < 0)
+  //     error("stat() file " + std::string(filename) + " failed");
+
+  // size_t length = filestat.st_size;
+  size_t length = 0;
+
+  while ((length = fread(buff, sizeof(uint8_t), buff_size, fd)) == buff_size)
+    if ((fwrite(buff, sizeof(uint8_t), buff_size, fp)) != buff_size)
+      error("fwrite() file " + std::string(filename) + " failed");
+
+  assert(length < buff_size);
+  if (length > 0)
+    if ((fwrite(buff, sizeof(uint8_t), length, fp)) != length)
+      error("fwrite() file " + std::string(filename) + " failed");
+
+  fclose(fd);
+}
+
+////////////////////////////////////////////////////////////////////////////////
 
 ////////////////////////////////////////////////////////////////////////////////
 /// Parallel computation
 ////////////////////////////////////////////////////////////////////////////////
 
-// This should be done using buffering.
-size_t next_start_fastq(gzFile fp)
+pthread_mutex_t mutex_reads_dispatcher;
+
+inline static size_t mt_kbseq_read(kbseq_t *b, kseq_t *seq, const size_t n)
 {
-  int c;
-  // Special case when we arr at the beginning of the file.
-  if ((gztell(fp) == 0) && ((c = gzgetc(fp)) != EOF) && c == '@')
-    return 0;
-
-  // Strart from the previous character
-  gzseek(fp, -1, SEEK_CUR);
-
-  std::vector<std::pair<int, size_t>> window;
-  // Find the first new line
-  for (size_t i = 0; i < 4; ++i)
+  size_t l = 0;
+  // Update the number of active threads
+  xpthread_mutex_lock(&mutex_reads_dispatcher, __LINE__, __FILE__);
   {
-    while (((c = gzgetc(fp)) != EOF) && (c != (int)'\n'))
-    {
-    }
-    if (c == EOF)
-      return gztell(fp);
-    if ((c = gzgetc(fp)) == EOF)
-      return gztell(fp);
-    window.push_back(std::make_pair(c, gztell(fp) - 1));
+    l = kbseq_read(b, seq, n);
   }
-
-  for (size_t i = 0; i < 2; ++i)
-  {
-    if (window[i].first == '@' && window[i + 2].first == '+')
-      return window[i].second;
-    if (window[i].first == '+' && window[i + 2].first == '@')
-      return window[i + 2].second;
-  }
-
-  return gztell(fp);
+  xpthread_mutex_unlock(&mutex_reads_dispatcher, __LINE__, __FILE__);
+  return l;
 }
 
-// test if the file is gzipped
-static inline bool is_gzipped(std::string filename)
+inline static size_t mt_kpbseq_read(kpbseq_t *b, kseq_t *mate1, kseq_t *mate2, const size_t n)
 {
-  FILE *fp = fopen(filename.c_str(), "rb");
-  if(fp == NULL) error("Opening file " + filename);
-  int byte1 = 0, byte2 = 0;
-  fread(&byte1, sizeof(char), 1, fp);
-  fread(&byte2, sizeof(char), 1, fp);
-  fclose(fp);
-  return (byte1 == 0x1f && byte2 == 0x8b);
-}
-
-// Return the length of the file
-// Assumes that the file is not compressed
-static inline size_t get_file_size(std::string filename)
-{
-  if (is_gzipped(filename))
+  size_t l = 0;
+  // Update the number of active threads
+  xpthread_mutex_lock(&mutex_reads_dispatcher, __LINE__, __FILE__);
   {
-    std::cerr << "The input is gzipped!" << std::endl;
-    return -1;
+    l = kpbseq_read(b, mate1, mate2, n);
   }
-  FILE *fp = fopen(filename.c_str(), "r");
-  fseek(fp, 0L, SEEK_END);
-  size_t size = ftell(fp);
-  fclose(fp);
-  return size;
-}
-
-std::vector<size_t> split_fastq(std::string filename, size_t n_threads)
-{
-  //Precondition: the file is not gzipped
-  // scan file for start positions and execute threads
-  size_t size = get_file_size(filename);
-
-  gzFile fp = gzopen(filename.c_str(), "r");
-  if (fp == Z_NULL)
-  {
-    throw new std::runtime_error("Cannot open input file " + filename);
-  }
-
-  std::vector<size_t> starts(n_threads + 1);
-  for (int i = 0; i < n_threads + 1; ++i)
-  {
-    size_t start = (size_t)((size * i) / n_threads);
-    gzseek(fp, start, SEEK_SET);
-    starts[i] = next_start_fastq(fp);
-  }
-  gzclose(fp);
-  return starts;
+  xpthread_mutex_unlock(&mutex_reads_dispatcher, __LINE__, __FILE__);
+  return l;
 }
 
 template <typename aligner_t>
@@ -2346,15 +2151,112 @@ struct mt_param_t
   size_t start;
   size_t end;
   size_t wk_id;
+  size_t b_size;
+  kseq_t *seq;
+  kseq_t *mate1;
+  kseq_t *mate2;
   // Return values
   size_t n_reads;
   size_t n_aligned_reads;
 };
 
+// template <typename aligner_t>
+// void *mt_align_worker(void *param)
+// {
+//   mt_param_t<aligner_t> *p = (mt_param_t<aligner_t>*) param;
+//   size_t n_reads = 0;
+//   size_t n_aligned_reads = 0;
+
+//   FILE *sam_fd;
+//   gzFile fp;
+
+//   if ((sam_fd = fopen(p->sam_filename.c_str(), "w")) == nullptr)
+//     error("open() file " + p->sam_filename + " failed");
+
+//   if ((fp = gzopen(p->pattern_filename.c_str(), "r")) == Z_NULL)
+//     error("open() file " + p->pattern_filename + " failed");
+
+//   gzseek(fp, p->start, SEEK_SET);
+
+//   kseq_t rev;
+//   int l;
+
+//   kseq_t *seq = kseq_init(fp);
+//   while ((ks_tell(seq) < p->end) && ((l = kseq_read(seq)) >= 0))
+//   {
+
+//     bool fwd_align = p->aligner->align(seq, sam_fd, 0);
+
+//     //copy seq
+//     copy_kseq_t(&rev, seq);
+
+//     for (size_t i = 0; i < seq->seq.l; ++i)
+//       rev.seq.s[i] = complement(seq->seq.s[seq->seq.l - i - 1]);
+
+//     if (rev.seq.m > rev.seq.l)
+//       rev.seq.s[rev.seq.l] = 0;
+
+//     bool rev_align = p->aligner->align(&rev, sam_fd, 1);
+
+//     if (fwd_align or rev_align)
+//       n_aligned_reads++;
+//     n_reads++;
+
+//     free(rev.name.s);
+//     free(rev.comment.s);
+//     free(rev.seq.s);
+//     free(rev.qual.s);
+//   }
+
+//   verbose("Number of aligned reads block ", p->wk_id, " : ", n_aligned_reads, "/", n_reads);
+//   p->n_reads = n_reads;
+//   p->n_aligned_reads = n_aligned_reads;
+//   kseq_destroy(seq);
+//   gzclose(fp);
+//   fclose(sam_fd);
+
+//   return NULL;
+// }
+// template <typename aligner_t>
+// size_t mt_align(aligner_t *aligner, std::string pattern_filename, std::string sam_filename, size_t n_threads)
+// {
+//   pthread_t t[n_threads] = {0};
+//   mt_param_t<aligner_t> params[n_threads];
+//   std::vector<size_t> starts = split_fastq(pattern_filename, n_threads);
+//   for(size_t i = 0; i < n_threads; ++i)
+//   {
+//     params[i].aligner = aligner;
+//     params[i].pattern_filename = pattern_filename;
+//     params[i].sam_filename = sam_filename + "_" + std::to_string(i) + ".sam";
+//     params[i].start = starts[i];
+//     params[i].end = starts[i+1];
+//     params[i].wk_id = i;
+//     xpthread_create(&t[i], NULL, &mt_align_worker<aligner_t>, &params[i], __LINE__, __FILE__);
+//   }
+
+//   size_t tot_reads = 0;
+//   size_t tot_aligned_reads = 0;
+
+//   for(size_t i = 0; i < n_threads; ++i)
+//   {
+//     xpthread_join(t[i],NULL,__LINE__,__FILE__);
+//   }
+
+//   sleep(5);
+//   for(size_t i = 0; i < n_threads; ++i)
+//   {
+//     tot_reads += params[i].n_reads;
+//     tot_aligned_reads += params[i].n_aligned_reads;
+//   }
+
+//   verbose("Number of aligned reads: ", tot_aligned_reads, "/", tot_reads);
+//   return tot_aligned_reads;
+// }
+
 template <typename aligner_t>
 void *mt_align_worker(void *param)
 {
-  mt_param_t<aligner_t> *p = (mt_param_t<aligner_t>*) param;
+  mt_param_t<aligner_t> *p = (mt_param_t<aligner_t> *)param;
   size_t n_reads = 0;
   size_t n_aligned_reads = 0;
 
@@ -2364,63 +2266,84 @@ void *mt_align_worker(void *param)
   if ((sam_fd = fopen(p->sam_filename.c_str(), "w")) == nullptr)
     error("open() file " + p->sam_filename + " failed");
 
-  if ((fp = gzopen(p->pattern_filename.c_str(), "r")) == Z_NULL)
-    error("open() file " + p->pattern_filename + " failed");
-
-  gzseek(fp, p->start, SEEK_SET);
-
-  kseq_t rev;
-  int l;
-
-  kseq_t *seq = kseq_init(fp);
-  while ((ks_tell(seq) < p->end) && ((l = kseq_read(seq)) >= 0))
+  size_t b_size = p->b_size;
+  if (p->seq != nullptr)
   {
-
-    bool fwd_align = p->aligner->align(seq, sam_fd, 0);
-
-    //copy seq
-    copy_kseq_t(&rev, seq);
-
-    for (size_t i = 0; i < seq->seq.l; ++i)
-      rev.seq.s[i] = complement(seq->seq.s[seq->seq.l - i - 1]);
-
-    if (rev.seq.m > rev.seq.l)
-      rev.seq.s[rev.seq.l] = 0;
-
-    bool rev_align = p->aligner->align(&rev, sam_fd, 1);
-
-    if (fwd_align or rev_align)
-      n_aligned_reads++;
-    n_reads++;
-
-    free(rev.name.s);
-    free(rev.comment.s);
-    free(rev.seq.s);
-    free(rev.qual.s);
+    kseq_t *seq = p->seq;
+    kbseq_t *b = kbseq_init();
+    int l = 0;
+    while ((l = mt_kbseq_read(b, seq, b_size)) > 0)
+    {
+      for (size_t i = 0; i < l; ++i)
+      {
+        if (p->aligner->align(&b->buf[i], sam_fd, 0))
+          n_aligned_reads++;        
+        n_reads++;
+      }
+      // std::cout << "Block p " << p->wk_id << " end!" << std::endl;
+    }
+    kbseq_destroy(b);
+  }
+  else
+  {
+    kseq_t *mate1 = p->mate1;
+    kseq_t *mate2 = p->mate2;
+    kpbseq_t *b = kpbseq_init();
+    int l = 0;
+    while ((l = mt_kpbseq_read(b, mate1, mate2, b_size)) > 0)
+    {
+      for (size_t i = 0; i < l; ++i)
+      {
+        if (p->aligner->align(&b->mate1->buf[i], &b->mate2->buf[i],sam_fd))
+          n_aligned_reads++;
+        n_reads++;
+      }
+      // std::cout << "Block p " << p->wk_id << " end!" << std::endl;
+    }
+    kpbseq_destroy(b);
   }
 
   verbose("Number of aligned reads block ", p->wk_id, " : ", n_aligned_reads, "/", n_reads);
   p->n_reads = n_reads;
   p->n_aligned_reads = n_aligned_reads;
-  kseq_destroy(seq);
-  gzclose(fp);
   fclose(sam_fd);
 
   return NULL;
 }
+
 template <typename aligner_t>
-size_t mt_align(aligner_t *aligner, std::string pattern_filename, std::string sam_filename, size_t n_threads)
+size_t mt_align(aligner_t *aligner, std::string pattern_filename, std::string sam_filename, size_t n_threads, size_t b_size, std::string mate2_filename = "")
 {
+  xpthread_mutex_init(&mutex_reads_dispatcher, NULL, __LINE__, __FILE__);
+  kseq_t *seq = nullptr;
+  kseq_t *mate1 = nullptr;
+  kseq_t *mate2 = nullptr;
+
+  gzFile fp_mate2 = nullptr;
+  gzFile fp = gzopen(pattern_filename.c_str(), "r");
+  if (mate2_filename != "")
+  {
+    fp_mate2 = gzopen(mate2_filename.c_str(), "r");
+    mate1 = kseq_init(fp);
+    mate2 = kseq_init(fp_mate2);
+  }
+  else
+  {
+    seq = kseq_init(fp);
+  }
+
   pthread_t t[n_threads] = {0};
   mt_param_t<aligner_t> params[n_threads];
-  std::vector<size_t> starts = split_fastq(pattern_filename, n_threads);
-  for(size_t i = 0; i < n_threads; ++i)
+  for (size_t i = 0; i < n_threads; ++i)
   {
+    // Create a new thread
     params[i].aligner = aligner;
     params[i].pattern_filename = pattern_filename;
     params[i].sam_filename = sam_filename + "_" + std::to_string(i) + ".sam";
-    params[i].start = starts[i];
-    params[i].end = starts[i+1];
+    params[i].b_size = b_size;
+    params[i].seq = seq;
+    params[i].mate1 = mate1;
+    params[i].mate2 = mate2;
     params[i].wk_id = i;
     xpthread_create(&t[i], NULL, &mt_align_worker<aligner_t>, &params[i], __LINE__, __FILE__);
   }
@@ -2428,32 +2351,73 @@ size_t mt_align(aligner_t *aligner, std::string pattern_filename, std::string sa
   size_t tot_reads = 0;
   size_t tot_aligned_reads = 0;
 
-  for(size_t i = 0; i < n_threads; ++i)
+  for (size_t i = 0; i < n_threads; ++i)
   {
-    xpthread_join(t[i],NULL,__LINE__,__FILE__);
+    xpthread_join(t[i], NULL, __LINE__, __FILE__);
   }
 
-  sleep(5);
-  for(size_t i = 0; i < n_threads; ++i)
+  if (fp_mate2 != nullptr)
+  {
+    kseq_destroy(mate1);
+    kseq_destroy(mate2);
+    gzclose(fp_mate2);
+  }
+  else
+  {
+    kseq_destroy(seq);
+  }
+  gzclose(fp);
+
+  // sleep(5);
+  verbose("Merging temporary SAM files");
+
+  FILE *fd;
+
+  if ((fd = fopen(std::string(sam_filename + ".sam").c_str(), "w")) == nullptr)
+    error("open() file " + std::string(sam_filename + ".sam") + " failed");
+
+  for (size_t i = 0; i < n_threads; ++i)
   {
     tot_reads += params[i].n_reads;
     tot_aligned_reads += params[i].n_aligned_reads;
+
+    append_file(params[i].sam_filename, fd);
+    if (std::remove(params[i].sam_filename.c_str()) != 0)
+      error("remove() file " + params[i].sam_filename + " failed");
   }
+
+  xpthread_mutex_destroy(&mutex_reads_dispatcher, __LINE__, __FILE__);
 
   verbose("Number of aligned reads: ", tot_aligned_reads, "/", tot_reads);
   return tot_aligned_reads;
 }
 
-
 ////////////////////////////////////////////////////////////////////////////////
 /// Single Thread
 ////////////////////////////////////////////////////////////////////////////////
-template<typename aligner_t>
-size_t st_align(aligner_t *aligner, std::string pattern_filename, std::string sam_filename)
+template <typename aligner_t>
+size_t st_align(aligner_t *aligner, std::string pattern_filename, std::string sam_filename, size_t b_size, std::string mate2_filename = "")
 {
   size_t n_reads = 0;
   size_t n_aligned_reads = 0;
-  kseq_t rev;
+
+  kseq_t *seq = nullptr;
+  kseq_t *mate1 = nullptr;
+  kseq_t *mate2 = nullptr;
+
+  gzFile fp_mate2 = nullptr;
+  gzFile fp = gzopen(pattern_filename.c_str(), "r");
+  if (mate2_filename != "")
+  {
+    fp_mate2 = gzopen(mate2_filename.c_str(), "r");
+    mate1 = kseq_init(fp);
+    mate2 = kseq_init(fp_mate2);
+  }
+  else
+  {
+    seq = kseq_init(fp);
+  }
+
   int l;
   FILE *sam_fd;
 
@@ -2462,34 +2426,37 @@ size_t st_align(aligner_t *aligner, std::string pattern_filename, std::string sa
   if ((sam_fd = fopen(sam_filename.c_str(), "w")) == nullptr)
     error("open() file " + sam_filename + " failed");
 
-  gzFile fp = gzopen(pattern_filename.c_str(), "r");
-  kseq_t* seq = kseq_init(fp);
-  while ((l = kseq_read(seq)) >= 0)
+  if (seq != nullptr)
   {
-
-    bool fwd_align = aligner->align(seq, sam_fd, 0);
-
-    //copy seq
-    copy_kseq_t(&rev, seq);
-
-    for (size_t i = 0; i < seq->seq.l; ++i)
-      rev.seq.s[i] = complement(seq->seq.s[seq->seq.l - i - 1]);
-
-    if (rev.seq.m > rev.seq.l)
-      rev.seq.s[rev.seq.l] = 0;
-
-    bool rev_align = aligner->align(&rev, sam_fd, 1);
-
-    if (fwd_align or rev_align)
-      n_aligned_reads++;
-    n_reads++;
-
-    free(rev.name.s);
-    free(rev.comment.s);
-    free(rev.seq.s);
-    free(rev.qual.s);
+    kbseq_t *b = kbseq_init();
+    int l = 0;
+    while ((l = kbseq_read(b, seq, b_size)) > 0)
+    {
+      for (size_t i = 0; i < l; ++i)
+      {
+        if (aligner->align(&b->buf[i], sam_fd, 0))
+          n_aligned_reads++;
+        n_reads++;
+      }
+    }
+    kbseq_destroy(b);
+  } 
+  else
+  {
+    kpbseq_t *b = kpbseq_init();
+    int l = 0;
+    while ((l = kpbseq_read(b, mate1, mate2, b_size)) > 0)
+    {
+      for (size_t i = 0; i < l; ++i)
+      {
+        if (aligner->align(&b->mate1->buf[i], &b->mate2->buf[i], sam_fd))
+          n_aligned_reads++;
+        n_reads++;
+      }
+      // std::cout << "Block p " << p->wk_id << " end!" << std::endl;
+    }
+    kpbseq_destroy(b);
   }
-
   verbose("Number of aligned reads: ", n_aligned_reads, "/", n_reads);
   kseq_destroy(seq);
   gzclose(fp);
@@ -2511,6 +2478,9 @@ struct Args
   bool csv   = false; // print stats on stderr in csv format
   bool rle   = false; // outpt RLBWT
   std::string patterns = ""; // path to patterns file
+  std::string mate1 = "";    // path to file with #1 mates paired with mate2.
+  std::string mate2 = "";    // path to file with #2 mates paired with mate1.
+  size_t b_size = 100;       // size of the batch of read to be processed
   size_t l = 25; // minumum MEM length
   size_t th = 1; // number of threads
   bool is_fasta = false; // read a fasta file
@@ -2523,7 +2493,7 @@ void parseArgs(int argc, char *const argv[], Args &arg)
   extern char *optarg;
   extern int optind;
 
-  std::string usage("usage: " + std::string(argv[0]) + " infile [-s store] [-m memo] [-c csv] [-p patterns] [-f fasta] [-r rle] [-t threads] [-l len] [-q shaped_slp]\n\n" +
+  std::string usage("usage: " + std::string(argv[0]) + " infile [-s store] [-m memo] [-c csv] [-p patterns] [-1 mate1] [-2 mate2] [-f fasta] [-r rle] [-t threads] [-b b_size] [-l len] [-q shaped_slp]\n\n" +
                     "Computes the pfp data structures of infile, provided that infile.parse, infile.dict, and infile.occ exists.\n" +
                     "     wsize: [integer] - sliding window size (def. 10)\n" +
                     "     store: [boolean] - store the data structure in infile.pfp.ds. (def. false)\n" +
@@ -2532,12 +2502,15 @@ void parseArgs(int argc, char *const argv[], Args &arg)
                     "       rle: [boolean] - output run length encoded BWT. (def. false)\n" +
                     "shaped_slp: [boolean] - use shaped slp. (def. false)\n" +
                     "   pattens: [string]  - path to patterns file.\n" +
+                    "     mate1: [string]  - path to file with #1 mates paired with mate2.\n" +
+                    "     mate2: [string]  - path to file with #2 mates paired with mate1.\n" +
+                    "    b_size: [integer] - size of the batch of read to be processed (def. 100)\n" +
                     "       len: [integer] - minimum MEM lengt (def. 25)\n" +
                     "    thread: [integer] - number of threads (def. 1)\n" +
                     "       csv: [boolean] - print the stats in csv form on strerr. (def. false)\n");
 
   std::string sarg;
-  while ((c = getopt(argc, argv, "w:smcfql:rhp:t:")) != -1)
+  while ((c = getopt(argc, argv, "w:smcfql:rhp:t:1:2:b:")) != -1)
   {
     switch (c)
     {
@@ -2560,9 +2533,19 @@ void parseArgs(int argc, char *const argv[], Args &arg)
     case 'p':
       arg.patterns.assign(optarg);
       break;
+    case '1':
+      arg.mate1.assign(optarg);
+      break;
+    case '2':
+      arg.mate2.assign(optarg);
+      break;
     case 'l':
       sarg.assign(optarg);
       arg.l = stoi(sarg);
+      break;
+    case 'b':
+      sarg.assign(optarg);
+      arg.b_size = stoi(sarg);
       break;
     case 't':
       sarg.assign(optarg);
@@ -2612,16 +2595,31 @@ void dispatcher(Args &args){
   std::string base_name = basename(args.filename.data());
   std::string sam_filename = args.patterns + "_" + base_name + "_" + std::to_string(args.l);
 
-  if (is_gzipped(args.patterns))
-  {
-    verbose("The input is gzipped - forcing single thread alignment.");
-    args.th = 1;
-  }
 
-  if (args.th == 1)
-    st_align<aligner_t>(&aligner, args.patterns, sam_filename);
+  if(args.patterns != "")
+  {
+    if (is_gzipped(args.patterns))
+    {
+      verbose("The input is gzipped - forcing single thread alignment.");
+      args.th = 1;
+    }
+    if (args.th == 1)
+      st_align<aligner_t>(&aligner, args.patterns, sam_filename, args.b_size);
+    else
+      mt_align<aligner_t>(&aligner, args.patterns, sam_filename, args.th, args.b_size);
+  }
   else
-    mt_align<aligner_t>(&aligner, args.patterns, sam_filename, args.th);
+  {
+    if (is_gzipped(args.mate1) or is_gzipped(args.mate2))
+    {
+      verbose("The input is gzipped - forcing single thread alignment.");
+      args.th = 1;
+    }
+    if (args.th == 1)
+      st_align<aligner_t>(&aligner, args.mate1, sam_filename, args.b_size, args.mate2 );
+    else
+      mt_align<aligner_t>(&aligner, args.mate1, sam_filename, args.th, args.b_size, args.mate2);
+  }
 
   // TODO: Merge the SAM files.
 
