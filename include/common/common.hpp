@@ -495,7 +495,32 @@ void my_load(std::vector<X> &x, std::istream &in, typename std::enable_if<std::i
   my_load_vector(x, in);
 }
 
+//*********************** Timing *********************************************
 
+#ifdef MTIME
+#define MTIME_INIT(_n)                                                                                                                \
+  std::vector<std::chrono::high_resolution_clock::time_point> __watches(_n);                                                          \
+  std::vector<double> __durations(_n, 0.0);
 
+#define MTIME_START(_i) \
+  __watches[_i] = std::chrono::high_resolution_clock::now();
+
+#define MTIME_END(_i) \
+  __durations[_i] += std::chrono::duration<double, std::ratio<1>>(std::chrono::high_resolution_clock::now() - __watches[_i]).count();
+
+#define MTIME_REPORT(_i) \
+  verbose("Timing variable: ", _i, " ", __durations[_i]);
+
+#define MTIME_REPORT_ALL                          \
+  for (size_t i = 0; i < __durations.size(); ++i) \
+  MTIME_REPORT(i)
+
+#else
+  #define MTIME_INIT(_n)
+  #define MTIME_START(_i)
+  #define MTIME_END(_i)
+  #define MTIME_REPORT(_i)
+  #define MTIME_REPORT_ALL
+#endif
 
 #endif /* end of include guard: _COMMON_HH */
