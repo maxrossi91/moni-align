@@ -608,10 +608,15 @@ class run_helper(threading.Thread):
       # ----------- computation of the BWT of the parsing
       # print("==== Computing {name}. ".format(name=exe_name), flush=True)
       start = time.time()
+      if args.pattern is not None:
+        command = "{exe} {file} -p {query} -t {th}".format(exe=os.path.join(
+            args.exe_dir, exe), file=args.index,
+            query=args.pattern, th=args.threads)
+      else:
+        command = "{exe} {file} -1 {mate1} -2 {mate2} -t {th}".format(exe=os.path.join(
+            args.exe_dir, exe), file=args.index,
+            mate1=args.mate1, mate2=args.mate2, th=args.threads)
 
-      command = "{exe} {file} -p {query} -t {th}".format(exe=os.path.join(
-          args.exe_dir, exe), file=args.index,
-          query=args.pattern, th=args.threads)
       if exe_name != "SPUMONI" and args.grammar == "shaped":
         command += " -q"
 
@@ -629,7 +634,11 @@ class run_helper(threading.Thread):
 
 
 def run(args):
-  logfile_name = args.pattern + "." + args.which + ".log"
+  if args.pattern is not None:
+    logfile_name = args.pattern + "." + args.which + ".log"
+  else:
+    logfile_name = args.mate1 + "." + args.which + ".log"
+  
   # get main bigbwt directory
   args.exe_dir = os.path.split(sys.argv[0])[0]
   print("Sending logging messages to file:", logfile_name, flush=True)
@@ -730,7 +739,9 @@ def main():
   pseudo_ms_parser.set_defaults(which='pseudo_ms')
 
   align_parser.add_argument('-i', '--index', help='reference index folder', type=str, required=True)
-  align_parser.add_argument('-p', '--pattern', help='the input query', type=str, required=True)
+  align_parser.add_argument('-p', '--pattern', help='the input query', type=str)
+  align_parser.add_argument('-1', '--mate1', help='path to the input left end of the reads', type=str)
+  align_parser.add_argument('-2', '--mate2', help='path to the input right end of the reads', type=str)
   align_parser.add_argument('-o', '--output', help='output directory path', type=str, default='.')
   align_parser.add_argument('-t', '--threads', help='number of helper threads', default=1, type=int)
   align_parser.add_argument('-g', '--grammar', help='select the grammar (only for moni and phoni) [plain, shaped]', type=str, default='plain')
