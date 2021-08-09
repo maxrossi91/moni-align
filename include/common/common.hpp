@@ -416,6 +416,29 @@ void LCP_array_cyclic_text(S* s, const std::vector<T>& isa, const std::vector<T>
 //********** begin my serialize edit from sdsl ********************
 // Those are wrapper around most of the serialization functions of sdsl
 
+template <class T, typename size_type>
+uint64_t
+my_serialize_array(const T* p, const size_type size, std::ostream &out, typename std::enable_if<std::is_fundamental<T>::value>::type * = 0)
+{
+  size_t written_bytes = 0;
+  if (size > 0)
+  {
+
+    size_type idx = 0;
+    while (idx + sdsl::conf::SDSL_BLOCK_SIZE < (size))
+    {
+      out.write((char *)p, sdsl::conf::SDSL_BLOCK_SIZE * sizeof(T));
+      written_bytes += sdsl::conf::SDSL_BLOCK_SIZE * sizeof(T);
+      p += sdsl::conf::SDSL_BLOCK_SIZE;
+      idx += sdsl::conf::SDSL_BLOCK_SIZE;
+    }
+    out.write((char *)p, ((size) - idx) * sizeof(T));
+    written_bytes += ((size) - idx) * sizeof(T);
+
+  }
+  return written_bytes;
+}
+
 //! Serialize each element of an std::vector
 /*!
  * \param vec The vector which should be serialized.
@@ -433,19 +456,21 @@ my_serialize_vector(const std::vector<T> &vec, std::ostream &out, sdsl::structur
   if (vec.size() > 0)
   {
     sdsl::structure_tree_node *child = sdsl::structure_tree::add_child(v, name, "std::vector<" + sdsl::util::class_name(vec[0]) + ">");
-    size_t written_bytes = 0;
+    // size_t written_bytes = 0;
 
-    const T *p = &vec[0];
-    typename std::vector<T>::size_type idx = 0;
-    while (idx + sdsl::conf::SDSL_BLOCK_SIZE < (vec.size()))
-    {
-      out.write((char *)p, sdsl::conf::SDSL_BLOCK_SIZE * sizeof(T));
-      written_bytes += sdsl::conf::SDSL_BLOCK_SIZE * sizeof(T);
-      p += sdsl::conf::SDSL_BLOCK_SIZE;
-      idx += sdsl::conf::SDSL_BLOCK_SIZE;
-    }
-    out.write((char *)p, ((vec.size()) - idx) * sizeof(T));
-    written_bytes += ((vec.size()) - idx) * sizeof(T);
+    // const T *p = &vec[0];
+    // typename std::vector<T>::size_type idx = 0;
+    // while (idx + sdsl::conf::SDSL_BLOCK_SIZE < (vec.size()))
+    // {
+    //   out.write((char *)p, sdsl::conf::SDSL_BLOCK_SIZE * sizeof(T));
+    //   written_bytes += sdsl::conf::SDSL_BLOCK_SIZE * sizeof(T);
+    //   p += sdsl::conf::SDSL_BLOCK_SIZE;
+    //   idx += sdsl::conf::SDSL_BLOCK_SIZE;
+    // }
+    // out.write((char *)p, ((vec.size()) - idx) * sizeof(T));
+    // written_bytes += ((vec.size()) - idx) * sizeof(T);
+
+    size_t written_bytes = my_serialize_array<T, typename std::vector<T>::size_type>(&vec[0], vec.size(), out);
 
     sdsl::structure_tree::add_size(child, written_bytes);
     return written_bytes;
@@ -465,6 +490,27 @@ my_serialize(const std::vector<X> &x,
   return sdsl::serialize(x.size(), out, v, name) + my_serialize_vector(x, out, v, name);
 }
 
+/**
+ * @brief Load an array of size elements into p. p should be preallocated.
+ * 
+ * \tparam T 
+ * \tparam size_type 
+ * @param p 
+ * @param size 
+ * @param in 
+ */
+template <class T, typename size_type>
+void my_load_array(T *p, const size_type size, std::istream &in, typename std::enable_if<std::is_fundamental<T>::value>::type * = 0)
+{
+  size_type idx = 0;
+  while (idx + sdsl::conf::SDSL_BLOCK_SIZE < (size))
+  {
+    in.read((char *)p, sdsl::conf::SDSL_BLOCK_SIZE * sizeof(T));
+    p += sdsl::conf::SDSL_BLOCK_SIZE;
+    idx += sdsl::conf::SDSL_BLOCK_SIZE;
+  }
+  in.read((char *)p, ((size) - idx) * sizeof(T));
+}
 //! Load all elements of a vector from a input stream
 /*! \param vec  Vector whose elements should be loaded.
  *  \param in   Input stream.
@@ -475,15 +521,16 @@ my_serialize(const std::vector<X> &x,
 template <class T>
 void my_load_vector(std::vector<T> &vec, std::istream &in, typename std::enable_if<std::is_fundamental<T>::value>::type * = 0)
 {
-  T *p = &vec[0];
-  typename std::vector<T>::size_type idx = 0;
-  while (idx + sdsl::conf::SDSL_BLOCK_SIZE < (vec.size()))
-  {
-    in.read((char *)p, sdsl::conf::SDSL_BLOCK_SIZE * sizeof(T));
-    p += sdsl::conf::SDSL_BLOCK_SIZE;
-    idx += sdsl::conf::SDSL_BLOCK_SIZE;
-  }
-  in.read((char *)p, ((vec.size()) - idx) * sizeof(T));
+  // T *p = &vec[0];
+  // typename std::vector<T>::size_type idx = 0;
+  // while (idx + sdsl::conf::SDSL_BLOCK_SIZE < (vec.size()))
+  // {
+  //   in.read((char *)p, sdsl::conf::SDSL_BLOCK_SIZE * sizeof(T));
+  //   p += sdsl::conf::SDSL_BLOCK_SIZE;
+  //   idx += sdsl::conf::SDSL_BLOCK_SIZE;
+  // }
+  // in.read((char *)p, ((vec.size()) - idx) * sizeof(T));
+  my_load_array<T, typename std::vector<T>::size_type>(&vec[0], vec.size(), in);
 }
 
 template <typename X>

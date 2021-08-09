@@ -252,3 +252,10 @@ target_include_directories(thr_test PUBLIC    "../../include/ms"
                                             "${SUX_SOURCE_DIR}/support"
                                         )
 target_compile_options(thr_test PUBLIC "-std=c++17")
+
+add_executable(build_seqidx build_seqidx.cpp)
+target_link_libraries(build_seqidx common sdsl divsufsort divsufsort64 malloc_count klib z)
+target_include_directories(build_seqidx PUBLIC    "../../include/ms" 
+                                        "../../include/common" 
+                                        )
+target_compile_options(build_seqidx PUBLIC "-std=c++17")
