@@ -48,6 +48,8 @@ extern "C" {
 
 #include <libgen.h>
 #include <kpbseq.h>
+
+#include <seqidx.hpp>
 #define _REALIGN
 
 MTIME_INIT(3);
@@ -194,7 +196,7 @@ public:
 
     std::chrono::high_resolution_clock::time_point t_insert_end = std::chrono::high_resolution_clock::now();
 
-    verbose("Matching statistics index construction complete");
+    verbose("Matching statistics index loading complete");
     verbose("Memory peak: ", malloc_count_peak());
     verbose("Elapsed time (s): ", std::chrono::duration<double, std::ratio<1>>(t_insert_end - t_insert_start).count());
 
@@ -211,7 +213,22 @@ public:
 
     t_insert_end = std::chrono::high_resolution_clock::now();
 
-    verbose("Matching statistics index loading complete");
+    verbose("Random access loading complete");
+    verbose("Memory peak: ", malloc_count_peak());
+    verbose("Elapsed time (s): ", std::chrono::duration<double, std::ratio<1>>(t_insert_end - t_insert_start).count());
+
+    std::string filename_idx = filename + idx.get_file_extension();
+    verbose("Loading fasta index file: " + filename_idx);
+    t_insert_start = std::chrono::high_resolution_clock::now();
+
+
+    ifstream fs_idx(filename_idx);
+    idx.load(fs_idx);
+    fs_idx.close();
+
+    t_insert_end = std::chrono::high_resolution_clock::now();
+
+    verbose("Fasta index loading complete");
     verbose("Memory peak: ", malloc_count_peak());
     verbose("Elapsed time (s): ", std::chrono::duration<double, std::ratio<1>>(t_insert_end - t_insert_start).count());
 
@@ -368,12 +385,18 @@ public:
     return aligned;
   }
 
+  #define MATE_1 0 // The MEM cames from mate_1
+  #define MATE_2 1 // The MEM cames from mate_2
+  #define MATE_F 0 // The MEM cames from the forward strand
+  #define MATE_RC 2 // The MEM cames from the reverse-complement strand
+
   typedef struct mem_t{
     size_t pos = 0;  // Position in the reference
     size_t len = 0;  // Length
     size_t idx = 0;  // Position in the pattern
     size_t mate = 0; // Left mate (0) or Right mate (1)
     size_t rpos = 0; // Position in the read for chaining
+                     // With a Forward-Reverse library
                      // If the mem is in the FWD strand it is the position of the last character in the read
                      // If the mem is in the REV strand it is the position of the first character in the read
     std::vector<size_t> occs; // List of occurrences of the MEM
@@ -461,10 +484,7 @@ public:
     fprintf(out, "%d\t", s.tlen);                 // TLEN
     fprintf(out, "%s\t", s.read->seq.s);          // SEQ
 
-    if (s.read->qual.s && s.reverse)              // QUAL
-      for (size_t p = s.read->qual.l; p > 0; --p)
-        fprintf(out, "%c", s.read->qual.s[p-1]);
-    else if (s.read->qual.s)
+    if (s.read->qual.s)                           // QUAL
       fprintf(out, "%s", s.read->qual.s);
     else
       fprintf(out, "*");
@@ -605,7 +625,7 @@ public:
     if ((not fwd_chains) and (not rev_chains))
     {
       std::string dummy = "";
-      write_sam(0, 0, 0, 0, "human", read, 0, out, dummy, dummy, 0, "*", 0, 0);
+      write_sam(0, 0, 0, 0, "*", read, 0, out, dummy, dummy, 0, "*", 0, 0);
       return false;
     } 
 
@@ -688,7 +708,7 @@ public:
     if(best_scores[0].first < min_score)
     {
       std::string dummy = "";
-      write_sam(0, 0, 0, 0, "human", read, 0, out, dummy, dummy, 0, "*", 0, 0);
+      write_sam(0, 0, 0, 0, "*", read, 0, out, dummy, dummy, 0, "*", 0, 0);
       return false;
     }
 
@@ -1048,11 +1068,24 @@ public:
     if(not aligned)
     {
       std::string dummy = "";
-      write_sam(0, 0, 0, 0, "human", read, 0, out, dummy, dummy, 0, "*", 0, 0);
+      write_sam(0, 0, 0, 0, "*", read, 0, out, dummy, dummy, 0, "*", 0, 0);
     }
 
     return aligned;
   }
+
+  typedef struct{
+    bool aligned = false;
+    enum type_t {Unpaired, Paired} type;
+
+    kseq_t* read;
+    kseq_t* mate1;
+    kseq_t* mate2;
+
+
+
+
+  } alignment_t;
 
   // Aligning pair-ended sequences
   bool align(kseq_t *mate1, kseq_t *mate2, FILE *out)
@@ -1062,80 +1095,32 @@ public:
     
     MTIME_START(0); // Timing helper
 
-    // Find MEMs of mate1 and reverse of mate2
+    // Generate rc reads
+    kseq_t mate1_rev, mate2_rev;
+    rc_copy_kseq_t(&mate1_rev, mate1);
+    rc_copy_kseq_t(&mate2_rev, mate2);
+
+    // Find MEMs
     std::vector<mem_t> mems;
 
-    find_mems(mate1, mems);
-    //copy seq
-    kseq_t mate2_rev;
-    copy_kseq_t(&mate2_rev, mate2);
-
-    for (size_t i = 0; i < mate2->seq.l; ++i)
-      mate2_rev.seq.s[i] = complement(mate2->seq.s[mate2->seq.l - i - 1]);
-
-    if (mate2_rev.seq.m > mate2_rev.seq.l)
-      mate2_rev.seq.s[mate2_rev.seq.l] = 0;
-
-    find_mems(&mate2_rev, mems, 1, mate1->seq.l, 1);
+    find_mems(mate1, mems, 0, MATE_1 | MATE_F);
+    find_mems(&mate1_rev, mems, mate2->seq.l, MATE_1 | MATE_RC );
+    find_mems(mate2, mems, 0, MATE_2 | MATE_F);
+    find_mems(&mate2_rev, mems, mate1->seq.l, MATE_2 | MATE_RC);
 
     MTIME_END(0); //Timing helper
     MTIME_START(1); //Timing helper
 
-    // for(size_t i = 0; i < mems.size(); ++i){
-    //   std::cout << "MEM[" << i <<"]: \n";
-    //   std::cout << "    len:" << mems[i].len <<"\n";
-    //   std::cout << "    pos:" << mems[i].pos <<"\n";
-    //   std::cout << "    idx:" << mems[i].idx <<"\n";
-    //   std::cout << "   occs:" << mems[i].occs.size() <<"\n";
-    // }
-
     std::vector<std::pair<size_t, size_t>> anchors;
     std::vector<chain_t> chains;
 
-    // Chain MEMs of mate1 and reverse of mate2
-    const bool fwd_chains = find_chains(mems, anchors, chains);
+    // Chain MEMs
+    const bool chained = find_chains(mems, anchors, chains);
 
     MTIME_END(1);   //Timing helper
-    MTIME_START(0); //Timing helper
-
-    // Find MEMs of mate2 and reverse of mate1
-    std::vector<mem_t> mems_rev;
-
-    find_mems(mate2, mems_rev, 0, 0, 1);
-
-    //copy seq
-    kseq_t mate1_rev;
-    copy_kseq_t(&mate1_rev, mate1);
-
-    for (size_t i = 0; i < mate1->seq.l; ++i)
-      mate1_rev.seq.s[i] = complement(mate1->seq.s[mate1->seq.l - i - 1]);
-
-    if (mate1_rev.seq.m > mate1_rev.seq.l)
-      mate1_rev.seq.s[mate1_rev.seq.l] = 0;
-
-    find_mems(&mate1_rev, mems_rev, 1, mate1->seq.l);
-
-    MTIME_END(0);   //Timing helper
-    MTIME_START(1); //Timing helper
-
-    // for (size_t i = 0; i < mems_rev.size(); ++i)
-    // {
-    //   std::cout << "MEM[" << i << "]: \n";
-    //   std::cout << "    len:" << mems_rev[i].len << "\n";
-    //   std::cout << "    pos:" << mems_rev[i].pos << "\n";
-    //   std::cout << "    idx:" << mems_rev[i].idx << "\n";
-    //   std::cout << "   occs:" << mems_rev[i].occs.size() << "\n";
-    // }
-
-    std::vector<std::pair<size_t, size_t>> anchors_rev;
-    std::vector<chain_t> chains_rev;
-
-    // Chain MEMs of mate2 and reverse of mate1
-    const bool rev_chains = find_chains(mems_rev, anchors_rev, chains_rev);
-
-    MTIME_END(1); //Timing helper
     MTIME_START(2); //Timing helper
-    if ((not fwd_chains) and (not rev_chains))
+
+    if (not chained)
     {
       sam_t sam_m1(mate1);
       sam_t sam_m2(mate2);
@@ -1153,19 +1138,13 @@ public:
 
     int32_t min_score = 20 + 8 * log(mate1->seq.l);
 
-
-
     // // Compute the second best score
     std::vector<std::pair<int32_t, size_t>> best_scores;
     // get the occurrences of the top 4 best scores
     std::set<size_t> different_scores;
     size_t i = 0;
-    size_t j = 0;
-    size_t off = chains.size();
-    while (i < chains.size() and j < chains_rev.size() and different_scores.size() < 3)
+    while (i < chains.size() and different_scores.size() < 3)
     {
-      if (chains[i].score > chains_rev[j].score)
-      {
         different_scores.insert(chains[i].score);
         if (different_scores.size() < 3)
         {
@@ -1174,56 +1153,18 @@ public:
           // Reverse the chain order
           std::reverse(chain.anchors.begin(), chain.anchors.end());
           // Compute the score of a chain.
-          paired_score_t score = paired_chain_score(chain, anchors, mems, min_score, mate1, &mate2_rev);
+          paired_score_t score;
+          if( (chain.mate == 0) || ((chain.mate & MATE_RC) and (chain.mate & MATE_2)) )
+            score = paired_chain_score(chain, anchors, mems, min_score, mate1, &mate2_rev);
+          else
+            score = paired_chain_score(chain, anchors, mems, min_score, &mate1_rev, mate2);
+          
           best_scores.push_back(std::make_pair(score.tot, i++));
         }
-      }
-      else
-      {
-        different_scores.insert(chains_rev[j].score);
-        if (different_scores.size() < 3)
-        {
-          // Align the chain
-          auto chain = chains_rev[j];
-          // Reverse the chain order
-          std::reverse(chain.anchors.begin(), chain.anchors.end());
-          // Compute the score of a chain.
-          paired_score_t score = paired_chain_score(chain, anchors_rev, mems_rev, min_score, &mate1_rev, mate2);
-          best_scores.push_back(std::make_pair(score.tot, off + j++));
-        }
-      }
     }
-    while (different_scores.size() < 3 and i < chains.size())
-    {
-      different_scores.insert(chains[i].score);
-      if (different_scores.size() < 3)
-      {
-        // Align the chain
-        auto chain = chains[i];
-        // Reverse the chain order
-        std::reverse(chain.anchors.begin(), chain.anchors.end());
-        // Compute the score of a chain.
-        paired_score_t score = paired_chain_score(chain, anchors, mems, min_score, mate1, &mate2_rev);
-        best_scores.push_back(std::make_pair(score.tot, i++));
-      }
-    }
-    while (different_scores.size() < 3 and j < chains_rev.size())
-    {
-      different_scores.insert(chains_rev[j].score);
-      if (different_scores.size() < 3)
-      {
-        // Align the chain
-        auto chain = chains_rev[j];
-        // Reverse the chain order
-        std::reverse(chain.anchors.begin(), chain.anchors.end());
-        // Compute the score of a chain.
-        paired_score_t score = paired_chain_score(chain, anchors_rev, mems_rev, min_score, &mate1_rev, mate2);
-        best_scores.push_back(std::make_pair(score.tot, off + j++));
-      }
-    }
-
+    
     if (best_scores.size() < 2)
-      best_scores.push_back(std::make_pair(0, chains.size() + chains_rev.size()));
+      best_scores.push_back(std::make_pair(0, chains.size()));
 
     std::sort(best_scores.begin(), best_scores.end(), std::greater<std::pair<int32_t, size_t>>());
 
@@ -1248,18 +1189,7 @@ public:
     int32_t score2 = best_scores[1].first;
     paired_score_t score;
 
-    // TODO: Check if the mates are paired or not.
-    if (best_scores[0].second >= off)
-    { // Reverse case
-      j = best_scores[0].second - off;
-      // Align the chain
-      auto chain = chains_rev[j];
-      // Reverse the chain order
-      std::reverse(chain.anchors.begin(), chain.anchors.end());
-      // Compute the score of a chain.
-      score = paired_chain_score(chain, anchors_rev, mems_rev, min_score, &mate1_rev, mate2, false, score2, 1, out);
-    }
-    else
+
     { // Forward case
       i = best_scores[0].second;
       // Align the chain
@@ -1267,7 +1197,10 @@ public:
       // Reverse the chain order
       std::reverse(chain.anchors.begin(), chain.anchors.end());
       // Compute the score of a chain.
-      score = paired_chain_score(chain, anchors, mems, min_score, mate1, &mate2_rev, false, score2, 0, out);
+      if( (chain.mate == 0) || ((chain.mate & MATE_RC) and (chain.mate & MATE_2)) )
+        score = paired_chain_score(chain, anchors, mems, min_score, mate1, &mate2_rev, false, score2, 0, out);
+      else
+        score = paired_chain_score(chain, anchors, mems, min_score, &mate1_rev, mate2, false, score2, 1, out);
     }
 
     if (score.tot >= min_score)
@@ -1293,6 +1226,247 @@ public:
 
     return aligned;
   }
+  // // Aligning pair-ended sequences
+  // bool align(kseq_t *mate1, kseq_t *mate2, FILE *out)
+  // {
+
+  //   bool aligned = false;
+    
+  //   MTIME_START(0); // Timing helper
+
+  //   // Find MEMs of mate1 and reverse of mate2
+  //   std::vector<mem_t> mems;
+
+  //   find_mems(mate1, mems);
+  //   //copy seq
+  //   kseq_t mate2_rev;
+  //   rc_copy_kseq_t(&mate2_rev, mate2);
+  //   // copy_kseq_t(&mate2_rev, mate2);
+
+  //   // for (size_t i = 0; i < mate2->seq.l; ++i)
+  //   //   mate2_rev.seq.s[i] = complement(mate2->seq.s[mate2->seq.l - i - 1]);
+
+  //   // if (mate2_rev.seq.m > mate2_rev.seq.l)
+  //   //   mate2_rev.seq.s[mate2_rev.seq.l] = 0;
+
+  //   find_mems(&mate2_rev, mems, 1, mate1->seq.l, 1);
+
+  //   MTIME_END(0); //Timing helper
+  //   MTIME_START(1); //Timing helper
+
+  //   // for(size_t i = 0; i < mems.size(); ++i){
+  //   //   std::cout << "MEM[" << i <<"]: \n";
+  //   //   std::cout << "    len:" << mems[i].len <<"\n";
+  //   //   std::cout << "    pos:" << mems[i].pos <<"\n";
+  //   //   std::cout << "    idx:" << mems[i].idx <<"\n";
+  //   //   std::cout << "   occs:" << mems[i].occs.size() <<"\n";
+  //   // }
+
+  //   std::vector<std::pair<size_t, size_t>> anchors;
+  //   std::vector<chain_t> chains;
+
+  //   // Chain MEMs of mate1 and reverse of mate2
+  //   const bool fwd_chains = find_chains(mems, anchors, chains);
+
+  //   MTIME_END(1);   //Timing helper
+  //   MTIME_START(0); //Timing helper
+
+  //   // Find MEMs of mate2 and reverse of mate1
+  //   std::vector<mem_t> mems_rev;
+
+  //   find_mems(mate2, mems_rev, 0, 0, 1);
+
+  //   //copy seq
+  //   kseq_t mate1_rev;
+  //   rc_copy_kseq_t(&mate1_rev, mate1);
+  //   // copy_kseq_t(&mate1_rev, mate1);
+
+  //   // for (size_t i = 0; i < mate1->seq.l; ++i)
+  //   //   mate1_rev.seq.s[i] = complement(mate1->seq.s[mate1->seq.l - i - 1]);
+
+  //   // if (mate1_rev.seq.m > mate1_rev.seq.l)
+  //   //   mate1_rev.seq.s[mate1_rev.seq.l] = 0;
+
+  //   find_mems(&mate1_rev, mems_rev, 1, mate1->seq.l);
+
+  //   MTIME_END(0);   //Timing helper
+  //   MTIME_START(1); //Timing helper
+
+  //   // for (size_t i = 0; i < mems_rev.size(); ++i)
+  //   // {
+  //   //   std::cout << "MEM[" << i << "]: \n";
+  //   //   std::cout << "    len:" << mems_rev[i].len << "\n";
+  //   //   std::cout << "    pos:" << mems_rev[i].pos << "\n";
+  //   //   std::cout << "    idx:" << mems_rev[i].idx << "\n";
+  //   //   std::cout << "   occs:" << mems_rev[i].occs.size() << "\n";
+  //   // }
+
+  //   std::vector<std::pair<size_t, size_t>> anchors_rev;
+  //   std::vector<chain_t> chains_rev;
+
+  //   // Chain MEMs of mate2 and reverse of mate1
+  //   const bool rev_chains = find_chains(mems_rev, anchors_rev, chains_rev);
+
+  //   MTIME_END(1); //Timing helper
+  //   MTIME_START(2); //Timing helper
+  //   if ((not fwd_chains) and (not rev_chains))
+  //   {
+  //     sam_t sam_m1(mate1);
+  //     sam_t sam_m2(mate2);
+
+  //     // Fill sam fields RNEXT, PNEXT and TLEN
+  //     sam_m1.rnext = std::string(mate2->name.s);
+  //     sam_m2.rnext = std::string(mate1->name.s);
+
+  //     sam_m1.flag = sam_m2.flag = SAM_PAIRED | SAM_UNMAPPED | SAM_MATE_UNMAPPED;
+      
+  //     write_sam(out, sam_m1);
+  //     write_sam(out, sam_m2);
+  //     return false;
+  //   }
+
+  //   int32_t min_score = 20 + 8 * log(mate1->seq.l);
+
+
+
+  //   // // Compute the second best score
+  //   std::vector<std::pair<int32_t, size_t>> best_scores;
+  //   // get the occurrences of the top 4 best scores
+  //   std::set<size_t> different_scores;
+  //   size_t i = 0;
+  //   size_t j = 0;
+  //   size_t off = chains.size();
+  //   while (i < chains.size() and j < chains_rev.size() and different_scores.size() < 3)
+  //   {
+  //     if (chains[i].score > chains_rev[j].score)
+  //     {
+  //       different_scores.insert(chains[i].score);
+  //       if (different_scores.size() < 3)
+  //       {
+  //         // Align the chain
+  //         auto chain = chains[i];
+  //         // Reverse the chain order
+  //         std::reverse(chain.anchors.begin(), chain.anchors.end());
+  //         // Compute the score of a chain.
+  //         paired_score_t score = paired_chain_score(chain, anchors, mems, min_score, mate1, &mate2_rev);
+  //         best_scores.push_back(std::make_pair(score.tot, i++));
+  //       }
+  //     }
+  //     else
+  //     {
+  //       different_scores.insert(chains_rev[j].score);
+  //       if (different_scores.size() < 3)
+  //       {
+  //         // Align the chain
+  //         auto chain = chains_rev[j];
+  //         // Reverse the chain order
+  //         std::reverse(chain.anchors.begin(), chain.anchors.end());
+  //         // Compute the score of a chain.
+  //         paired_score_t score = paired_chain_score(chain, anchors_rev, mems_rev, min_score, &mate1_rev, mate2);
+  //         best_scores.push_back(std::make_pair(score.tot, off + j++));
+  //       }
+  //     }
+  //   }
+  //   while (different_scores.size() < 3 and i < chains.size())
+  //   {
+  //     different_scores.insert(chains[i].score);
+  //     if (different_scores.size() < 3)
+  //     {
+  //       // Align the chain
+  //       auto chain = chains[i];
+  //       // Reverse the chain order
+  //       std::reverse(chain.anchors.begin(), chain.anchors.end());
+  //       // Compute the score of a chain.
+  //       paired_score_t score = paired_chain_score(chain, anchors, mems, min_score, mate1, &mate2_rev);
+  //       best_scores.push_back(std::make_pair(score.tot, i++));
+  //     }
+  //   }
+  //   while (different_scores.size() < 3 and j < chains_rev.size())
+  //   {
+  //     different_scores.insert(chains_rev[j].score);
+  //     if (different_scores.size() < 3)
+  //     {
+  //       // Align the chain
+  //       auto chain = chains_rev[j];
+  //       // Reverse the chain order
+  //       std::reverse(chain.anchors.begin(), chain.anchors.end());
+  //       // Compute the score of a chain.
+  //       paired_score_t score = paired_chain_score(chain, anchors_rev, mems_rev, min_score, &mate1_rev, mate2);
+  //       best_scores.push_back(std::make_pair(score.tot, off + j++));
+  //     }
+  //   }
+
+  //   if (best_scores.size() < 2)
+  //     best_scores.push_back(std::make_pair(0, chains.size() + chains_rev.size()));
+
+  //   std::sort(best_scores.begin(), best_scores.end(), std::greater<std::pair<int32_t, size_t>>());
+
+  //   assert(best_scores.size() > 1);
+
+  //   if (best_scores[0].first < min_score)
+  //   {
+  //     sam_t sam_m1(mate1);
+  //     sam_t sam_m2(mate2);
+
+  //     // Fill sam fields RNEXT, PNEXT and TLEN
+  //     sam_m1.rnext = std::string(mate2->name.s);
+  //     sam_m2.rnext = std::string(mate1->name.s);
+
+  //     sam_m1.flag = sam_m2.flag = SAM_PAIRED | SAM_UNMAPPED | SAM_MATE_UNMAPPED;
+
+  //     write_sam(out, sam_m1);
+  //     write_sam(out, sam_m2);
+  //     return false;
+  //   }
+
+  //   int32_t score2 = best_scores[1].first;
+  //   paired_score_t score;
+
+  //   // TODO: Check if the mates are paired or not.
+  //   if (best_scores[0].second >= off)
+  //   { // Reverse case
+  //     j = best_scores[0].second - off;
+  //     // Align the chain
+  //     auto chain = chains_rev[j];
+  //     // Reverse the chain order
+  //     std::reverse(chain.anchors.begin(), chain.anchors.end());
+  //     // Compute the score of a chain.
+  //     score = paired_chain_score(chain, anchors_rev, mems_rev, min_score, &mate1_rev, mate2, false, score2, 1, out);
+  //   }
+  //   else
+  //   { // Forward case
+  //     i = best_scores[0].second;
+  //     // Align the chain
+  //     auto chain = chains[i];
+  //     // Reverse the chain order
+  //     std::reverse(chain.anchors.begin(), chain.anchors.end());
+  //     // Compute the score of a chain.
+  //     score = paired_chain_score(chain, anchors, mems, min_score, mate1, &mate2_rev, false, score2, 0, out);
+  //   }
+
+  //   if (score.tot >= min_score)
+  //     aligned = true;
+
+  //   if (not aligned)
+  //   {
+  //     sam_t sam_m1(mate1);
+  //     sam_t sam_m2(mate2);
+
+  //     // Fill sam fields RNEXT, PNEXT and TLEN
+  //     sam_m1.rnext = std::string(mate2->name.s);
+  //     sam_m2.rnext = std::string(mate1->name.s);
+
+  //     sam_m1.flag = sam_m2.flag = SAM_PAIRED | SAM_UNMAPPED | SAM_MATE_UNMAPPED;
+
+  //     write_sam(out, sam_m1);
+  //     write_sam(out, sam_m2);
+  //     return false;
+  //   }
+
+  //   MTIME_END(2); //Timing helper
+
+  //   return aligned;
+  // }
 
   typedef struct{
     ll score = 0;
@@ -1380,6 +1554,12 @@ public:
         const ll y_j = mem_j.rpos;
         // const ll y_j = mem_j.idx + mem_j.len - 1;
         const size_t mate_j = mem_j.mate;
+
+        // Check if anchors are compatible
+        // if mate_i == mate_j they are from the same mate and same orientation
+        // if mate_i ^ mate_j == 3 they are from different mate and withdifferent orientation
+        // TODO: we can change to same orientation replacing 3 with 1
+        if((mate_i != mate_j) and ((mate_i ^ mate_j)!= 3)) continue;
 
         // If the current anchor is too far, exit.
         if(x_i > x_j + max_dist_x)
@@ -1543,7 +1723,6 @@ public:
   void find_mems(
     const kseq_t *read,
     std::vector<mem_t>& mems,
-    size_t reverse = 0,
     size_t r_offset = 0,
     size_t mate = 0
     ) 
@@ -1640,6 +1819,7 @@ public:
         sam->zs = score2;
         sam->mapq = compute_mapq(sam->as, sam->zs, min_score, sam->read->seq.l);
         sam->reverse = (strand != 0);
+        sam->rname = idx[sam->pos - 1];
         if(output)
         {
           write_sam(out,*sam);
@@ -1683,7 +1863,7 @@ public:
       for(size_t i = 0; i < chain.anchors.size(); ++i)
       {
         size_t anchor_id = chain.anchors[i];
-        if (mems[anchors[anchor_id].first].mate == 0)
+        if ((mems[anchors[anchor_id].first].mate & MATE_2) == 0)
           mate1_chain.second.push_back(anchor_id);
         else
           mate2_chain.second.push_back(anchor_id);
@@ -1709,24 +1889,47 @@ public:
         sam_m1.rnext = std::string(mate2->name.s);
         sam_m2.rnext = std::string(mate1->name.s);
 
-        sam_m1.pnext = sam_m2.pos;
-        sam_m2.pnext = sam_m1.pos;
-
-        ll tlen = (sam_m2.pos + mate2->seq.l) - sam_m1.pos + 1;
-
-        sam_m1.tlen = tlen;
-        sam_m2.tlen = -tlen;
-
-        sam_m1.flag = sam_m2.flag = SAM_PAIRED | SAM_MAPPED_PAIRED;
-        if(strand)
+        if(score.m1 >= min_score and score.m2 >= min_score)
         {
-          sam_m1.flag |= SAM_REVERSED | SAM_FIRST_IN_PAIR;
-          sam_m2.flag |= SAM_MATE_REVERSED | SAM_SECOND_IN_PAIR;
-        }
-        else
-        {
-          sam_m1.flag |= SAM_MATE_REVERSED | SAM_FIRST_IN_PAIR;
-          sam_m2.flag |= SAM_REVERSED | SAM_SECOND_IN_PAIR;
+
+          sam_m1.pnext = sam_m2.pos;
+          sam_m2.pnext = sam_m1.pos;
+
+          ll tlen = (sam_m2.pos + mate2->seq.l) - sam_m1.pos;
+
+          sam_m1.tlen = tlen;
+          sam_m2.tlen = -tlen;
+
+          sam_m1.rname = idx[sam_m1.pos - 1];
+          sam_m2.rname = idx[sam_m2.pos - 1];
+
+          sam_m1.flag = sam_m2.flag = SAM_PAIRED | SAM_MAPPED_PAIRED;
+          if(strand)
+          {
+            sam_m1.flag |= SAM_REVERSED | SAM_FIRST_IN_PAIR;
+            sam_m2.flag |= SAM_MATE_REVERSED | SAM_SECOND_IN_PAIR;
+          }
+          else
+          {
+            sam_m1.flag |= SAM_MATE_REVERSED | SAM_FIRST_IN_PAIR;
+            sam_m2.flag |= SAM_REVERSED | SAM_SECOND_IN_PAIR;
+          }
+        }else if(score.m1 >= min_score) {
+          sam_m1.rname = idx[sam_m1.pos - 1];
+
+          sam_m1.flag = SAM_PAIRED | SAM_MATE_UNMAPPED | SAM_FIRST_IN_PAIR;
+          sam_m2.flag = SAM_PAIRED | SAM_UNMAPPED | SAM_SECOND_IN_PAIR;
+          if(strand)
+            sam_m1.flag |= SAM_REVERSED;
+        }else if(score.m2 >= min_score) {
+          sam_m2.rname = idx[sam_m2.pos - 1];
+
+          sam_m1.flag = SAM_PAIRED | SAM_UNMAPPED | SAM_FIRST_IN_PAIR;
+          sam_m2.flag = SAM_PAIRED | SAM_MATE_UNMAPPED | SAM_SECOND_IN_PAIR;
+          if(not strand)
+            sam_m2.flag |= SAM_REVERSED;
+        }else {
+          sam_m1.flag = sam_m2.flag = SAM_PAIRED | SAM_UNMAPPED | SAM_MATE_UNMAPPED;
         }
 
         write_sam(out,sam_m1);
@@ -1914,7 +2117,7 @@ public:
         std::string mdz_s;
         size_t nm = write_MD_core((uint8_t*)ref,seq,ez.cigar,ez.n_cigar,tmp,0,mdz_s);
 
-        write_sam(ez.score, score2, min_score, ref_pos, "human", read, strand, out, cigar_s, mdz_s, nm, "*", 0, 0);
+        write_sam(ez.score, score2, min_score, ref_pos, idx[ref_pos].c_str(), read, strand, out, cigar_s, mdz_s, nm, "*", 0, 0);
       }
       else
       {
@@ -1964,7 +2167,7 @@ public:
         std::string mdz_s;
         size_t nm = write_MD_core((uint8_t*)ref,seq,cigar,n_cigar,tmp,0,mdz_s);
 
-        write_sam(score, score2, min_score, ref_pos, "human", read, strand, out, cigar_s, mdz_s, nm, "*", 0, 0);
+        write_sam(score, score2, min_score, ref_pos, idx[ref_pos].c_str(), read, strand, out, cigar_s, mdz_s, nm, "*", 0, 0);
 
         delete cigar;
       }
@@ -2219,7 +2422,7 @@ public:
 
         sam->as = ez.score;
         sam->pos = ref_pos + 1; // ref_pos is 1 based
-        sam->rname = "human";
+        sam->rname = idx[ref_pos];
         sam->rlen = ref_len;
         // write_sam(ez.score, score2, min_score, ref_pos, "human", read, strand, out, cigar_s, mdz_s, nm, "*", 0, 0);
       }
@@ -2514,6 +2717,7 @@ public:
 protected:
   ms_t ms;
   slp_t ra;
+  seqidx idx;
   // SelfShapedSlp<uint32_t, DagcSd, DagcSd, SelSd> ra;
 
   size_t min_len = 0;

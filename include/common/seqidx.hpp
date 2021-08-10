@@ -32,6 +32,10 @@
 class seqidx
 {
 public:
+    seqidx()
+    {
+        u = 0;
+    }
     /**
      * @brief Construct a new seqidx object
      * 
