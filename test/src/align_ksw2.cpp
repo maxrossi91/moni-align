@@ -84,7 +84,7 @@ void parseArgs(int argc, char *const argv[], Args &arg)
                     "       csv: [boolean] - print the stats in csv form on strerr. (def. false)\n");
 
   std::string sarg;
-  while ((c = getopt(argc, argv, "w:smcfl:rhp:b:t:")) != -1)
+  while ((c = getopt(argc, argv, "w:smcfl:rhp:b:t:q")) != -1)
   {
     switch (c)
     {
