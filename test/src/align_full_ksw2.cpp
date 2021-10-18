@@ -372,7 +372,7 @@ public:
           rcs_len // Right context of the read length
         );
 
-        if(score > min_score)
+        if(score >= min_score)
         {
           extend(curr_mem_pos,mem_len,lcs,lcs_len,rcs,rcs_len,false,0,min_score,read,strand,out); 
           aligned = true;
@@ -1806,7 +1806,7 @@ public:
         read
       );
 
-      if(!score_only and score > min_score)
+      if(!score_only and score >= min_score)
       {
         bool output = (sam == nullptr);
 
@@ -2648,7 +2648,7 @@ public:
     int32_t max_score = read_l * smatch;
     int32_t best = max_score - score;
     size_t best_bin = (size_t)((double)best * (10.0 / (double)(max_score - min_score)) + 0.5);
-    if(score2 > min_score)
+    if(score2 >= min_score)
     {
       int32_t diff = score - score2;
       size_t diff_bin = (size_t)((double)diff * (10.0 / (double)(max_score - min_score)) + 0.5);
@@ -2712,6 +2712,14 @@ public:
       }
     }
     return target_o + "\n" + bars_o + "\n" + seq_o + "\n";
+  }
+
+  std::string to_sam()
+  {
+      std::string res = "@HD VN:1.6 SO:unknown\n";
+      res += idx.to_sam();
+      res += "@PG ID:moni PN:moni VN:0.1.0\n";
+      return res; 
   }
 
 protected:
@@ -3116,6 +3124,8 @@ size_t mt_align(aligner_t *aligner, std::string pattern_filename, std::string sa
   if ((fd = fopen(std::string(sam_filename + ".sam").c_str(), "w")) == nullptr)
     error("open() file " + std::string(sam_filename + ".sam") + " failed");
 
+  fprintf(fd, "%s", aligner->to_sam().c_str());
+
   for (size_t i = 0; i < n_threads; ++i)
   {
     tot_reads += params[i].n_reads;
@@ -3165,6 +3175,8 @@ size_t st_align(aligner_t *aligner, std::string pattern_filename, std::string sa
 
   if ((sam_fd = fopen(sam_filename.c_str(), "w")) == nullptr)
     error("open() file " + sam_filename + " failed");
+
+  fprintf(sam_fd, "%s", aligner->to_sam().c_str());
 
   if (seq != nullptr)
   {
