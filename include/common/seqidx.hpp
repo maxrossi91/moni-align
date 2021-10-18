@@ -111,7 +111,7 @@ public:
     inline size_t length(const size_t i)
     {
         assert(i < names.size());
-        return select1(i+1) - select1(i);
+        return select1(i+2) - select1(i+1);
     }
 
     /**
@@ -122,7 +122,20 @@ public:
      */
     inline std::string operator[](const size_t pos)
     {
-        return names[rank1(pos)-1];
+        return names[rank1(pos + 1)-1]; // pos+1 becausethe rank counts the 1s before
+    }
+
+    /**
+     * @brief return the name of the sequence pos belongs, and its offset.
+     * 
+     * @param pos the position in the set of sequences.
+     * @return std::pair<std::string,size_t> the name of the sequence pos belongs and its offset.
+     */
+    inline std::pair<std::string,size_t> index(const size_t pos)
+    {
+        size_t rank = rank1(pos + 1);
+        size_t start = select1(rank);
+        return std::make_pair(names[rank-1],pos - start); // pos+1 becausethe rank counts the 1s before
     }
 
     /**
@@ -135,7 +148,7 @@ public:
      */
     inline bool valid(size_t pos, size_t len)
     {
-        return (pos + len <= select1(rank1(pos)+1));
+        return (pos + len <= select1(rank1(pos + 1)+1)); // pos+1 becausethe rank counts the 1s before
     }
 
     /**
