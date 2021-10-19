@@ -8,6 +8,7 @@ if(NOT CMAKE_BUILD_TYPE)
   set(CMAKE_BUILD_TYPE Release CACHE STRING "Choose the type of build." FORCE)
 endif()
 
+message(STATUS "Install directory: ${CMAKE_INSTALL_PREFIX}")
 # About this project
 # ------------------------------------------------------------------------------
 project(moni)
@@ -18,8 +19,6 @@ SET(VERSION "${VERSION_MAJOR}.${VERSION_MINOR}.${VERSION_PATCH}")
 
 # Set environment
 # ------------------------------------------------------------------------------
-set(CMAKE_INSTALL_PREFIX ${CMAKE_BINARY_DIR}/install)
-
 
 find_package(Git)
 if(GIT_FOUND)
@@ -51,6 +50,7 @@ endif()
 
 
 add_subdirectory(include)
+add_subdirectory(src)
 add_subdirectory(test/src)
 add_subdirectory(utils)
 # add_subdirectory(benchmarks/src)
