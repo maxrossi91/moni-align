@@ -18,6 +18,9 @@
    \date 03/06/2021
 */
 
+#ifndef _KPBSEQ_HH
+#define _KPBSEQ_HH
+
 #include <iostream>
 #include <vector>
 
@@ -300,3 +303,6 @@ inline static void kpbseq_destroy(kpbseq_t *p)
 }
 
 ////////////////////////////////////////////////////////////////////////////////
+
+
+#endif /* end of include guard: _KPBSEQ_HH */

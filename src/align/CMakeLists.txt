@@ -25,6 +25,7 @@ add_executable(align_full_ksw2 align_full_ksw2.cpp ${bigbwt_SOURCE_DIR}/xerrors.
 target_link_libraries(align_full_ksw2 common sdsl malloc_count divsufsort divsufsort64 ri ksw2 pthread)
 target_include_directories(align_full_ksw2 PUBLIC    "../../include/ms" 
                                             "../../include/common" 
+                                            "../../include/aligner" 
                                             "${shaped_slp_SOURCE_DIR}" 
                                             "${FOLCA_SOURCE_DIR}" 
                                             "${SUX_SOURCE_DIR}/function" 

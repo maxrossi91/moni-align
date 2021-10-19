@@ -545,6 +545,10 @@ void my_load(std::vector<X> &x, std::istream &in, typename std::enable_if<std::i
 //*********************** Timing *********************************************
 
 #ifdef MTIME
+
+#ifndef _MTIME
+#define _MTIME
+
 #define MTIME_INIT(_n)                                                                                                                \
   std::vector<std::chrono::high_resolution_clock::time_point> __watches(_n);                                                          \
   std::vector<double> __durations(_n, 0.0);
@@ -561,6 +565,7 @@ void my_load(std::vector<X> &x, std::istream &in, typename std::enable_if<std::i
 #define MTIME_REPORT_ALL                          \
   for (size_t i = 0; i < __durations.size(); ++i) \
   MTIME_REPORT(i)
+#endif /* _MTIME */
 
 #else
   #define MTIME_INIT(_n)

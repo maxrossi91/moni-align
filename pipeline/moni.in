@@ -26,13 +26,38 @@ The input file cannot contain the characters 0, 1 or 2 which are
 used internally by the algorithm.
 """
 
+install = @USE_INSTALL_PATH@
+
 dirname                 = os.path.dirname(os.path.abspath(__file__))
 
-bigbwt_dirname          = os.path.join(dirname, "_deps/bigbwt-build")
-bigrepair_dirname       = os.path.join(dirname, "_deps/bigrepair-src")
-thresholds_dirname      = os.path.join(dirname, "_deps/pfp_thresholds-build/test/src")
-compress_dirname        = os.path.join(dirname, "test/src")
-shaped_slp_dirname      = os.path.join(dirname, "_deps/shaped_slp-build")
+
+bigbwt_dirname          = dirname
+bigrepair_dirname       = dirname
+thresholds_dirname      = dirname
+compress_dirname        = dirname
+shaped_slp_dirname      = dirname
+repair_dirname          = dirname
+largeb_repair_dirname   = dirname
+align_dirname           = dirname
+extend_dirname          = dirname
+spumoni_dirname         = dirname
+phoni_dirname           = dirname
+
+if not install:
+
+  bigbwt_dirname        = os.path.join(dirname, "_deps/bigbwt-build")
+  bigrepair_dirname     = os.path.join(dirname, "_deps/bigrepair-src")
+  thresholds_dirname    = os.path.join(dirname, "_deps/pfp_thresholds-build/test/src")
+  compress_dirname      = os.path.join(dirname, "src")
+  shaped_slp_dirname    = os.path.join(dirname, "_deps/shaped_slp-build")
+  repair_dirname        = os.path.join(bigrepair_dirname, "repair")
+  largeb_repair_dirname = os.path.join(bigrepair_dirname, "largeb_repair")
+  align_dirname         = os.path.join(dirname, "src/align")
+  extend_dirname        = os.path.join(dirname, "src/extend")
+  spumoni_dirname       = os.path.join(dirname, "src/spumoni")
+  phoni_dirname         = os.path.join(dirname, "src/phoni")
+
+
 
 parse_exe               = os.path.join(bigbwt_dirname, "pscan.x")
 parse_fasta_exe         = os.path.join(bigbwt_dirname, "newscan.x")
@@ -67,14 +92,16 @@ integer_postprocess_exe = os.path.join(bigrepair_dirname,"ipostproc")
 
 shaped_slp              = os.path.join(shaped_slp_dirname, "SlpEncBuild")
 
-build_moni_exe          = os.path.join(compress_dirname, "rlebwt_ms_full_build")
-build_phoni_ms_exe         = os.path.join(compress_dirname, "build_phoni")
-build_spumoni_exe       = os.path.join(compress_dirname, "build_spumoni")
+build_moni_exe          = os.path.join(align_dirname, "rlebwt_ms_full_build")
+build_phoni_ms_exe      = os.path.join(phoni_dirname, "build_phoni")
+build_spumoni_exe       = os.path.join(spumoni_dirname, "build_spumoni")
 
-run_moni_exe            = os.path.join(compress_dirname, "align_full_ksw2")
+run_moni_exe            = os.path.join(align_dirname, "align_full_ksw2")
 run_moni_ms_exe         = os.path.join(compress_dirname, "ms")
-run_phoni_ms_exe        = os.path.join(compress_dirname, "run_phoni")
-run_spumoni_exe         = os.path.join(compress_dirname, "run_spumoni")
+run_moni_mems_exe       = os.path.join(compress_dirname, "mems")
+run_moni_extend_exe     = os.path.join(extend_dirname, "extend_ksw2")
+run_phoni_ms_exe        = os.path.join(phoni_dirname, "run_phoni")
+run_spumoni_exe         = os.path.join(spumoni_dirname, "run_spumoni")
 
 class PFPthresholds(threading.Thread):
     def __init__(self, name, counter, args):
@@ -617,8 +644,14 @@ class run_helper(threading.Thread):
             args.exe_dir, exe), file=args.index,
             mate1=args.mate1, mate2=args.mate2, th=args.threads)
 
+      if exe_name == "MONI" or exe_name == "MONI-EXTEND":
+        command += " -b {} -A {} -B {} -O {} -E {} -L {} ".format(args.batch,args.smatch, args.smismatch, args.gapo, args.gape, args.extl)
+
       if exe_name != "SPUMONI" and args.grammar == "shaped":
         command += " -q"
+
+      if args.output != ".":
+        command += " -o {}".format(args.output)
 
       print("==== Running {name}. Command:".format(
           name=exe_name), command, flush=True)
@@ -664,6 +697,18 @@ def run(args):
       run_spumoni.start()
       run_spumoni.join()
 
+    if args.which == 'mems':
+      run_moni_ms = run_helper(
+              name="MONI-MEMS", args=args, counter=2,exe=run_moni_mems_exe)
+      run_moni_ms.start()
+      run_moni_ms.join()
+
+    if args.which == 'extend':
+      run_moni_extend = run_helper(
+              name="MONI-EXTEND", args=args, counter=2,exe=run_moni_extend_exe)
+      run_moni_extend.start()
+      run_moni_extend.join()
+
     if args.which == 'align':
       if args.moni:
         run_moni = run_helper(
@@ -700,7 +745,9 @@ def main():
   build_parser = subparsers.add_parser('build', help='build help', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
   ms_parser = subparsers.add_parser('ms', help='build help', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
   pseudo_ms_parser = subparsers.add_parser('pseudo-ms', help='build help', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-  align_parser = subparsers.add_parser('align', help='build help', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+  mems_parser = subparsers.add_parser('mems', help='compute the maximal exact matches', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+  extend_parser = subparsers.add_parser('extend', help='extend the MEMs ofthe reads in the reference genome', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+  align_parser = subparsers.add_parser('align', help='align the reads to the reference genome', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 
   parser.add_argument('--version', help='print the version number', action='store_true')
   parser.set_defaults(which='base')
@@ -738,13 +785,40 @@ def main():
   pseudo_ms_parser.add_argument('-t', '--threads', help='number of helper threads', default=1, type=int)
   pseudo_ms_parser.set_defaults(which='pseudo_ms')
 
+
+  mems_parser.add_argument('-i', '--index', help='reference index folder', type=str, required=True)
+  mems_parser.add_argument('-p', '--pattern', help='the input query', type=str, required=True)
+  mems_parser.add_argument('-o', '--output', help='output file prefix', type=str, default='.')
+  mems_parser.add_argument('-t', '--threads', help='number of helper threads', default=1, type=int)
+  mems_parser.add_argument('-g', '--grammar', help='select the grammar [plain, shaped]', type=str, default='plain')
+  mems_parser.set_defaults(which='mems')
+
+  extend_parser.add_argument('-i', '--index', help='reference index folder', type=str, required=True)
+  extend_parser.add_argument('-p', '--pattern', help='the input query', type=str, required=True)
+  extend_parser.add_argument('-o', '--output', help='output directory path', type=str, default='.')
+  extend_parser.add_argument('-t', '--threads', help='number of helper threads', default=1, type=int)
+  extend_parser.add_argument('-b', '--batch', help='number of reads per thread batch', default=100, type=int)
+  extend_parser.add_argument('-g', '--grammar', help='select the grammar [plain, shaped]', type=str, default='plain')
+  extend_parser.add_argument('-L', '--extl', help='length of reference substring for extension', type=int, default=100)
+  extend_parser.add_argument('-A', '--smatch', help='match score value', type=int, default=2)
+  extend_parser.add_argument('-B', '--smismatch', help='mismatch penalty value', type=int, default=4)
+  extend_parser.add_argument('-O', '--gapo', help='coma separated gap open penalty values', type=str, default='4,13')
+  extend_parser.add_argument('-E', '--gape', help='coma separated gap extension penalty values', type=str, default='2,1')
+  extend_parser.set_defaults(which='extend')
+
   align_parser.add_argument('-i', '--index', help='reference index folder', type=str, required=True)
   align_parser.add_argument('-p', '--pattern', help='the input query', type=str)
   align_parser.add_argument('-1', '--mate1', help='path to the input left end of the reads', type=str)
   align_parser.add_argument('-2', '--mate2', help='path to the input right end of the reads', type=str)
   align_parser.add_argument('-o', '--output', help='output directory path', type=str, default='.')
   align_parser.add_argument('-t', '--threads', help='number of helper threads', default=1, type=int)
+  align_parser.add_argument('-b', '--batch', help='number of reads per thread batch', default=100, type=int)
   align_parser.add_argument('-g', '--grammar', help='select the grammar (only for moni and phoni) [plain, shaped]', type=str, default='plain')
+  align_parser.add_argument('-L', '--extl', help='length of reference substring for extension', type=int, default=100)
+  align_parser.add_argument('-A', '--smatch', help='match score value', type=int, default=2)
+  align_parser.add_argument('-B', '--smismatch', help='mismatch penalty value', type=int, default=4)
+  align_parser.add_argument('-O', '--gapo', help='coma separated gap open penalty values', type=str, default='4,13')
+  align_parser.add_argument('-E', '--gape', help='coma separated gap extension penalty values', type=str, default='2,1')
   align_parser.add_argument('--moni', help='run moni index',action='store_true')
   align_parser.add_argument('--phoni', help='run phoni index', action='store_true')
   align_parser.set_defaults(which='align')
@@ -763,19 +837,18 @@ def main():
     base(args)
   elif args.which == 'build':
     build(args)
-  elif args.which == 'ms' or args.which == 'pseudo_ms' or args.which == 'align':
+  elif args.which == 'ms' or args.which == 'pseudo_ms' or args.which == 'align' or args.which == 'mems' or args.which == 'extend':
     run(args)
 
   return
-
-  
 
 # delete intermediate files
 def delete_temp_files(args,logfile,logfile_name):
     if args.k==False:
       print("==== Deleting temporary files.", flush=True) # no need to show the command
-      command = "rm -f {file}.parse_old {file}.last {file}.bwlast {file}.ilist".format(file=args.reference)
-      #command = "rm -f {file}.parse {file}.parse_old {file}.last {file}.bwlast {file}.dicz {file}.ilist {file}.occ".format(file=args.reference)
+      # command = "rm -f {file}.parse_old {file}.last {file}.bwlast {file}.ilist".format(file=args.reference)
+      command = "rm -f {file}.parse {file}.parse_old {file}.last {file}.bwlast {file}.dict {file}.dicz {file}.ilist {file}.occ {file}.esa {file}.ssa {file}.dicz.len {file}.C {file}.R {file}.bwt.len {file}.bwt.heads {file}.thr {file}.thr_pos".format(
+          file=args.reference)
       if(execute_command(command,logfile,logfile_name)!=True):
         return
       for i in range(args.threads):
@@ -790,7 +863,6 @@ def delete_temp_files(args,logfile,logfile_name):
         command = "rm -f {file}.{i}.sai".format(file=args.reference, i=i)
         if(execute_command(command,logfile,logfile_name)!=True):
           return
-
 
 # compute hash digest for a file
 def file_digest(name,logfile):
