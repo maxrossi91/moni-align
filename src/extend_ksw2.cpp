@@ -1,4 +1,4 @@
-/* align_ksw2 - Align the reads to the reference
+/* extend_ksw2 - Extend the MEMs of the reads to the reference
     Copyright (C) 2020 Massimiliano Rossi
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -12,10 +12,10 @@
     along with this program.  If not, see http://www.gnu.org/licenses/ .
 */
 /*!
-   \file align_ksw2.cpp
-   \brief align_ksw2.cpp Align the reads to the reference.
+   \file extend_ksw2.cpp
+   \brief extend_ksw2.cpp Extend the MEMs of the reads to the reference.
    \author Massimiliano Rossi
-   \date 30/04/2021
+   \date 13/07/2020
 */
 
 extern "C" {
@@ -31,8 +31,8 @@ extern "C" {
 #include <sdsl/io.hpp>
 
 #include <ms_pointers.hpp>
-#include <aligner_klib.hpp>
-#include <aligner_reads_dispatcher.hpp>
+#include <extender_ksw2.hpp>
+#include <extend_reads_dispatcher.hpp>
 
 #include <malloc_count.h>
 
@@ -42,9 +42,6 @@ extern "C" {
 #include <PlainSlp.hpp>
 #include <FixedBitLenCode.hpp>
 
-#include <ksw.h>
-#include <ssw.h>
-
 #include <libgen.h>
 
 //*********************** Argument options ***************************************
@@ -52,17 +49,26 @@ extern "C" {
 struct Args
 {
   std::string filename = "";
-  size_t w = 10;             // sliding window size and its default
-  bool store = false;        // store the data structure in the file
-  bool memo = false;         // print the memory usage
-  bool csv = false;          // print stats on stderr in csv format
-  bool rle = false;          // outpt RLBWT
   std::string patterns = ""; // path to patterns file
+  std::string output   = ""; // output file prefix
   size_t l = 25;             // minumum MEM length
   size_t th = 1;             // number of threads
   size_t b = 1;              // number of batches per thread pool
-  bool is_fasta = false;     // read a fasta file
   bool shaped_slp = false;   // use shaped slp
+  size_t ext_len = 100;      // Extension length
+  // size_t top_k = 1;       // Report the top_k alignments
+
+  // ksw2 parameters
+  int8_t smatch = 2;      // Match score default
+  int8_t smismatch = 4;   // Mismatch score default
+  int8_t gapo = 4;        // Gap open penalty
+  int8_t gapo2 = 13;      // Gap open penalty
+  int8_t gape = 2;        // Gap extension penalty
+  int8_t gape2 = 1;       // Gap extension penalty
+  // int end_bonus = 400;    // Bonus to add at the extension score to declare the alignment
+
+  // int w = -1;             // Band width
+  // int zdrop = -1;         // Zdrop enable
 };
 
 void parseArgs(int argc, char *const argv[], Args &arg)
@@ -71,43 +77,31 @@ void parseArgs(int argc, char *const argv[], Args &arg)
   extern char *optarg;
   extern int optind;
 
-  std::string usage("usage: " + std::string(argv[0]) + " infile [-s store] [-m memo] [-c csv] [-p patterns] [-f fasta] [-r rle] [-t threads] [-l len] [-q shaped_slp] [-b batch]\n\n" +
-                    "Computes the pfp data structures of infile, provided that infile.parse, infile.dict, and infile.occ exists.\n" +
-                    "     wsize: [integer] - sliding window size (def. 10)\n" +
-                    "     store: [boolean] - store the data structure in infile.pfp.ds. (def. false)\n" +
-                    "      memo: [boolean] - print the data structure memory usage. (def. false)\n" +
-                    "     fasta: [boolean] - the input file is a fasta file. (def. false)\n" +
-                    "       rle: [boolean] - output run length encoded BWT. (def. false)\n" +
+  std::string usage("usage: " + std::string(argv[0]) + " infile [-p patterns] [-t threads] [-l len] [-q shaped_slp] [-b batch] [-L ext_l] [-A smatch] [-B smismatc] [-O gapo] [-E gape]\n\n" +
+                    "Extends the MEMs of the reads in the pattern against the reference index in infile.\n" +
                     "shaped_slp: [boolean] - use shaped slp. (def. false)\n" +
                     "   pattens: [string]  - path to patterns file.\n" +
+                    "    output: [string]  - output file prefix.\n" +
                     "       len: [integer] - minimum MEM lengt (def. 25)\n" +
                     "    thread: [integer] - number of threads (def. 1)\n" +
-                    "     batch: [integer] - number of batches per therad pool (def. 1)\n" +
-                    "       csv: [boolean] - print the stats in csv form on strerr. (def. false)\n");
+                    "     ext_l: [integer] - length of reference substring for extension (def. " + std::to_string(arg.ext_len) + ")\n" +
+                    "    smatch: [integer] - match score value (def. " + std::to_string(arg.smatch) + ")\n" +
+                    " smismatch: [integer] - mismatch penalty value (def. " + std::to_string(arg.smismatch) + ")\n" +
+                    "      gapo: [integer] - gap open penalty value (def. " + std::to_string(arg.gapo) + "," + std::to_string(arg.gapo2) + ")\n" +
+                    "      gape: [integer] - gap extension penalty value (def. " + std::to_string(arg.gape) + "," + std::to_string(arg.gape2) + ")\n" +
+                    "     batch: [integer] - number of batches per therad pool (def. 1)\n");
 
   std::string sarg;
-  while ((c = getopt(argc, argv, "w:smcfl:rhp:b:t:")) != -1)
+  char* s;
+  while ((c = getopt(argc, argv, "l:hp:o:b:t:qA:B:O:E:L:")) != -1)
   {
     switch (c)
     {
-    case 'w':
-      sarg.assign(optarg);
-      arg.w = stoi(sarg);
-      break;
-    case 's':
-      arg.store = true;
-      break;
-    case 'm':
-      arg.memo = true;
-      break;
-    case 'c':
-      arg.csv = true;
-      break;
-    case 'r':
-      arg.rle = true;
-      break;
     case 'p':
       arg.patterns.assign(optarg);
+      break;
+    case 'o':
+      arg.output.assign(optarg);
       break;
     case 'l':
       sarg.assign(optarg);
@@ -121,8 +115,25 @@ void parseArgs(int argc, char *const argv[], Args &arg)
       sarg.assign(optarg);
       arg.b = stoi(sarg);
       break;
-    case 'f':
-      arg.is_fasta = true;
+    case 'L':
+      sarg.assign(optarg);
+      arg.ext_len = stoi(sarg);
+      break;
+    case 'A':
+      sarg.assign(optarg);
+      arg.smatch = stoi(sarg);
+      break;
+    case 'B':
+      sarg.assign(optarg);
+      arg.smismatch = stoi(sarg);
+      break;
+    case 'O':
+      arg.gapo = arg.gapo2 = strtol(optarg, &s, 10);
+      if (*s == ',') arg.gapo2 = strtol(s+1, &s, 10);
+      break;
+    case 'E':
+      arg.gape = arg.gape2 = strtol(optarg, &s, 10);
+      if (*s == ',') arg.gape2 = strtol(s+1, &s, 10);
       break;
     case 'q':
       arg.shaped_slp = true;
@@ -148,12 +159,31 @@ void parseArgs(int argc, char *const argv[], Args &arg)
 //********** end argument options ********************
 
 
-template<typename aligner_t>
+template<typename extender_t>
+typename extender_t::config_t configurer(Args &args){
+  typename extender_t::config_t config;
+  
+  config.min_len    = args.l;           // Minimum MEM length
+  config.ext_len    = args.ext_len;     // Extension length
+
+  // ksw2 parameters
+  config.smatch     = args.smatch;      // Match score default
+  config.smismatch  = args.smismatch;   // Mismatch score default
+  config.gapo       = args.gapo;        // Gap open penalty
+  config.gapo2      = args.gapo2;       // Gap open penalty
+  config.gape       = args.gape;        // Gap extension penalty
+  config.gape2      = args.gape2;       // Gap extension penalty
+
+  return config;
+}
+
+template<typename extender_t>
 void dispatcher(Args &args){
-  verbose("Construction of the aligner");
+  verbose("Construction of the extender");
   std::chrono::high_resolution_clock::time_point t_insert_start = std::chrono::high_resolution_clock::now();
 
-  aligner_t aligner(args.filename, args.l);
+
+  extender_t extender(args.filename, configurer<extender_t>(args));
 
   std::chrono::high_resolution_clock::time_point t_insert_end = std::chrono::high_resolution_clock::now();
   verbose("Memory peak: ", malloc_count_peak());
@@ -164,17 +194,19 @@ void dispatcher(Args &args){
 
   std::string base_name = basename(args.filename.data());
   std::string sam_filename = args.patterns + "_" + base_name + "_" + std::to_string(args.l);
+  if(args.output != "")
+    sam_filename = args.output;
 
   if (is_gzipped(args.patterns))
   {
-    verbose("The input is gzipped - forcing single thread alignment.");
+    verbose("The input is gzipped - forcing single thread extension.");
     args.th = 1;
   }
 
   if (args.th == 1)
-    st_align<aligner_t>(&aligner, args.patterns, sam_filename);
+    st_extend<extender_t>(&extender, args.patterns, sam_filename);
   else
-    mt_align<aligner_t>(&aligner, args.patterns, sam_filename, args.th, args.b);
+    mt_extend<extender_t>(&extender, args.patterns, sam_filename, args.th, args.b);
 
   // TODO: Merge the SAM files.
 
@@ -185,18 +217,6 @@ void dispatcher(Args &args){
 
   auto mem_peak = malloc_count_peak();
   verbose("Memory peak: ", malloc_count_peak());
-
-  size_t space = 0;
-  if (args.memo)
-  {
-  }
-
-  if (args.store)
-  {
-  }
-
-  if (args.csv)
-    std::cerr << csv(args.filename.c_str(), time, space, mem_peak) << std::endl;
 }
 
 int main(int argc, char *const argv[])
@@ -207,11 +227,11 @@ int main(int argc, char *const argv[])
 
   if (args.shaped_slp)
   {
-    dispatcher<aligner<shaped_slp_t>>(args);
+    dispatcher<extender<shaped_slp_t, ms_pointers<>>>(args);
   }
   else
   {
-    dispatcher<aligner<plain_slp_t>>(args);
+    dispatcher<extender<plain_slp_t, ms_pointers<>>>(args);
   }
 
   return 0;

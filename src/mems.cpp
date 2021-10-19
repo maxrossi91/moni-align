@@ -1,4 +1,4 @@
-/* matching_statistics - Computes the matching statistics from BWT and Thresholds
+/* mems - Computes the MEMs from BWT and Thresholds
     Copyright (C) 2020 Massimiliano Rossi
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -12,8 +12,8 @@
     along with this program.  If not, see http://www.gnu.org/licenses/ .
 */
 /*!
-   \file matching_statistics.cpp
-   \brief matching_statistics.cpp Computes the matching statistics from BWT and Thresholds.
+   \file mems.cpp
+   \brief mems.cpp Computes the MEMs from BWT and Thresholds.
    \author Massimiliano Rossi
    \date 13/07/2020
 */
@@ -188,11 +188,11 @@ std::string get_slp_file_extension<plain_slp_t>()
 ////////////////////////////////////////////////////////////////////////////////
 
 template <typename slp_t>
-class ms_c
+class mems_c
 {
 public:
 
-  ms_c(std::string filename)
+  mems_c(std::string filename)
   {
     verbose("Loading the matching statistics index");
     std::chrono::high_resolution_clock::time_point t_insert_start = std::chrono::high_resolution_clock::now();
@@ -228,19 +228,22 @@ public:
   }
 
   // Destructor
-  ~ms_c() 
+  ~mems_c() 
   {
       // NtD
   }
 
   // The outfile has the following format. The first size_t integer store the
-  // length l of the query. Then the following l size_t integers stores the
-  // pointers of the matching statistics, and the following l size_t integers
-  // stores the lengths of the mathcing statistics.
-  void matching_statistics(kseq_t *read, FILE* out)
+  // length l of the name. Then the following l characters stores the name of
+  // the read, the next size_t integer stores the number m of MEMs, and the 
+  // following m size_t pairs of integers stores the positions and lengths of 
+  // the MEMs.
+  void maxrimal_exact_matches(kseq_t *read, FILE* out)
   {
     auto pointers = ms.query(read->seq.s, read->seq.l);
     std::vector<size_t> lengths(pointers.size());
+    std::vector<std::pair<size_t,size_t>> mems;
+
     size_t l = 0;
     for (size_t i = 0; i < pointers.size(); ++i)
     {
@@ -250,6 +253,9 @@ public:
 
       lengths[i] = l;
       l = (l == 0 ? 0 : (l - 1));
+ 
+      if((i == 0) or (lengths[i] >= lengths[i-1]))
+        mems.push_back(make_pair(i,lengths[i]));
     }
 
     // Original MS computation
@@ -265,10 +271,12 @@ public:
 
     assert(lengths.size() == pointers.size());
 
-    size_t q_length = pointers.size();
+    size_t h_length = read->name.l;
+    fwrite(&h_length, sizeof(size_t), 1,out);
+    fwrite(read->name.s, sizeof(char),h_length,out);
+    size_t q_length = mems.size();
     fwrite(&q_length, sizeof(size_t), 1,out);
-    fwrite(pointers.data(), sizeof(size_t),q_length,out);
-    fwrite(lengths.data(), sizeof(size_t),q_length,out);
+    fwrite(mems.data(), sizeof(std::pair<size_t,size_t>),q_length,out);
   }
 
 protected:
@@ -313,7 +321,7 @@ void *mt_ms_worker(void *param)
 {
   mt_param_t<ms_t> *p = (mt_param_t<ms_t>*) param;
   size_t n_reads = 0;
-  size_t n_aligned_reads = 0;
+  size_t n_processed_reads = 0;
 
   FILE *out_fd;
   gzFile fp;
@@ -333,7 +341,7 @@ void *mt_ms_worker(void *param)
   while ((ks_tell(seq) < p->end) && ((l = kseq_read(seq)) >= 0))
   {
 
-    p->ms->matching_statistics(seq,out_fd);
+    p->ms->maxrimal_exact_matches(seq,out_fd);
 
   }
 
@@ -354,7 +362,7 @@ void mt_ms(ms_t *ms, std::string pattern_filename, std::string out_filename, siz
   {
     params[i].ms = ms;
     params[i].pattern_filename = pattern_filename;
-    params[i].out_filename = out_filename + "_" + std::to_string(i) + ".ms.tmp.out";
+    params[i].out_filename = out_filename + "_" + std::to_string(i) + ".mems.tmp.out";
     params[i].start = starts[i];
     params[i].end = starts[i+1];
     params[i].wk_id = i;
@@ -366,7 +374,7 @@ void mt_ms(ms_t *ms, std::string pattern_filename, std::string out_filename, siz
     xpthread_join(t[i],NULL,__LINE__,__FILE__);
   }
 
-  sleep(5);
+  // sleep(5);
 
 
   return;
@@ -380,12 +388,12 @@ template <typename ms_t>
 size_t st_ms(ms_t *ms, std::string pattern_filename, std::string out_filename)
 {
   size_t n_reads = 0;
-  size_t n_aligned_reads = 0;
+  size_t n_processed_reads = 0;
   kseq_t rev;
   int l;
   FILE *out_fd;
 
-  out_filename += "_0.ms.tmp.out";
+  out_filename += "_0.mems.tmp.out";
 
   if ((out_fd = fopen(out_filename.c_str(), "w")) == nullptr)
     error("open() file " + out_filename + " failed");
@@ -395,7 +403,7 @@ size_t st_ms(ms_t *ms, std::string pattern_filename, std::string out_filename)
   while ((l = kseq_read(seq)) >= 0)
   {
 
-    ms->matching_statistics(seq, out_fd);
+    ms->maxrimal_exact_matches(seq, out_fd);
 
   }
 
@@ -403,9 +411,9 @@ size_t st_ms(ms_t *ms, std::string pattern_filename, std::string out_filename)
   gzclose(fp);
   fclose(out_fd);
 
-  sleep(5);
+  // sleep(5);
 
-  return n_aligned_reads;
+  return n_processed_reads;
 }
 
 
@@ -416,15 +424,10 @@ typedef std::pair<std::string, std::vector<uint8_t>> pattern_t;
 struct Args
 {
   std::string filename = "";
-  size_t w = 10;             // sliding window size and its default
-  bool store = false;        // store the data structure in the file
-  bool memo = false;         // print the memory usage
-  bool csv = false;          // print stats on stderr in csv format
-  bool rle = false;          // outpt RLBWT
   std::string patterns = ""; // path to patterns file
+  std::string output   = ""; // output file prefix
   size_t l = 25;             // minumum MEM length
   size_t th = 1;             // number of threads
-  bool is_fasta = false;     // read a fasta file
   bool shaped_slp = false;   // use shaped slp
 };
 
@@ -434,42 +437,24 @@ void parseArgs(int argc, char *const argv[], Args &arg)
   extern char *optarg;
   extern int optind;
 
-  std::string usage("usage: " + std::string(argv[0]) + " infile [-s store] [-m memo] [-c csv] [-p patterns] [-f fasta] [-r rle] [-t threads] [-l len] [-q shaped_slp]\n\n" +
-                    "Computes the pfp data structures of infile, provided that infile.parse, infile.dict, and infile.occ exists.\n" +
-                    "     wsize: [integer] - sliding window size (def. 10)\n" +
-                    "     store: [boolean] - store the data structure in infile.pfp.ds. (def. false)\n" +
-                    "      memo: [boolean] - print the data structure memory usage. (def. false)\n" +
-                    "     fasta: [boolean] - the input file is a fasta file. (def. false)\n" +
-                    "       rle: [boolean] - output run length encoded BWT. (def. false)\n" +
+  std::string usage("usage: " + std::string(argv[0]) + " infile [-p patterns] [-o output] [-t threads] [-l len] [-q shaped_slp] [-b batch]\n\n" +
+                    "Copmputes the matching statistics of the reads in the pattern against the reference index in infile.\n" +
                     "shaped_slp: [boolean] - use shaped slp. (def. false)\n" +
                     "   pattens: [string]  - path to patterns file.\n" +
+                    "    output: [string]  - output file prefix.\n" +
                     "       len: [integer] - minimum MEM lengt (def. 25)\n" +
-                    "    thread: [integer] - number of threads (def. 1)\n" +
-                    "       csv: [boolean] - print the stats in csv form on strerr. (def. false)\n");
+                    "    thread: [integer] - number of threads (def. 1)\n");
 
   std::string sarg;
-  while ((c = getopt(argc, argv, "w:smcfql:rhp:t:")) != -1)
+  while ((c = getopt(argc, argv, "l:hp:o:t:")) != -1)
   {
     switch (c)
     {
-    case 'w':
-      sarg.assign(optarg);
-      arg.w = stoi(sarg);
-      break;
-    case 's':
-      arg.store = true;
-      break;
-    case 'm':
-      arg.memo = true;
-      break;
-    case 'c':
-      arg.csv = true;
-      break;
-    case 'r':
-      arg.rle = true;
-      break;
     case 'p':
       arg.patterns.assign(optarg);
+      break;
+    case 'o':
+      arg.output.assign(optarg);
       break;
     case 'l':
       sarg.assign(optarg);
@@ -478,9 +463,6 @@ void parseArgs(int argc, char *const argv[], Args &arg)
     case 't':
       sarg.assign(optarg);
       arg.th = stoi(sarg);
-      break;
-    case 'f':
-      arg.is_fasta = true;
       break;
     case 'q':
       arg.shaped_slp = true;
@@ -522,10 +504,12 @@ void dispatcher(Args &args)
 
   std::string base_name = basename(args.filename.data());
   std::string out_filename = args.patterns + "_" + base_name;
+  if(args.output != "")
+    out_filename = args.output;
 
   if (is_gzipped(args.patterns))
   {
-    verbose("The input is gzipped - forcing single thread matchin statistics.");
+    verbose("The input is gzipped - forcing single thread matching statistics.");
     args.th = 1;
   }
 
@@ -547,19 +531,15 @@ void dispatcher(Args &args)
   verbose("Printing plain output");
   t_insert_start = std::chrono::high_resolution_clock::now();
 
-  std::ofstream f_pointers(out_filename + ".pointers");
-  std::ofstream f_lengths(out_filename + ".lengths");
+  std::ofstream f_mems(out_filename + ".mems");
 
-  if (!f_pointers.is_open())
-    error("open() file " + std::string(out_filename) + ".pointers failed");
-
-  if (!f_lengths.is_open())
-    error("open() file " + std::string(out_filename) + ".lengths failed");
+  if (!f_mems.is_open())
+    error("open() file " + std::string(out_filename) + ".mems failed");
 
   size_t n_seq = 0;
   for (size_t i = 0; i < args.th; ++i)
   {
-    std::string tmp_filename = out_filename + "_" + std::to_string(i) + ".ms.tmp.out";
+    std::string tmp_filename = out_filename + "_" + std::to_string(i) + ".mems.tmp.out";
     FILE *in_fd;
 
     if ((in_fd = fopen(tmp_filename.c_str(), "r")) == nullptr)
@@ -567,40 +547,53 @@ void dispatcher(Args &args)
 
     size_t length = 0;
     size_t m = 100; // Reserved size for pointers and lengths
-    size_t *mem = (size_t *)malloc(m * sizeof(size_t));
+    std::vector<std::pair<size_t,size_t>> mem(m);
+    size_t s = 100; // Reserved size for read name
+    char* rname = (char *)malloc(s * sizeof(char));
     while (!feof(in_fd) and fread(&length, sizeof(size_t), 1, in_fd) > 0)
     {
+      // Reading read name
+      if (s < length)
+      {
+        // Resize lengths and pointers
+        s = length;
+        rname = (char *)realloc(rname, m * sizeof(char));
+      }
+
+      if ((fread(rname, sizeof(char), length, in_fd)) != length)
+        error("fread() file " + std::string(tmp_filename) + " failed");
+
+      // TODO: Store the fasta headers somewhere
+      f_mems << ">" + std::string(rname,length) << endl;
+
+      // Reading MEMs
+      if ((fread(&length, sizeof(size_t), 1, in_fd)) != 1)
+        error("fread() file " + std::string(tmp_filename) + " failed");
+
       if (m < length)
       {
         // Resize lengths and pointers
         m = length;
-        mem = (size_t *)realloc(mem, m * sizeof(size_t));
+        mem.resize(m);
       }
 
-      if ((fread(mem, sizeof(size_t), length, in_fd)) != length)
+      if ((fread(mem.data(), sizeof(std::pair<size_t,size_t>), length, in_fd)) != length)
         error("fread() file " + std::string(tmp_filename) + " failed");
 
       // TODO: Store the fasta headers somewhere
-      f_pointers << ">" + std::to_string(n_seq) << endl;
+      // f_mems << ">" + std::to_string(n_seq) << endl;
       for (size_t i = 0; i < length; ++i)
-        f_pointers << mem[i] << " ";
-      f_pointers << endl;
-
-      if ((fread(mem, sizeof(size_t), length, in_fd)) != length)
-        error("fread() file " + std::string(tmp_filename) + " failed");
-
-      f_lengths << ">" + std::to_string(n_seq) << endl;
-      for (size_t i = 0; i < length; ++i)
-        f_lengths << mem[i] << " ";
-      f_lengths << endl;
+        f_mems << "(" << mem[i].first << "," << mem[i].second << ") ";
+      f_mems << endl;
 
       n_seq++;
     }
     fclose(in_fd);
+    if (std::remove(tmp_filename.c_str()) != 0)
+      error("remove() file " + tmp_filename + " failed");
   }
 
-  f_pointers.close();
-  f_lengths.close();
+  f_mems.close();
 
   t_insert_end = std::chrono::high_resolution_clock::now();
 
@@ -609,18 +602,6 @@ void dispatcher(Args &args)
 
   mem_peak = malloc_count_peak();
   verbose("Memory peak: ", malloc_count_peak());
-
-  size_t space = 0;
-  if (args.memo)
-  {
-  }
-
-  if (args.store)
-  {
-  }
-
-  if (args.csv)
-    std::cerr << csv(args.filename.c_str(), time, space, mem_peak) << std::endl;
 }
 
 int main(int argc, char *const argv[])
@@ -630,11 +611,11 @@ int main(int argc, char *const argv[])
 
   if (args.shaped_slp)
   {
-    dispatcher<ms_c<shaped_slp_t>>(args);
+    dispatcher<mems_c<shaped_slp_t>>(args);
   }
   else
   {
-    dispatcher<ms_c<plain_slp_t>>(args);
+    dispatcher<mems_c<plain_slp_t>>(args);
   }
   return 0;
 }

@@ -32,14 +32,6 @@ struct Args
 {
   std::string filename = "";
   size_t w = 10;             // sliding window size and its default
-  bool store = false;        // store the data structure in the file
-  bool memo = false;         // print the memory usage
-  bool csv = false;          // print stats on stderr in csv format
-  bool rle = false;          // outpt RLBWT
-  std::string patterns = ""; // path to patterns file
-  size_t l = 25;             // minumum MEM length
-  size_t th = 1;             // number of threads
-  bool is_fasta = false;     // read a fasta file
 };
 
 void parseArgs(int argc, char *const argv[], Args &arg)
@@ -48,17 +40,9 @@ void parseArgs(int argc, char *const argv[], Args &arg)
   extern char *optarg;
   extern int optind;
 
-  std::string usage("usage: " + std::string(argv[0]) + " infile [-s store] [-m memo] [-c csv] [-p patterns] [-f fasta] [-r rle] [-t threads] [-l len]\n\n" +
+  std::string usage("usage: " + std::string(argv[0]) + " infile [-w wsize]\n\n" +
                     "Computes the pfp data structures of infile, provided that infile.parse, infile.dict, and infile.occ exists.\n" +
-                    "  wsize: [integer] - sliding window size (def. 10)\n" +
-                    "  store: [boolean] - store the data structure in infile.pfp.ds. (def. false)\n" +
-                    "   memo: [boolean] - print the data structure memory usage. (def. false)\n" +
-                    "  fasta: [boolean] - the input file is a fasta file. (def. false)\n" +
-                    "    rle: [boolean] - output run length encoded BWT. (def. false)\n" +
-                    "pattens: [string]  - path to patterns file.\n" +
-                    "    len: [integer] - minimum MEM lengt (def. 25)\n" +
-                    " thread: [integer] - number of threads (def. 1)\n" +
-                    "    csv: [boolean] - print the stats in csv form on strerr. (def. false)\n");
+                    "  wsize: [integer] - sliding window size (def. 10)\n");
 
   std::string sarg;
   while ((c = getopt(argc, argv, "w:smcfl:rhp:t:")) != -1)
@@ -68,32 +52,6 @@ void parseArgs(int argc, char *const argv[], Args &arg)
     case 'w':
       sarg.assign(optarg);
       arg.w = stoi(sarg);
-      break;
-    case 's':
-      arg.store = true;
-      break;
-    case 'm':
-      arg.memo = true;
-      break;
-    case 'c':
-      arg.csv = true;
-      break;
-    case 'r':
-      arg.rle = true;
-      break;
-    case 'p':
-      arg.patterns.assign(optarg);
-      break;
-    case 'l':
-      sarg.assign(optarg);
-      arg.l = stoi(sarg);
-      break;
-    case 't':
-      sarg.assign(optarg);
-      arg.th = stoi(sarg);
-      break;
-    case 'f':
-      arg.is_fasta = true;
       break;
     case 'h':
       error(usage);
@@ -201,18 +159,6 @@ int main(int argc, char *const argv[])
 
   auto mem_peak = malloc_count_peak();
   verbose("Memory peak: ", malloc_count_peak());
-
-  size_t space = 0;
-  if (args.memo)
-  {
-  }
-
-  if (args.store)
-  {
-  }
-
-  if (args.csv)
-    std::cerr << csv(args.filename.c_str(), time, space, mem_peak) << std::endl;
 
   return 0;
 }
