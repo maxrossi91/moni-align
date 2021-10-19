@@ -1,4 +1,4 @@
-/* aligner_reads_dispatcher - Dispatches the reads in single and multithread.
+/* extender_reads_dispatcher - Dispatches the reads in single and multithread.
     Copyright (C) 2020 Massimiliano Rossi
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -12,8 +12,8 @@
     along with this program.  If not, see http://www.gnu.org/licenses/ .
 */
 /*!
-   \file aligner_reads_dispatcher.cpp
-   \brief aligner_reads_dispatcher.cpp Dispatches the reads in single and multithread.
+   \file extender_reads_dispatcher.cpp
+   \brief extender_reads_dispatcher.cpp Dispatches the reads in single and multithread.
    \author Massimiliano Rossi
    \date 29/04/2021
 */
@@ -280,11 +280,11 @@ pthread_cond_t cond_reads_dispatcher;
 size_t n_active_threads = 0;
 // std::vector<bool> active_threads;
 
-template <typename aligner_t>
+template <typename extender_t>
 struct mt_param_t
 {
     // Parameters
-    aligner_t *aligner;
+    extender_t *extender;
     std::string pattern_filename;
     std::string sam_filename;
     size_t start;
@@ -292,15 +292,15 @@ struct mt_param_t
     size_t wk_id;
     // Return values
     size_t n_reads;
-    size_t n_aligned_reads;
+    size_t n_extended_reads;
 };
 
-template <typename aligner_t>
-void *mt_align_worker(void *param)
+template <typename extender_t>
+void *mt_extend_worker(void *param)
 {
-    mt_param_t<aligner_t> *p = (mt_param_t<aligner_t> *)param;
+    mt_param_t<extender_t> *p = (mt_param_t<extender_t> *)param;
     size_t n_reads = 0;
-    size_t n_aligned_reads = 0;
+    size_t n_extended_reads = 0;
 
     FILE *sam_fd;
     gzFile fp;
@@ -320,7 +320,7 @@ void *mt_align_worker(void *param)
     while ((ks_tell(seq) < p->end) && ((l = kseq_read(seq)) >= 0))
     {
 
-        bool fwd_align = p->aligner->align(seq, sam_fd, 0);
+        bool fwd_extend = p->extender->extend(seq, sam_fd, 0);
 
         //copy seq
         copy_kseq_t(&rev, seq);
@@ -331,10 +331,10 @@ void *mt_align_worker(void *param)
         if (rev.seq.m > rev.seq.l)
             rev.seq.s[rev.seq.l] = 0;
 
-        bool rev_align = p->aligner->align(&rev, sam_fd, 1);
+        bool rev_extend = p->extender->extend(&rev, sam_fd, 1);
 
-        if (fwd_align or rev_align)
-            n_aligned_reads++;
+        if (fwd_extend or rev_extend)
+            n_extended_reads++;
         n_reads++;
 
         free(rev.name.s);
@@ -343,9 +343,9 @@ void *mt_align_worker(void *param)
         free(rev.qual.s);
     }
 
-    verbose("Number of aligned reads block ", p->wk_id, " : ", n_aligned_reads, "/", n_reads);
+    verbose("Number of extended reads block ", p->wk_id, " : ", n_extended_reads, "/", n_reads);
     p->n_reads = n_reads;
-    p->n_aligned_reads = n_aligned_reads;
+    p->n_extended_reads = n_extended_reads;
     kseq_destroy(seq);
     gzclose(fp);
     fclose(sam_fd);
@@ -361,15 +361,15 @@ void *mt_align_worker(void *param)
     return NULL;
 }
 
-template <typename aligner_t>
-size_t mt_align(aligner_t *aligner, std::string pattern_filename, std::string sam_filename, size_t n_threads, size_t k)
+template <typename extender_t>
+size_t mt_extend(extender_t *extender, std::string pattern_filename, std::string sam_filename, size_t n_threads, size_t k)
 {
     xpthread_mutex_init(&mutex_reads_dispatcher, NULL, __LINE__, __FILE__);
     xpthread_cond_init(&cond_reads_dispatcher, NULL, __LINE__, __FILE__);
 
     // active_threads = std::vector<bool>(n_threads, false);
     pthread_t t[k * n_threads] = {0};
-    mt_param_t<aligner_t> params[k * n_threads];
+    mt_param_t<extender_t> params[k * n_threads];
     std::vector<size_t> starts = split_fastq(pattern_filename, k * n_threads);
     for (size_t i = 0; i < k * n_threads; ++i)
     {
@@ -380,13 +380,13 @@ size_t mt_align(aligner_t *aligner, std::string pattern_filename, std::string sa
                 xpthread_cond_wait(&cond_reads_dispatcher, &mutex_reads_dispatcher, __LINE__, __FILE__);
             assert(n_active_threads < n_threads);
             // Create a new thread
-            params[i].aligner = aligner;
+            params[i].extender = extender;
             params[i].pattern_filename = pattern_filename;
             params[i].sam_filename = sam_filename + "_" + std::to_string(i) + ".sam";
             params[i].start = starts[i];
             params[i].end = starts[i + 1];
             params[i].wk_id = i;
-            xpthread_create(&t[i], NULL, &mt_align_worker<aligner_t>, &params[i], __LINE__, __FILE__);
+            xpthread_create(&t[i], NULL, &mt_extend_worker<extender_t>, &params[i], __LINE__, __FILE__);
             // Update the number of active threads
             ++n_active_threads;
         }
@@ -394,7 +394,7 @@ size_t mt_align(aligner_t *aligner, std::string pattern_filename, std::string sa
     }
 
     size_t tot_reads = 0;
-    size_t tot_aligned_reads = 0;
+    size_t tot_extended_reads = 0;
 
     for (size_t i = 0; i < k * n_threads; ++i)
     {
@@ -409,10 +409,12 @@ size_t mt_align(aligner_t *aligner, std::string pattern_filename, std::string sa
     if ((fd = fopen(std::string(sam_filename + ".sam").c_str(), "w")) == nullptr)
         error("open() file " + std::string(sam_filename + ".sam") + " failed");
 
+    fprintf(fd, "%s", extender->to_sam().c_str());
+
     for (size_t i = 0; i < k * n_threads; ++i)
     {
         tot_reads += params[i].n_reads;
-        tot_aligned_reads += params[i].n_aligned_reads;
+        tot_extended_reads += params[i].n_extended_reads;
 
         append_file(params[i].sam_filename, fd);
         if (std::remove(params[i].sam_filename.c_str()) != 0)
@@ -422,18 +424,18 @@ size_t mt_align(aligner_t *aligner, std::string pattern_filename, std::string sa
     xpthread_mutex_destroy(&mutex_reads_dispatcher, __LINE__, __FILE__);
     xpthread_cond_destroy(&cond_reads_dispatcher, __LINE__, __FILE__);
 
-    verbose("Number of aligned reads: ", tot_aligned_reads, "/", tot_reads);
-    return tot_aligned_reads;
+    verbose("Number of extended reads: ", tot_extended_reads, "/", tot_reads);
+    return tot_extended_reads;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
 /// Single Thread
 ////////////////////////////////////////////////////////////////////////////////
-template <typename aligner_t>
-size_t st_align(aligner_t *aligner, std::string pattern_filename, std::string sam_filename)
+template <typename extender_t>
+size_t st_extend(extender_t *extender, std::string pattern_filename, std::string sam_filename)
 {
     size_t n_reads = 0;
-    size_t n_aligned_reads = 0;
+    size_t n_extended_reads = 0;
     kseq_t rev;
     int l;
     FILE *sam_fd;
@@ -443,12 +445,14 @@ size_t st_align(aligner_t *aligner, std::string pattern_filename, std::string sa
     if ((sam_fd = fopen(sam_filename.c_str(), "w")) == nullptr)
         error("open() file " + sam_filename + " failed");
 
+    fprintf(sam_fd, "%s", extender->to_sam().c_str());
+
     gzFile fp = gzopen(pattern_filename.c_str(), "r");
     kseq_t *seq = kseq_init(fp);
     while ((l = kseq_read(seq)) >= 0)
     {
 
-        bool fwd_align = aligner->align(seq, sam_fd, 0);
+        bool fwd_extend = extender->extend(seq, sam_fd, 0);
 
         //copy seq
         copy_kseq_t(&rev, seq);
@@ -459,10 +463,10 @@ size_t st_align(aligner_t *aligner, std::string pattern_filename, std::string sa
         if (rev.seq.m > rev.seq.l)
             rev.seq.s[rev.seq.l] = 0;
 
-        bool rev_align = aligner->align(&rev, sam_fd, 1);
+        bool rev_extend = extender->extend(&rev, sam_fd, 1);
 
-        if (fwd_align or rev_align)
-            n_aligned_reads++;
+        if (fwd_extend or rev_extend)
+            n_extended_reads++;
         n_reads++;
 
         free(rev.name.s);
@@ -471,14 +475,14 @@ size_t st_align(aligner_t *aligner, std::string pattern_filename, std::string sa
         free(rev.qual.s);
     }
 
-    verbose("Number of aligned reads: ", n_aligned_reads, "/", n_reads);
+    verbose("Number of extended reads: ", n_extended_reads, "/", n_reads);
     kseq_destroy(seq);
     gzclose(fp);
     fclose(sam_fd);
 
-    sleep(5);
+    // sleep(5);
 
-    return n_aligned_reads;
+    return n_extended_reads;
 }
 
 #endif /* end of include guard: _READS_DISPATCHER_HH */

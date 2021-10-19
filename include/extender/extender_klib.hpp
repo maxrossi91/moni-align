@@ -1,4 +1,4 @@
-/* align_klib - Align the reads to the reference using the klib library for SW
+/* extender_klib - Extend the MEMs of the reads to the reference using the klib library for SW
     Copyright (C) 2020 Massimiliano Rossi
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -12,14 +12,14 @@
     along with this program.  If not, see http://www.gnu.org/licenses/ .
 */
 /*!
-   \file align_klib.cpp
-   \brief align_klib.cpp Align the reads to the reference using the klib library for SW
+   \file extender_klib.cpp
+   \brief extender_klib.cpp Extend the MEMs of the reads to the reference using the klib library for SW
    \author Massimiliano Rossi
    \date 13/07/2020
 */
 
-#ifndef _ALIGN_KLIB_HH
-#define _ALIGN_KLIB_HH
+#ifndef _EXTENDER_KLIB_HH
+#define _EXTENDER_KLIB_HH
 
 #include <common.hpp>
 
@@ -39,6 +39,7 @@
 #include <ssw.h>
 
 #include <libgen.h>
+#include <seqidx.hpp>
 
 ////////////////////////////////////////////////////////////////////////////////
 /// SLP definitions
@@ -71,10 +72,10 @@ std::string get_slp_file_extension<plain_slp_t>()
 ////////////////////////////////////////////////////////////////////////////////
 
 template <typename slp_t>
-class aligner
+class extender
 {
 public:
-    aligner(std::string filename,
+    extender(std::string filename,
             size_t min_len_ = 50,
             bool forward_only_ = true) : min_len(min_len_),
                                          forward_only(forward_only_)
@@ -111,6 +112,22 @@ public:
         verbose("Memory peak: ", malloc_count_peak());
         verbose("Elapsed time (s): ", std::chrono::duration<double, std::ratio<1>>(t_insert_end - t_insert_start).count());
 
+        std::string filename_idx = filename + idx.get_file_extension();
+        verbose("Loading fasta index file: " + filename_idx);
+        t_insert_start = std::chrono::high_resolution_clock::now();
+
+
+        ifstream fs_idx(filename_idx);
+        idx.load(fs_idx);
+        fs_idx.close();
+
+        t_insert_end = std::chrono::high_resolution_clock::now();
+
+        verbose("Fasta index loading complete");
+        verbose("Memory peak: ", malloc_count_peak());
+        verbose("Elapsed time (s): ", std::chrono::duration<double, std::ratio<1>>(t_insert_end - t_insert_start).count());
+
+
         verbose("Initialize the local aligner");
         t_insert_start = std::chrono::high_resolution_clock::now();
 
@@ -136,13 +153,13 @@ public:
         verbose("Minimum MEM length: ", min_len);
     }
 
-    bool align(kseq_t *read, FILE *out, uint8_t strand)
+    bool extend(kseq_t *read, FILE *out, uint8_t strand)
     {
         size_t mem_pos = 0;
         size_t mem_len = 0;
         size_t mem_idx = 0;
 
-        bool aligned = false;
+        bool extended = false;
 
         auto pointers = ms.query(read->seq.s, read->seq.l);
         std::vector<size_t> lengths(pointers.size());
@@ -248,22 +265,22 @@ public:
 
             if (r.score >= min_score)
             {
-                ssw_write_sam(r, "human", read, strand, out, cig, mismatch);
-                aligned = true;
+                ssw_write_sam(r, idx[r.tb].c_str(), read, strand, out, cig, mismatch);
+                extended = true;
             }
 
-            // aligned_reads++;
+            // extended_reads++;
             free(cigar);
             free(q);
             delete str;
             delete seq;
         }
-        return aligned;
+        return extended;
     }
 
-    size_t get_aligned_reads()
+    size_t get_extended_reads()
     {
-        return aligned_reads;
+        return extended_reads;
     }
 
     // Adapted from SSW
@@ -323,12 +340,21 @@ public:
         }
     }
 
+    std::string to_sam()
+    {
+        std::string res = "@HD VN:1.6 SO:unknown\n";
+        res += idx.to_sam();
+        res += "@PG ID:moni PN:moni VN:0.1.0\n";
+        return res; 
+    }
+
 protected:
     ms_pointers<> ms;
     slp_t ra;
+    seqidx idx;
 
     size_t min_len = 0;
-    size_t aligned_reads = 0;
+    size_t extended_reads = 0;
     size_t n = 0;
 
     unsigned char seq_nt4_table[256] = {
@@ -358,4 +384,4 @@ protected:
     bool forward_only;
 };
 
-#endif /* end of include guard: _ALIGN_KLIB_HH */
+#endif /* end of include guard: _EXTENDER_KLIB_HH */

@@ -1,4 +1,4 @@
-/* align_klib - Align the reads to the reference using the klib library for SW
+/* extender_ksw2 - Extend the MEMs of the reads to the reference using the ksw2 library for SW
     Copyright (C) 2020 Massimiliano Rossi
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -12,14 +12,14 @@
     along with this program.  If not, see http://www.gnu.org/licenses/ .
 */
 /*!
-   \file align_klib.cpp
-   \brief align_klib.cpp Align the reads to the reference using the klib library for SW
+   \file extender_ksw2.cpp
+   \brief extender_ksw2.cpp Extend the MEMs of the reads to the reference using the ksw2 library for SW
    \author Massimiliano Rossi
    \date 13/07/2020
 */
 
-#ifndef _ALIGN_KSW2_HH
-#define _ALIGN_KSW2_HH
+#ifndef _EXTENDER_KSW2_HH
+#define _EXTENDER_KSW2_HH
 
 #include <common.hpp>
 
@@ -38,7 +38,7 @@
 #include <ksw2.h>
 
 #include <libgen.h>
-
+#include <seqidx.hpp>
 ////////////////////////////////////////////////////////////////////////////////
 /// SLP definitions
 ////////////////////////////////////////////////////////////////////////////////
@@ -71,7 +71,7 @@ std::string get_slp_file_extension<plain_slp_t>()
 
 template <typename slp_t,
           typename ms_t>
-class aligner
+class extender
 {
 public:
     // using SelSd = SelectSdvec<>;
@@ -79,10 +79,48 @@ public:
     // using SlpT = SelfShapedSlp<uint32_t, DagcSd, DagcSd, SelSd>;
     using ll = long long int;
 
-    aligner(std::string filename,
-            size_t min_len_ = 50,
-            bool forward_only_ = true) : min_len(min_len_),
-                                         forward_only(forward_only_)
+    typedef struct{
+
+        size_t min_len = 25;    // Minimum MEM length
+        size_t ext_len = 100;   // Extension length
+        size_t top_k = 1;       // Report the top_k alignments
+
+        // ksw2 parameters
+        int8_t smatch = 2;      // Match score default
+        int8_t smismatch = 4;   // Mismatch score default
+        int8_t gapo = 4;        // Gap open penalty
+        int8_t gapo2 = 13;      // Gap open penalty
+        int8_t gape = 2;        // Gap extension penalty
+        int8_t gape2 = 1;       // Gap extension penalty
+        int end_bonus = 400;    // Bonus to add at the extension score to declare the alignment
+
+        int w = -1;             // Band width
+        int zdrop = -1;         // Zdrop enable
+
+        bool forward_only = true;      // Align only 
+
+    } config_t;
+
+    // extender(std::string filename,
+    //         size_t min_len_ = 50,
+    //         bool forward_only_ = true) : min_len(min_len_),
+    //                                      forward_only(forward_only_)
+
+    extender(std::string filename,
+            config_t config = config_t()) : 
+                min_len(config.min_len),        // Minimum MEM length
+                ext_len(config.ext_len),        // Extension length
+                top_k(config.top_k),            // Report the top_k alignments
+                smatch(config.smatch),          // Match score default
+                smismatch(config.smismatch),    // Mismatch score default
+                gapo(config.gapo),              // Gap open penalty
+                gapo2(config.gapo2),            // Gap open penalty
+                gape(config.gape),              // Gap extension penalty
+                gape2(config.gape2),            // Gap extension penalty
+                end_bonus(config.end_bonus),    // Bonus to add at the extension score to declare the alignment
+                w(config.w),                    // Band width
+                zdrop(config.zdrop),            // Zdrop enable
+                forward_only(config.forward_only)
     {
         verbose("Loading the matching statistics index");
         std::chrono::high_resolution_clock::time_point t_insert_start = std::chrono::high_resolution_clock::now();
@@ -115,6 +153,21 @@ public:
         verbose("Memory peak: ", malloc_count_peak());
         verbose("Elapsed time (s): ", std::chrono::duration<double, std::ratio<1>>(t_insert_end - t_insert_start).count());
 
+        std::string filename_idx = filename + idx.get_file_extension();
+        verbose("Loading fasta index file: " + filename_idx);
+        t_insert_start = std::chrono::high_resolution_clock::now();
+
+
+        ifstream fs_idx(filename_idx);
+        idx.load(fs_idx);
+        fs_idx.close();
+
+        t_insert_end = std::chrono::high_resolution_clock::now();
+
+        verbose("Fasta index loading complete");
+        verbose("Memory peak: ", malloc_count_peak());
+        verbose("Elapsed time (s): ", std::chrono::duration<double, std::ratio<1>>(t_insert_end - t_insert_start).count());
+
         verbose("Initialize the local aligner");
         t_insert_start = std::chrono::high_resolution_clock::now();
 
@@ -131,58 +184,19 @@ public:
     }
 
     // Destructor
-    ~aligner()
+    ~extender()
     {
         // NtD
     }
 
-    bool align(kseq_t *read, FILE *out, uint8_t strand)
+    bool extend(kseq_t *read, FILE *out, uint8_t strand)
     {
 
-            return align_no_chain(read, out, strand);
-    }
-
-    // bool align(kseq_t *read, FILE* out, uint8_t strand)
-    bool align_no_chain(kseq_t *read, FILE *out, uint8_t strand)
-    {
-        // size_t mem_pos = 0;
-        // size_t mem_len = 0;
-        // size_t mem_idx = 0;
-
-        bool aligned = false;
-
-        // Find MEMs.
-        // auto pointers = ms.query(read->seq.s, read->seq.l);
-        // std::vector<size_t> lengths(pointers.size());
-        // size_t l = 0;
-        // size_t n_Ns = 0;
-        // for (size_t i = 0; i < pointers.size(); ++i)
-        // {
-        //     size_t pos = pointers[i];
-        //     while ((i + l) < read->seq.l && (pos + l) < n && read->seq.s[i + l] == ra.charAt(pos + l))
-        //     {
-        //         if (read->seq.s[i + l] == 'N')
-        //             n_Ns++;
-        //         else
-        //             n_Ns = 0;
-        //         ++l;
-        //     }
-
-        //     lengths[i] = l;
-        //     l = (l == 0 ? 0 : (l - 1));
-
-        //     // Update MEM
-        //     if (lengths[i] > mem_len and n_Ns < lengths[i])
-        //     {
-        //         mem_len = lengths[i];
-        //         mem_pos = pointers[i];
-        //         mem_idx = i;
-        //     }
-        // }
+        bool extended = false;
 
         mem_t mem = find_longest_mem(read);
 
-        // Align the read
+        // Extend the read
         if (mem.len >= min_len)
         {
 
@@ -220,13 +234,13 @@ public:
             if (score > min_score)
             {
                 extend(mem.pos, mem.len, lcs, lcs_len, rcs, rcs_len, false, 0, min_score, read, strand, out);
-                aligned = true;
+                extended = true;
             }
             
             delete lcs;
             delete rcs;
         }
-        return aligned;
+        return extended;
     }
 
     typedef struct mem_t
@@ -281,9 +295,9 @@ public:
         return mem_t(mem_pos, mem_len, mem_idx);
     }
 
-    size_t get_aligned_reads()
+    size_t get_extended_reads()
     {
-        return aligned_reads;
+        return extended_reads;
     }
 
     // If score_only is true we compute the score of the alignment.
@@ -326,14 +340,14 @@ public:
         ksw_reset_extz(&ez_lc);
         if (lcs_len > 0)
         {
-            size_t lc_occ = (mem_pos > 100 ? mem_pos - 100 : 0);
-            size_t lc_len = (mem_pos > 100 ? 100 : 100 - mem_pos);
-            char *tmp_lc = (char *)malloc(100);
+            size_t lc_occ = (mem_pos > ext_len ? mem_pos - ext_len : 0);
+            size_t lc_len = (mem_pos > ext_len ? ext_len : ext_len - mem_pos);
+            char *tmp_lc = (char *)malloc(ext_len);
             ra.expandSubstr(lc_occ, lc_len, tmp_lc);
             // verbose("lc: " + std::string(lc));
             // Convert A,C,G,T,N into 0,1,2,3,4
             // The left context is reversed
-            uint8_t *lc = (uint8_t *)malloc(100);
+            uint8_t *lc = (uint8_t *)malloc(ext_len);
             for (size_t i = 0; i < lc_len; ++i)
                 lc[lc_len - i - 1] = seq_nt4_table[(int)tmp_lc[i]];
 
@@ -359,8 +373,8 @@ public:
         if (rcs_len > 0)
         {
             size_t rc_occ = mem_pos + mem_len;
-            size_t rc_len = (rc_occ < n - 100 ? 100 : n - rc_occ);
-            char *rc = (char *)malloc(100);
+            size_t rc_len = (rc_occ < n - ext_len ? ext_len : n - rc_occ);
+            char *rc = (char *)malloc(ext_len);
             ra.expandSubstr(rc_occ, rc_len, rc);
             // verbose("rc: " + std::string(rc));
             // Convert A,C,G,T,N into 0,1,2,3,4
@@ -440,8 +454,8 @@ public:
 
                 // Compute the MD:Z field and thenumber of mismatches
                 std::pair<std::string, size_t> md_nm = write_MD_core((uint8_t *)ref, seq, ez.cigar, ez.n_cigar, tmp, 0);
-
-                write_sam(ez.score, score2, min_score, ref_pos, "human", read, strand, out, cigar_s, md_nm.first, md_nm.second);
+                std::pair<std::string,size_t> pos = idx.index(ref_pos);
+                write_sam(ez.score, score2, min_score, pos.second, pos.first.c_str(), read, strand, out, cigar_s, md_nm.first, md_nm.second);
             }
             else
             {
@@ -486,8 +500,8 @@ public:
 
                 // Compute the MD:Z field and thenumber of mismatches
                 std::pair<std::string, size_t> md_nm = write_MD_core((uint8_t *)ref, seq, cigar, n_cigar, tmp, 0);
-
-                write_sam(score, score2, min_score, ref_pos, "human", read, strand, out, cigar_s, md_nm.first, md_nm.second);
+                std::pair<std::string,size_t> pos = idx.index(ref_pos);
+                write_sam(score, score2, min_score, pos.second, pos.first.c_str(), read, strand, out, cigar_s, md_nm.first, md_nm.second);
 
                 delete cigar;
             }
@@ -722,17 +736,27 @@ public:
         return target_o + "\n" + bars_o + "\n" + seq_o + "\n";
     }
 
+    std::string to_sam()
+    {
+        std::string res = "@HD VN:1.6 SO:unknown\n";
+        res += idx.to_sam();
+        res += "@PG\tID:moni\tPN:moni\tVN:0.1.0\n";
+        return res; 
+    }
+
 protected:
     ms_t ms;
     slp_t ra;
+    seqidx idx;
     // SelfShapedSlp<uint32_t, DagcSd, DagcSd, SelSd> ra;
 
-    size_t min_len = 0;
-    size_t aligned_reads = 0;
+    const size_t min_len = 0;
+    const size_t ext_len = 100;   // Extension length
+    size_t extended_reads = 0;
     size_t n = 0;
-    size_t top_k = 1; // report the top_k alignments
+    const size_t top_k = 1; // report the top_k alignments
 
-    unsigned char seq_nt4_table[256] = {
+    const unsigned char seq_nt4_table[256] = {
         0, 1, 2, 3, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,
         4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,
         4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,
@@ -750,27 +774,27 @@ protected:
         4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,
         4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4};
 
-    int8_t smatch = 2;    // Match score default
-    int8_t smismatch = 4; // Mismatch score default
-    int8_t gapo = 4;      // Gap open penalty
-    int8_t gapo2 = 13;    // Gap open penalty
-    int8_t gape = 2;      // Gap extension penalty
-    int8_t gape2 = 1;     // Gap extension penalty
-    int end_bonus = 400;  // Bonus to add at the extension score to declare the alignment
+    const int8_t smatch = 2;    // Match score default
+    const int8_t smismatch = 4; // Mismatch score default
+    const int8_t gapo = 4;      // Gap open penalty
+    const int8_t gapo2 = 13;    // Gap open penalty
+    const int8_t gape = 2;      // Gap extension penalty
+    const int8_t gape2 = 1;     // Gap extension penalty
+    const int end_bonus = 400;  // Bonus to add at the extension score to declare the alignment
 
-    int w = -1; // Band width
-    int zdrop = -1;
+    const int w = -1; // Band width
+    const int zdrop = -1;
 
     void *km = 0; // Kalloc
 
     // int8_t max_rseq = 0;
 
-    int m = 5;
+    const int m = 5;
     int8_t mat[25];
     // int minsc = 0, xtra = KSW_XSTART;
     // uint8_t *rseq = 0;
 
-    bool forward_only;
+    const bool forward_only;
 
     // From https://github.com/BenLangmead/bowtie2/blob/4512b199768e562e8627ffdfd9253affc96f6fc6/unique.cpp
     // There is no valid second-best alignment and the best alignment has a
@@ -816,4 +840,4 @@ protected:
     const uint32_t pair_nosec_perf = 44;
 };
 
-#endif /* end of include guard: _ALIGN_KSW2_HH */
+#endif /* end of include guard: _EXTENDER_KSW2_HH */
