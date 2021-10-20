@@ -287,22 +287,22 @@ protected:
 
 
 
-char complement(char n)
-{
-  switch (n)
-  {
-  case 'A':
-    return 'T';
-  case 'T':
-    return 'A';
-  case 'G':
-    return 'C';
-  case 'C':
-    return 'G';
-  default:
-    return n;
-  }
-}
+// char complement(char n)
+// {
+//   switch (n)
+//   {
+//   case 'A':
+//     return 'T';
+//   case 'T':
+//     return 'A';
+//   case 'G':
+//     return 'C';
+//   case 'C':
+//     return 'G';
+//   default:
+//     return n;
+//   }
+// }
 
 template <typename ms_t>
 struct mt_param_t

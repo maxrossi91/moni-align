@@ -575,4 +575,99 @@ void my_load(std::vector<X> &x, std::istream &in, typename std::enable_if<std::i
   #define MTIME_REPORT_ALL
 #endif
 
+
+
+
+//***********************  Utils ***********************************************
+
+//*************** Borrowed from minimap2 ***************************************
+static const char LogTable256[256] = {
+#define LT(n) n, n, n, n, n, n, n, n, n, n, n, n, n, n, n, n
+	-1, 0, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3, 3, 3, 3, 3,
+	LT(4), LT(5), LT(5), LT(6), LT(6), LT(6), LT(6),
+	LT(7), LT(7), LT(7), LT(7), LT(7), LT(7), LT(7), LT(7)
+};
+
+static inline int ilog2_32(uint32_t v)
+{
+	uint32_t t, tt;
+	if ((tt = v>>16)) return (t = tt>>8) ? 24 + LogTable256[t] : 16 + LogTable256[tt];
+	return (t = v>>8) ? 8 + LogTable256[t] : LogTable256[v];
+}
+//******************************************************************************
+
+////////////////////////////////////////////////////////////////////////////////
+/// helper functions
+////////////////////////////////////////////////////////////////////////////////
+
+static inline char complement(const char n)
+{
+  switch (n)
+  {
+  case 'A':
+    return 'T';
+  case 'T':
+    return 'A';
+  case 'G':
+    return 'C';
+  case 'C':
+    return 'G';
+  default:
+    return n;
+  }
+}
+////////////////////////////////////////////////////////////////////////////////
+
+
+//*********************** Print Utils ******************************************
+
+
+  static std::string print_BLAST_like(const uint8_t *tseq, const uint8_t *qseq, const uint32_t *cigar, const size_t n_cigar)
+  {
+    std::string target_o;
+    std::string bars_o;
+    std::string seq_o;
+
+
+    int i, q_off, t_off, l_MD = 0;
+    for (i = q_off = t_off = 0; i < (int)n_cigar; ++i) {
+      int j, op = cigar[i]&0xf, len = cigar[i]>>4;
+      assert((op >= 0 && op <= 3) || op == 7 || op == 8);
+      if (op == 0 || op == 7 || op == 8) { // match
+        for (j = 0; j < len; ++j) {
+          if (qseq[q_off + j] != tseq[t_off + j]) {
+            bars_o +="*";
+          } else {
+            bars_o +="|";
+          }
+          target_o += std::to_string(tseq[t_off + j]);
+          seq_o += std::to_string(qseq[q_off + j]);
+        }
+        q_off += len, t_off += len;
+      } else if (op == 1) { // insertion to ref
+        for (j = 0; j < len; ++j) {
+          target_o += " ";
+          bars_o += " ";
+          seq_o += std::to_string(qseq[q_off + j]);
+        }
+        q_off += len;
+      } else if (op == 2) { // deletion from ref
+        for (j = 0; j < len; ++j) {
+          seq_o += " ";
+          bars_o += " ";
+          target_o += std::to_string(tseq[t_off + j]);
+        }
+        t_off += len;
+      } else if (op == 3) { // reference skip
+        for (j = 0; j < len; ++j) {
+          seq_o += " ";
+          bars_o += " ";
+          target_o += std::to_string(tseq[t_off + j]);
+        }
+        t_off += len;
+      }
+    }
+    return target_o + "\n" + bars_o + "\n" + seq_o + "\n";
+  }
+
 #endif /* end of include guard: _COMMON_HH */

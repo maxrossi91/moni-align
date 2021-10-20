@@ -199,22 +199,22 @@ protected:
 
 
 
-char complement(char n)
-{
-  switch (n)
-  {
-  case 'A':
-    return 'T';
-  case 'T':
-    return 'A';
-  case 'G':
-    return 'C';
-  case 'C':
-    return 'G';
-  default:
-    return n;
-  }
-}
+// char complement(char n)
+// {
+//   switch (n)
+//   {
+//   case 'A':
+//     return 'T';
+//   case 'T':
+//     return 'A';
+//   case 'G':
+//     return 'C';
+//   case 'C':
+//     return 'G';
+//   default:
+//     return n;
+//   }
+// }
 
 typedef struct{
   // Parameters
