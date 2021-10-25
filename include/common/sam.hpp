@@ -161,4 +161,46 @@ inline void write_sam(FILE *out, const sam_t s)
     }
   }
 
+  // Readapted from https://github.com/lh3/minimap2/blob/c9874e2dc50e32bbff4ded01cf5ec0e9be0a53dd/format.c
+  // tmp is a string of length max(reference length, query length)
+  // it return the mdz string in the msdz parameter, and the number of mismatches as return value
+  static size_t write_MD_core(const uint8_t *tseq, const uint8_t *qseq, const uint32_t *cigar, const size_t n_cigar, char *tmp, int write_tag, std::string& mdz)
+  {
+    // std::string mdz;
+    int i, q_off, t_off, l_MD = 0, NM = 0;
+    if (write_tag) mdz += "MD:Z:"; //printf("MD:Z:");
+    for (i = q_off = t_off = 0; i < (int)n_cigar; ++i) {
+      int j, op = cigar[i]&0xf, len = cigar[i]>>4;
+      assert((op >= 0 && op <= 3) || op == 7 || op == 8);
+      if (op == 0 || op == 7 || op == 8) { // match
+        for (j = 0; j < len; ++j) {
+          if (qseq[q_off + j] != tseq[t_off + j]) {
+            mdz += std::to_string(l_MD) + "ACGTN"[tseq[t_off + j]];
+            // printf("%d%c", l_MD, "ACGTN"[tseq[t_off + j]]);
+            l_MD = 0;
+            ++NM;
+          } else ++l_MD;
+        }
+        q_off += len, t_off += len;
+      } else if (op == 1) { // insertion to ref
+        q_off += len;
+        NM += len;
+      } else if (op == 2) { // deletion from ref
+        for (j = 0, tmp[len] = 0; j < len; ++j)
+          tmp[j] = "ACGTN"[tseq[t_off + j]];
+        mdz += std::to_string(l_MD) + "^" + std::string(tmp);
+        // printf("%d^%s", l_MD, tmp);
+        l_MD = 0;
+        t_off += len;
+        NM += len;
+      } else if (op == 3) { // reference skip
+        t_off += len;
+      }
+    }
+    if (l_MD > 0) mdz += std::to_string(l_MD);//printf("%d", l_MD);
+    // assert(t_off == r->re - r->rs && q_off == r->qe - r->qs);
+    return NM;
+    // return make_pair(mdz,NM);
+  }
+
 #endif /* end of include guard: _SAM_HH */

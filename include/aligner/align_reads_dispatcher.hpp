@@ -229,7 +229,7 @@ void *mt_align_worker(void *param)
     {
       for (size_t i = 0; i < l; ++i)
       {
-        if (p->aligner->align(&b->buf[i], sam_fd, 0))
+        if (p->aligner->align(&b->buf[i], sam_fd))
           n_aligned_reads++;        
         n_reads++;
       }
@@ -391,7 +391,7 @@ size_t st_align(aligner_t *aligner, std::string pattern_filename, std::string sa
     {
       for (size_t i = 0; i < l; ++i)
       {
-        if (aligner->align(&b->buf[i], sam_fd, 0))
+        if (aligner->align(&b->buf[i], sam_fd))
           n_aligned_reads++;
         n_reads++;
       }

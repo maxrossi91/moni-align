@@ -24,6 +24,7 @@
 #define VERBOSE
 #define MTIME
 
+#include <vector>
 #include <common.hpp>
 
 #include <sdsl/io.hpp>
@@ -351,7 +352,7 @@ public:
   }
 
 
-  // bool align_chains(kseq_t *read, FILE* out, uint8_t strand)
+  // TODO: Fix top score anc chaining as for paired end reads.
   bool align(kseq_t *read, FILE* out)
   {
     // std::vector<mem_t> mems;
@@ -861,39 +862,143 @@ public:
     return aligned;
   }
 
-  typedef struct{
+  typedef struct alignment_t{
     bool aligned = false;
-    enum type_t {Unpaired, Paired} type;
 
     kseq_t* read;
+    kseq_t read_rev;
+
+    std::vector<mem_t> mems;
+
+    alignment_t(kseq_t *read_){
+        read = read_;
+        rc_copy_kseq_t(&read_rev, read);
+    }
+
+  } alignment_t;
+
+  typedef struct{
+    int32_t tot = 0;
+    int32_t m1 = 0;
+    int32_t m2 = 0; 
+    bool paired = false;
+  } paired_score_t;
+
+  typedef struct paired_alignment_t{
+    bool aligned = false;
+    bool chained = false;
+    bool best_score = false;
+
     kseq_t* mate1;
     kseq_t* mate2;
 
+    kseq_t mate1_rev;
+    kseq_t mate2_rev;
 
+    sam_t sam_m1;
+    sam_t sam_m2;
 
+    paired_score_t score;
+    int32_t score2 = 0;
 
-  } alignment_t;
+    std::vector<mem_t> mems;
+
+    paired_alignment_t(kseq_t *mate1_, kseq_t *mate2_):
+      mate1(mate1_),
+      mate2(mate2_),
+      sam_m1(mate1),
+      sam_m2(mate2)
+    {
+        rc_copy_kseq_t(&mate1_rev, mate1);
+        rc_copy_kseq_t(&mate2_rev, mate2);
+
+        // Initialize SAM infos
+        // Fill sam fields RNEXT
+        sam_m1.rnext = std::string(mate2->name.s);
+        sam_m2.rnext = std::string(mate1->name.s);
+    }
+
+    void write(FILE* out)
+    {
+      write_sam(out, sam_m1);
+      write_sam(out, sam_m2);
+    }
+
+    void set_sam_not_aligned()
+    {
+      sam_m1.flag = sam_m2.flag = SAM_PAIRED | SAM_UNMAPPED | SAM_MATE_UNMAPPED;
+    }
+
+  } paired_alignment_t;
+
+  // Aligning pair-ended batched sequences
+  size_t align(kpbseq_t* batch, FILE *out)
+  {
+    size_t n_aligned = 0;
+
+    std::vector<paired_alignment_t> alignments;
+    std::vector<double> mate_abs_distance;
+
+    int l = batch->mate1->l;
+    for (size_t i = 0; i < l; ++i)
+    {
+      paired_alignment_t alignment(&batch->mate1->buf[i], &batch->mate2->buf[i]);
+      if(align(alignment))
+      {
+        // Get stats
+        mate_abs_distance.push_back((double)(alignment.sam_m1.tlen >= 0?alignment.sam_m1.tlen :-alignment.sam_m1.tlen));
+      }
+      // Store the alignment informations
+      alignments.push_back(alignment);
+    }
+
+    // Computes stats
+    double variance = 0.0;
+    double mean = mate_abs_distance[0];
+    for(size_t i = 0 ; i < l; ++i )
+    {
+      mean += mate_abs_distance[i];
+      double diff = ((i+1) * mate_abs_distance[i] ) - mean;
+      variance += (diff * diff) / ((i + 1.0 ) * i);
+    }
+
+    variance /= (double)(l-1);
+    mean /= (double)l;
+    double std_dev = sqrt(variance);
+
+    // Perform local serach for unaligned mates.
+    for(auto alignment : alignments)
+    {
+      if(not alignment.aligned)
+        local_search(alignment, mean, std_dev);
+      // Write alignment to file
+      alignment.write(out);
+      if(alignment.aligned) ++n_aligned;
+    }
+    
+    return n_aligned;
+  }
 
   // Aligning pair-ended sequences
   bool align(kseq_t *mate1, kseq_t *mate2, FILE *out)
   {
+    paired_alignment_t alignment(mate1, mate2);
+    if(not align(alignment))
+      alignment.set_sam_not_aligned();
+    alignment.write(out);
+    return alignment.aligned;
+  }
 
-    bool aligned = false;
-    
+  // Aligning pair-ended sequences
+  bool align(paired_alignment_t &al)
+  {    
     MTIME_START(0); // Timing helper
 
-    // Generate rc reads
-    kseq_t mate1_rev, mate2_rev;
-    rc_copy_kseq_t(&mate1_rev, mate1);
-    rc_copy_kseq_t(&mate2_rev, mate2);
-
     // Find MEMs
-    std::vector<mem_t> mems;
-
-    find_mems(mate1, mems, 0, MATE_1 | MATE_F);
-    find_mems(&mate1_rev, mems, mate2->seq.l, MATE_1 | MATE_RC );
-    find_mems(mate2, mems, 0, MATE_2 | MATE_F);
-    find_mems(&mate2_rev, mems, mate1->seq.l, MATE_2 | MATE_RC);
+    find_mems(al.mate1, al.mems, 0, MATE_1 | MATE_F);
+    find_mems(&al.mate1_rev, al.mems, al.mate2->seq.l, MATE_1 | MATE_RC );
+    find_mems(al.mate2, al.mems, 0, MATE_2 | MATE_F);
+    find_mems(&al.mate2_rev, al.mems, al.mate1->seq.l, MATE_2 | MATE_RC);
 
     MTIME_END(0); //Timing helper
     MTIME_START(1); //Timing helper
@@ -902,28 +1007,16 @@ public:
     std::vector<chain_t> chains;
 
     // Chain MEMs
-    const bool chained = find_chains(mems, anchors, chains);
+    al.chained = find_chains(al.mems, anchors, chains);
 
     MTIME_END(1);   //Timing helper
     MTIME_START(2); //Timing helper
 
-    if (not chained)
-    {
-      sam_t sam_m1(mate1);
-      sam_t sam_m2(mate2);
-
-      // Fill sam fields RNEXT, PNEXT and TLEN
-      sam_m1.rnext = std::string(mate2->name.s);
-      sam_m2.rnext = std::string(mate1->name.s);
-
-      sam_m1.flag = sam_m2.flag = SAM_PAIRED | SAM_UNMAPPED | SAM_MATE_UNMAPPED;
-      
-      write_sam(out, sam_m1);
-      write_sam(out, sam_m2);
+    if (not al.chained)
       return false;
-    }
 
-    int32_t min_score = 20 + 8 * log(mate1->seq.l);
+
+    int32_t min_score = 20 + 8 * log(al.mate1->seq.l);
 
     // // Compute the second best score
     std::vector<std::pair<int32_t, size_t>> best_scores;
@@ -942,9 +1035,9 @@ public:
           // Compute the score of a chain.
           paired_score_t score;
           if( (chain.mate == 0) || ((chain.mate & MATE_RC) and (chain.mate & MATE_2)) )
-            score = paired_chain_score(chain, anchors, mems, min_score, mate1, &mate2_rev);
+            score = paired_chain_score(chain, anchors, al.mems, min_score, al.mate1, &al.mate2_rev);
           else
-            score = paired_chain_score(chain, anchors, mems, min_score, &mate1_rev, mate2);
+            score = paired_chain_score(chain, anchors, al.mems, min_score, &al.mate1_rev, al.mate2);
           
           best_scores.push_back(std::make_pair(score.tot, i++));
         }
@@ -958,23 +1051,11 @@ public:
     assert(best_scores.size() > 1);
 
     if (best_scores[0].first < min_score)
-    {
-      sam_t sam_m1(mate1);
-      sam_t sam_m2(mate2);
-
-      // Fill sam fields RNEXT, PNEXT and TLEN
-      sam_m1.rnext = std::string(mate2->name.s);
-      sam_m2.rnext = std::string(mate1->name.s);
-
-      sam_m1.flag = sam_m2.flag = SAM_PAIRED | SAM_UNMAPPED | SAM_MATE_UNMAPPED;
-
-      write_sam(out, sam_m1);
-      write_sam(out, sam_m2);
       return false;
-    }
 
-    int32_t score2 = best_scores[1].first;
-    paired_score_t score;
+    al.best_score = true;
+
+    al.score2 = best_scores[1].first;
 
 
     { // Forward case
@@ -985,33 +1066,25 @@ public:
       std::reverse(chain.anchors.begin(), chain.anchors.end());
       // Compute the score of a chain.
       if( (chain.mate == 0) || ((chain.mate & MATE_RC) and (chain.mate & MATE_2)) )
-        score = paired_chain_score(chain, anchors, mems, min_score, mate1, &mate2_rev, false, score2, 0, out);
+        al.score = paired_chain_score(chain, anchors, al.mems, min_score, al.mate1, &al.mate2_rev, false, al.score2, 0, nullptr);
       else
-        score = paired_chain_score(chain, anchors, mems, min_score, &mate1_rev, mate2, false, score2, 1, out);
+        al.score = paired_chain_score(chain, anchors, al.mems, min_score, &al.mate1_rev, al.mate2, false, al.score2, 1, nullptr);
     }
 
-    if (score.tot >= min_score)
-      aligned = true;
+    al.aligned = (al.score.tot >= min_score);
 
-    if (not aligned)
-    {
-      sam_t sam_m1(mate1);
-      sam_t sam_m2(mate2);
-
-      // Fill sam fields RNEXT, PNEXT and TLEN
-      sam_m1.rnext = std::string(mate2->name.s);
-      sam_m2.rnext = std::string(mate1->name.s);
-
-      sam_m1.flag = sam_m2.flag = SAM_PAIRED | SAM_UNMAPPED | SAM_MATE_UNMAPPED;
-
-      write_sam(out, sam_m1);
-      write_sam(out, sam_m2);
+    if (not al.aligned)
       return false;
-    }
+    
 
     MTIME_END(2); //Timing helper
 
-    return aligned;
+    return al.aligned;
+  }
+
+  void local_search(paired_alignment_t& alignment, const double mean, const double std_dev)
+  {
+
   }
 
   void find_mems(
@@ -1129,13 +1202,6 @@ public:
       return score;
   }
 
-  typedef struct{
-    int32_t tot = 0;
-    int32_t m1 = 0;
-    int32_t m2 = 0; 
-    bool paired = false;
-  } paired_score_t;
-
   paired_score_t paired_chain_score(
       const chain_t &chain,
       const std::vector<std::pair<size_t, size_t>> &anchors,
@@ -1226,8 +1292,8 @@ public:
           sam_m1.flag = sam_m2.flag = SAM_PAIRED | SAM_UNMAPPED | SAM_MATE_UNMAPPED;
         }
 
-        write_sam(out,sam_m1);
-        write_sam(out,sam_m2);
+        // write_sam(out,sam_m1);
+        // write_sam(out,sam_m2);
       }
     }
     else
@@ -1253,232 +1319,6 @@ public:
     return aligned_reads;
   }
 
-  // If score_only is true we compute the score of the alignment. 
-  // If score_only is false, we extend again the read and we write the result
-  // in the SAM file, so we need to give the second best score.
-  int32_t extend(
-      const size_t mem_pos,
-      const size_t mem_len,
-      const uint8_t *lcs,           // Left context of the read
-      const size_t lcs_len,         // Left context of the read lngth
-      const uint8_t *rcs,           // Right context of the read
-      const size_t rcs_len,         // Right context of the read length
-      const bool score_only = true, // Report only the score
-      const int32_t score2 = 0,     // The score of the second best alignment
-      const int32_t min_score = 0,  // The minimum score to call an alignment
-      const kseq_t *read = nullptr, // The read that has been aligned
-      int8_t strand = 0,            // 0: forward aligned ; 1: reverse complement aligned
-      FILE *out = nullptr,          // The SAM file pointer
-      const bool realign = false    // Realign globally the read
-  )
-  {
-    int flag = KSW_EZ_EXTZ_ONLY | KSW_EZ_RIGHT;
-
-    if(score_only) 
-      flag = KSW_EZ_SCORE_ONLY;
-
-    int score_lc = 0;
-    int score_rc = 0;
-
-    // TODO: Update end_bonus according to the MEM contribution to the score
-    ksw_extz_t ez_lc;
-    ksw_extz_t ez_rc;
-    ksw_extz_t ez;
-    memset(&ez_lc, 0, sizeof(ksw_extz_t));
-    memset(&ez_rc, 0, sizeof(ksw_extz_t));
-    memset(&ez, 0, sizeof(ksw_extz_t));
-
-    // Extract the context from the reference
-    // lc: left context
-    ksw_reset_extz(&ez_lc);
-    if(lcs_len > 0)
-    {
-      size_t lc_occ = (mem_pos > ext_len ? mem_pos - ext_len : 0);
-      size_t lc_len = (mem_pos > ext_len ? ext_len : ext_len - mem_pos);
-      char *tmp_lc = (char *)malloc(ext_len);
-      ra.expandSubstr(lc_occ, lc_len, tmp_lc);
-      // verbose("lc: " + std::string(lc));
-      // Convert A,C,G,T,N into 0,1,2,3,4
-      // The left context is reversed
-      uint8_t *lc = (uint8_t *)malloc(ext_len);
-      for (size_t i = 0; i < lc_len; ++i)
-        lc[lc_len -i -1] = seq_nt4_table[(int)tmp_lc[i]];
-      
-      delete tmp_lc;
-
-      // Query: lcs
-      // Target: lc
-      // verbose("aligning lc and lcs");
-      ksw_extz2_sse(km, lcs_len, (uint8_t*)lcs, lc_len, (uint8_t*)lc, m, mat, gapo, gape, w, zdrop, end_bonus, flag, &ez_lc);
-      score_lc =  ez_lc.mqe;
-      // verbose("lc score: " + std::to_string(score_lc));
-      // Check if the extension reached the end or the query
-      assert(score_only or ez_lc.reach_end);
-
-      // std::string blc = print_BLAST_like((uint8_t*)lc,(uint8_t*)lcs,ez_lc.cigar,ez_lc.n_cigar);
-      // std::cout<<blc;
-
-      delete lc;
-    }
-
-    // rc: right context
-    ksw_reset_extz(&ez_rc);
-    if(rcs_len > 0)
-    {
-      size_t rc_occ = mem_pos + mem_len;
-      size_t rc_len = (rc_occ < n-ext_len ? ext_len : n - rc_occ);
-      char *rc = (char *)malloc(ext_len);
-      ra.expandSubstr(rc_occ, rc_len, rc);
-      // verbose("rc: " + std::string(rc));
-      // Convert A,C,G,T,N into 0,1,2,3,4
-      for (size_t i = 0; i < rc_len; ++i)
-        rc[i] = seq_nt4_table[(int)rc[i]];
-
-      // Query: rcs
-      // Target: rc
-      // verbose("aligning rc and rcs");
-      ksw_extz2_sse(km, rcs_len, (uint8_t*)rcs, rc_len, (uint8_t*)rc, m, mat, gapo, gape, w, zdrop, end_bonus, flag, &ez_rc);
-      score_rc = ez_rc.mqe;
-      // verbose("rc score: " + std::to_string(score_rc));
-      // Check if the extension reached the end or the query
-      assert(score_only or ez_rc.reach_end);
-
-      // std::string brc = print_BLAST_like((uint8_t*)rc,(uint8_t*)rcs,ez_rc.cigar,ez_rc.n_cigar);
-      // std::cout<<brc;
-      delete rc;
-    }
-
-
-    // Compute the final score
-    int32_t score = mem_len * smatch + score_lc + score_rc;
-
-    if(not score_only)
-    {
-      // Compute starting position in reference
-      size_t ref_pos = mem_pos - (lcs_len > 0 ? ez_lc.mqe_t + 1 : 0);
-      size_t ref_len = (lcs_len > 0 ? ez_lc.mqe_t + 1 : 0) + mem_len + (rcs_len > 0 ? ez_rc.mqe_t + 1: 0);
-      char *ref = (char *)malloc(ref_len);
-      ra.expandSubstr(ref_pos, ref_len, ref);
-      // Convert A,C,G,T,N into 0,1,2,3,4
-      for (size_t i = 0; i < ref_len; ++i)
-        ref[i] = seq_nt4_table[(int)ref[i]];
-
-      // Convert the read
-      size_t seq_len = read->seq.l;
-      uint8_t* seq = (uint8_t*) malloc(seq_len);
-      for (size_t i = 0; i < seq_len; ++i)
-        seq[i] = seq_nt4_table[(int)read->seq.s[i]];
-
-      char* tmp = (char*)calloc(max(ref_len,seq_len),1);
-
-      if(realign)
-      {
-        // Realign the whole sequence globally
-        flag = KSW_EZ_RIGHT;
-        ksw_reset_extz(&ez);
-        ksw_extz2_sse(km, seq_len, (uint8_t*)seq, ref_len, (uint8_t*)ref, m, mat, gapo, gape, w, zdrop, end_bonus, flag, &ez);
-
-
-        // std::string bfull = print_BLAST_like((uint8_t*)ref,seq,ez.cigar,ez.n_cigar);
-        // std::cout << bfull;
-
-        // Example were ez.score is lrger than score:
-        // Left context alignment
-        // 22333022233022233302223302223
-        // ||||  ||||||||| ||||||*|||||*
-        // 2233  222330222 3302220302220
-        // Right context alignment
-        // 33022233022233022233022233022233      0222334
-        // *||||||||||||||||*||||||||||||||      ||||||*
-        // 130222330222330220330222330222332222330222330
-        // [INFO] 16:26:16 - Message: old score:  130  new score:  140
-        // Global alignment
-        // 2233    3022233022233302223  30222330222330222330222330222  330222  330222330222330222330222330222330222334
-        // ||||    |||||||||||*| ||||*  |||||||||||||||||||||||||||||  *|||||  |||||||||||*||||||||||||||*|||||||||||*
-        // 223322233022233022203 02220  30222330222330222330222330222  130222  330222330220330222330222332222330222330
-        // The original occurrence of the MEM has been shifted to the left by 6 positions, 
-        // reducing the gap in the right context, and moving in to the left context.
-
-        assert(ez.score >= score);
-
-        // Concatenate the CIGAR strings
-        
-        std::string cigar_s;
-        for(size_t i = 0; i < ez.n_cigar; ++i)
-          cigar_s += std::to_string(ez.cigar[i] >> 4) + "MID"[ez.cigar[i] & 0xf];
-
-        // Compute the MD:Z field and thenumber of mismatches
-        std::string mdz_s;
-        size_t nm = write_MD_core((uint8_t*)ref,seq,ez.cigar,ez.n_cigar,tmp,0,mdz_s);
-
-        write_sam(ez.score, score2, min_score, ref_pos, idx[ref_pos].c_str(), read, strand, out, cigar_s, mdz_s, nm, "*", 0, 0);
-      }
-      else
-      {
-        // Concatenate the CIGAR strings
-        size_t n_cigar = ez_lc.n_cigar + ez_rc.n_cigar + 1;
-        uint32_t *cigar = (uint32_t*)calloc(n_cigar,sizeof(uint32_t));
-        size_t i = 0;
-
-        for(size_t j = 0; j < ez_lc.n_cigar; ++j)
-          cigar[i++] = ez_lc.cigar[ez_lc.n_cigar -j -1];
-
-
-        if(ez_lc.n_cigar > 0 and ((cigar[i-1]& 0xf) == 0))
-        { // If the previous operation is also an M then merge the two operations
-          cigar[i-1] += (((uint32_t)mem_len) << 4);
-          --n_cigar;
-        }
-        else
-          cigar[i++] = (((uint32_t)mem_len) << 4);
-
-
-        if(ez_rc.n_cigar > 0)
-        {
-          if((ez_rc.cigar[0]& 0xf) == 0)
-          { // If the next operation is also an M then merge the two operations
-            cigar[i-1] += ez_rc.cigar[0];
-            --n_cigar;
-          }
-          else
-            cigar[i++] = ez_rc.cigar[0];
-        }
-
-        for(size_t j = 1; j < ez_rc.n_cigar; ++j)
-          cigar[i++] = ez_rc.cigar[j];
-        
-        assert(i <= n_cigar);
-
-        // std::string bfull = print_BLAST_like((uint8_t*)ref,seq,cigar,n_cigar);
-        // std::cout << bfull;
-
-        std::string cigar_s;
-        for(size_t i = 0; i < n_cigar; ++i)
-          cigar_s += std::to_string(cigar[i] >> 4) + "MID"[cigar[i] & 0xf];
-
-
-        // Compute the MD:Z field and thenumber of mismatches
-        std::string mdz_s;
-        size_t nm = write_MD_core((uint8_t*)ref,seq,cigar,n_cigar,tmp,0,mdz_s);
-
-        write_sam(score, score2, min_score, ref_pos, idx[ref_pos].c_str(), read, strand, out, cigar_s, mdz_s, nm, "*", 0, 0);
-
-        delete cigar;
-      }
-      delete tmp;
-      delete ref;
-      delete seq;
-    }
-
-    if (ez_lc.m_cigar > 0)
-      delete ez_lc.cigar;
-    if (ez_rc.m_cigar > 0)
-      delete ez_rc.cigar;
-    if (ez.m_cigar > 0)
-      delete ez.cigar;
-
-    return score;
-  }
 
   // If score_only is true we compute the score of the alignment. 
   // If score_only is false, we extend again the read and we write the result
@@ -1888,52 +1728,6 @@ protected:
     // uint8_t *rseq = 0;
 
     bool forward_only;
-
-
-    //   // From https://github.com/BenLangmead/bowtie2/blob/4512b199768e562e8627ffdfd9253affc96f6fc6/unique.cpp
-    //   // There is no valid second-best alignment and the best alignment has a
-    //   // perfect score.
-    //   const uint32_t unp_nosec_perf = 44;
-
-    //   // There is no valid second-best alignment.  We stratify the alignment
-    //   // score of the best alignment into 10 bins.
-    //   const uint32_t unp_nosec[11] = {
-    //     43, 42, 41, 36, 32, 27, 20, 11, 4, 1, 0
-    //   };
-
-    //   // The best alignment has a perfect score, and we stratify the distance
-    //   // between best and second-best alignment scores into 10 bins.
-    //   const uint32_t unp_sec_perf[11] = {
-    //     2, 16, 23, 30, 31, 32, 34, 36, 38, 40, 42
-    //   };
-
-    //   // The best alignment has a non-perfect score, and we stratify both by best
-    //   // alignment score (specifically, the maximum score minus the best "best")
-    //   // and by the distance between the best and second-best alignment scores
-    //   // ("difference").  Each is stratified into 10 bins.  Each row is a
-    //   // difference (smaller elts = smaller differences) and each column is a
-    //   // best score (smaller elts = higher best alignment scores).
-    //   const uint32_t unp_sec[11][11] = {
-    //     {  2,  2,  2,  1,  1, 0, 0, 0, 0, 0, 0},
-    //     { 20, 14,  7,  3,  2, 1, 0, 0, 0, 0, 0},
-    //     { 20, 16, 10,  6,  3, 1, 0, 0, 0, 0, 0},
-    //     { 20, 17, 13,  9,  3, 1, 1, 0, 0, 0, 0},
-    //     { 21, 19, 15,  9,  5, 2, 2, 0, 0, 0, 0},
-    //     { 22, 21, 16, 11, 10, 5, 0, 0, 0, 0, 0},
-    //     { 23, 22, 19, 16, 11, 0, 0, 0, 0, 0, 0},
-    //     { 24, 25, 21, 30,  0, 0, 0, 0, 0, 0, 0},
-    //     { 30, 26, 29,  0,  0, 0, 0, 0, 0, 0, 0},
-    //     { 30, 27,  0,  0,  0, 0, 0, 0, 0, 0, 0},
-    //     { 30,  0,  0,  0,  0, 0, 0, 0, 0, 0, 0},
-    //   };
-
-    //   //
-    //   // Paired mapping quality:
-    //   //
-
-    //   // There is no valid second-best alignment and the best alignment has a
-    //   // perfect score.
-    //   const uint32_t pair_nosec_perf = 44;
 };
 
 #endif /* end of include guard: _ALIGNER_KSW2_HH */
