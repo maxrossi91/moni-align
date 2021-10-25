@@ -173,16 +173,50 @@ template <typename slp_t,
 class aligner
 {
 public:
-  // using SelSd = SelectSdvec<>;
-  // using DagcSd = DirectAccessibleGammaCode<SelSd>;
-  // using SlpT = SelfShapedSlp<uint32_t, DagcSd, DagcSd, SelSd>;
-  using ll = long long int;
+    // using SelSd = SelectSdvec<>;
+    // using DagcSd = DirectAccessibleGammaCode<SelSd>;
+    // using SlpT = SelfShapedSlp<uint32_t, DagcSd, DagcSd, SelSd>;
+    using ll = long long int;
 
-  aligner(std::string filename, 
-            size_t min_len_ = 50, 
-            bool forward_only_ = true): 
-                min_len(min_len_), 
-                forward_only(forward_only_)
+
+    typedef struct{
+
+        size_t min_len = 25;    // Minimum MEM length
+        size_t ext_len = 100;   // Extension length
+        size_t top_k = 1;       // Report the top_k alignments
+
+        // ksw2 parameters
+        int8_t smatch = 2;      // Match score default
+        int8_t smismatch = 4;   // Mismatch score default
+        int8_t gapo = 4;        // Gap open penalty
+        int8_t gapo2 = 13;      // Gap open penalty
+        int8_t gape = 2;        // Gap extension penalty
+        int8_t gape2 = 1;       // Gap extension penalty
+        int end_bonus = 400;    // Bonus to add at the extension score to declare the alignment
+
+        int w = -1;             // Band width
+        int zdrop = -1;         // Zdrop enable
+
+        bool forward_only = true;      // Align only 
+
+    } config_t;
+
+
+    aligner(std::string filename, 
+            config_t config = config_t()) : 
+                min_len(config.min_len),        // Minimum MEM length
+                ext_len(config.ext_len),        // Extension length
+                top_k(config.top_k),            // Report the top_k alignments
+                smatch(config.smatch),          // Match score default
+                smismatch(config.smismatch),    // Mismatch score default
+                gapo(config.gapo),              // Gap open penalty
+                gapo2(config.gapo2),            // Gap open penalty
+                gape(config.gape),              // Gap extension penalty
+                gape2(config.gape2),            // Gap extension penalty
+                end_bonus(config.end_bonus),    // Bonus to add at the extension score to declare the alignment
+                w(config.w),                    // Band width
+                zdrop(config.zdrop),            // Zdrop enable
+                forward_only(config.forward_only)
   {
     verbose("Loading the matching statistics index");
     std::chrono::high_resolution_clock::time_point t_insert_start = std::chrono::high_resolution_clock::now();
@@ -255,252 +289,6 @@ public:
       // NtD
   }
 
-  bool align(kseq_t *read, FILE* out, uint8_t strand, bool mem_chaining = true)
-  {
-    if(mem_chaining) // TODO: fix the no chaining alignment
-      return (strand == 0? align_chain(read,out):false);
-    else
-      return align_no_chain(read,out,strand);
-  }
-
-  // bool align(kseq_t *read, FILE* out, uint8_t strand)
-  bool align_no_chain(kseq_t *read, FILE* out, uint8_t strand)
-  {
-    size_t mem_pos = 0;
-    size_t mem_len = 0;
-    size_t mem_idx = 0;
-
-    bool aligned = false;
-
-    // Find MEMs.
-    auto pointers = ms.query(read->seq.s, read->seq.l);
-    std::vector<size_t> lengths(pointers.size());
-    size_t l = 0;
-    size_t n_Ns = 0;
-    for (size_t i = 0; i < pointers.size(); ++i)
-    {
-      size_t pos = pointers[i];
-      while ((i + l) < read->seq.l && (pos + l) < n && read->seq.s[i + l] == ra.charAt(pos + l))
-      {
-        if(read->seq.s[i + l] == 'N') n_Ns++;
-        else n_Ns = 0;
-        ++l;
-      }
-
-      lengths[i] = l;
-      l = (l == 0 ? 0 : (l - 1));
-
-      // Update MEM
-      if (lengths[i] > mem_len and n_Ns < lengths[i])
-      {
-        mem_len = lengths[i];
-        mem_pos = pointers[i];
-        mem_idx = i;
-      }
-    }
-
-    // Align the read
-    if (mem_len >= min_len)
-    {
-      // Extract all the occurrences of the MEM
-      std::vector<size_t> occs;
-      occs.push_back(mem_pos);
-
-      // Phi direction
-      size_t curr = mem_pos;
-      size_t next = ms.Phi(curr);
-      size_t lcp =  lceToRBounded(ra,curr,next,mem_len);
-      while(lcp >= mem_len)
-      {
-        occs.push_back(next);
-        
-        curr = next;
-        next = ms.Phi(curr);
-        lcp  = lceToRBounded(ra,curr,next,mem_len);
-        // verbose("Phi: " + std::to_string(lcp));
-        // if(occs.size() > 100)
-        //   error("More than 100 occs Phi" + std::string(read->seq.s));
-      }
-
-      // Phi_inv direction
-      curr = mem_pos;
-      next = ms.Phi_inv(curr);
-      lcp =  lceToRBounded(ra,curr,next,mem_len);
-      while(lcp >= mem_len)
-      {
-        occs.push_back(next);
-        
-        curr = next;
-        next = ms.Phi_inv(curr);
-        lcp  = lceToRBounded(ra,curr,next,mem_len);
-        // verbose("Phi_inv: " + std::to_string(next));
-        // if(occs.size() > 100)
-        //   error("More than 100 occs Phi_inv" + std::string(read->seq.s));
-      }
-
-      // Extractin left and right context of the read
-      // lcs: left context sequence
-      size_t lcs_len = mem_idx;
-      uint8_t* lcs = (uint8_t*)malloc(lcs_len);
-      // verbose("lcs: " + std::string(read->seq.s).substr(0,lcs_len));
-      // Convert A,C,G,T,N into 0,1,2,3,4
-      // The left context is reversed
-      for (size_t i = 0; i < lcs_len; ++i)
-        lcs[lcs_len -i -1] = seq_nt4_table[(int)read->seq.s[i]];
-
-      // rcs: right context sequence
-      size_t rcs_occ = (mem_idx + mem_len); // The first character of the right context
-      size_t rcs_len = read->seq.l - rcs_occ;
-      uint8_t* rcs = (uint8_t*)malloc(rcs_len);
-      // verbose("rcs: " + std::string(read->seq.s).substr(rcs_occ,rcs_len));
-      // Convert A,C,G,T,N into 0,1,2,3,4
-      for (size_t i = 0; i < rcs_len; ++i) 
-        rcs[i] = seq_nt4_table[(int)read->seq.s[ rcs_occ + i]];
-
-      int32_t min_score = 20 + 8 * log(read->seq.l);
-      // verbose("Number of occurrences: " + std::to_string(occs.size()));
-      // For all the occurrences align
-      for(auto curr_mem_pos: occs)
-      {
-        int32_t score = extend(
-          curr_mem_pos,
-          mem_len,
-          lcs,   // Left context of the read
-          lcs_len, // Left context of the read lngth
-          rcs,   // Right context of the read
-          rcs_len // Right context of the read length
-        );
-
-        if(score >= min_score)
-        {
-          extend(curr_mem_pos,mem_len,lcs,lcs_len,rcs,rcs_len,false,0,min_score,read,strand,out); 
-          aligned = true;
-        }
-
-      }
-      delete lcs;
-      delete rcs;
-    }
-    return aligned;
-  }
-
-//   #define MATE_1 0 // The MEM cames from mate_1
-//   #define MATE_2 1 // The MEM cames from mate_2
-//   #define MATE_F 0 // The MEM cames from the forward strand
-//   #define MATE_RC 2 // The MEM cames from the reverse-complement strand
-
-//   typedef struct mem_t{
-//     size_t pos = 0;  // Position in the reference
-//     size_t len = 0;  // Length
-//     size_t idx = 0;  // Position in the pattern
-//     size_t mate = 0; // Left mate (0) or Right mate (1)
-//     size_t rpos = 0; // Position in the read for chaining
-//                      // With a Forward-Reverse library
-//                      // If the mem is in the FWD strand it is the position of the last character in the read
-//                      // If the mem is in the REV strand it is the position of the first character in the read
-//     std::vector<size_t> occs; // List of occurrences of the MEM
-
-//     mem_t(size_t p, size_t l, size_t i)
-//     {
-//       pos = p;  // Position in the reference
-//       len = l;  // Length of the MEM
-//       idx = i;  // Position in the read
-//     }
-//     mem_t(size_t p, size_t l, size_t i, size_t m, size_t r)
-//     {
-//       pos = p;  // Position in the reference
-//       len = l;  // Length of the MEM
-//       idx = i;  // Position in the read
-//       mate = m; // Left mate (0) or Right mate (1)
-//       rpos = r; // Position in the read for chaining
-//     }
-
-//   } mem_t;
-
-//   typedef struct sam_t{
-//     bool reverse = false; // The read is the reverse complement of the original 
-//     const kseq_t *read = nullptr; // The read of the SAM entry
-//                           // Contains: QNAME, SEQ, and QUAL
-//     size_t flag   = 4;    // FLAG: bitwise FLAG
-//     size_t pos    = 0;    // POS: 1-based leftmost mapping POSition
-//     size_t mapq   = 255;  // MAPQ: MAPping Quality
-//     size_t pnext  = 0;    // PNEXT: Position of the mate/next read
-//     ll tlen   = 0;        // TLEN: Position of the mate/next read
-
-//     std::string rname = "*"; // RNAME: Reference sequence NAME
-//     std::string cigar = "*"; // CIGAR: CIGAR string
-//     std::string rnext = "*"; // RNEXT: Reference name of the mate/next read
-
-//     size_t as = 0; // AS: Alignment score generated by aligner
-//     size_t nm = 0; // NM: Edit distance to the reference
-//     size_t zs = 0; // ZS: Second best score
-
-//     std::string md = ""; // MD: String encoding mismatched and deleted reference bases
-
-//     size_t rlen = 0; // Length of the match in the referenc. Requiredd to compute TLEN
-
-//     // Quind the sam_t struct for a read
-//     sam_t(const kseq_t* read_)
-//     {
-//       read = read_;
-//     }
-
-//     // void clear()
-//     // {
-//     //   reverse = false;   // The read is the reverse complement of the original
-//     //   read = nullptr; // The read of the SAM entry
-//     //                           // Contains: QNAME, SEQ, and QUAL
-//     //   flag = 4;        // FLAG: bitwise FLAG
-//     //   pos = 0;         // POS: 1-based leftmost mapping POSition
-//     //   mapq = 255;      // MAPQ: MAPping Quality
-//     //   pnext = 0;       // PNEXT: Position of the mate/next read
-//     //   tlen = 0;        // TLEN: Position of the mate/next read
-
-//     //   rname = "*"; // RNAME: Reference sequence NAME
-//     //   cigar = "*"; // CIGAR: CIGAR string
-//     //   rnext = "*"; // RNEXT: Reference name of the mate/next read
-
-//     //   as = 0; // AS: Alignment score generated by aligner
-//     //   nm = 0; // NM: Edit distance to the reference
-//     //   zs = 0; // ZS: Second best score
-
-//     //   md = ""; // MD: String encoding mismatched and deleted reference bases
-//     // }
-
-//   } sam_t;
-
-
-//   inline void write_sam(FILE *out, const sam_t s)
-//   {
-//     fprintf(out, "%s\t", s.read->name.s);         // QNAME
-//     fprintf(out, "%d\t", s.flag);                 // FLAG
-//     fprintf(out, "%s\t", s.rname.c_str());        // RNAME
-//     fprintf(out, "%d\t", s.pos);                  // POS
-//     fprintf(out, "%d\t", s.mapq);                 // MAPQ
-//     fprintf(out, "%s\t", s.cigar.c_str());        // CIGAR
-//     fprintf(out, "%s\t", s.rnext.c_str());        // RNEXT
-//     fprintf(out, "%d\t", s.pnext);                // PNEXT
-//     fprintf(out, "%d\t", s.tlen);                 // TLEN
-//     fprintf(out, "%s\t", s.read->seq.s);          // SEQ
-
-//     if (s.read->qual.s)                           // QUAL
-//       fprintf(out, "%s", s.read->qual.s);
-//     else
-//       fprintf(out, "*");
-
-//     // Optional TAGs
-//     if (!(s.flag & SAM_UNMAPPED))
-//     {
-//       fprintf(out, "\tAS:i:%d", s.as);            // AS
-//       fprintf(out, "\tNM:i:%d", s.nm);            // NM
-//       if (s.zs > 0)
-//         fprintf(out, "\tZS:i:%d", s.zs);          // ZS
-//       fprintf(out, "\tMD:Z:%s\n", s.md.c_str());  // MD
-//     }else
-//       fprintf(out, "\n");
-//   }
-
-
   // Fill the vector of occurrences of the mem_t data structure
   // TODO: remove the checks for the lengths once Dominik fix the lce queries
   void find_MEM_occs(mem_t &mem)
@@ -564,7 +352,7 @@ public:
 
 
   // bool align_chains(kseq_t *read, FILE* out, uint8_t strand)
-  bool align_chain(kseq_t *read, FILE* out)
+  bool align(kseq_t *read, FILE* out)
   {
     // std::vector<mem_t> mems;
 
@@ -1225,499 +1013,6 @@ public:
 
     return aligned;
   }
-  // // Aligning pair-ended sequences
-  // bool align(kseq_t *mate1, kseq_t *mate2, FILE *out)
-  // {
-
-  //   bool aligned = false;
-    
-  //   MTIME_START(0); // Timing helper
-
-  //   // Find MEMs of mate1 and reverse of mate2
-  //   std::vector<mem_t> mems;
-
-  //   find_mems(mate1, mems);
-  //   //copy seq
-  //   kseq_t mate2_rev;
-  //   rc_copy_kseq_t(&mate2_rev, mate2);
-  //   // copy_kseq_t(&mate2_rev, mate2);
-
-  //   // for (size_t i = 0; i < mate2->seq.l; ++i)
-  //   //   mate2_rev.seq.s[i] = complement(mate2->seq.s[mate2->seq.l - i - 1]);
-
-  //   // if (mate2_rev.seq.m > mate2_rev.seq.l)
-  //   //   mate2_rev.seq.s[mate2_rev.seq.l] = 0;
-
-  //   find_mems(&mate2_rev, mems, 1, mate1->seq.l, 1);
-
-  //   MTIME_END(0); //Timing helper
-  //   MTIME_START(1); //Timing helper
-
-  //   // for(size_t i = 0; i < mems.size(); ++i){
-  //   //   std::cout << "MEM[" << i <<"]: \n";
-  //   //   std::cout << "    len:" << mems[i].len <<"\n";
-  //   //   std::cout << "    pos:" << mems[i].pos <<"\n";
-  //   //   std::cout << "    idx:" << mems[i].idx <<"\n";
-  //   //   std::cout << "   occs:" << mems[i].occs.size() <<"\n";
-  //   // }
-
-  //   std::vector<std::pair<size_t, size_t>> anchors;
-  //   std::vector<chain_t> chains;
-
-  //   // Chain MEMs of mate1 and reverse of mate2
-  //   const bool fwd_chains = find_chains(mems, anchors, chains);
-
-  //   MTIME_END(1);   //Timing helper
-  //   MTIME_START(0); //Timing helper
-
-  //   // Find MEMs of mate2 and reverse of mate1
-  //   std::vector<mem_t> mems_rev;
-
-  //   find_mems(mate2, mems_rev, 0, 0, 1);
-
-  //   //copy seq
-  //   kseq_t mate1_rev;
-  //   rc_copy_kseq_t(&mate1_rev, mate1);
-  //   // copy_kseq_t(&mate1_rev, mate1);
-
-  //   // for (size_t i = 0; i < mate1->seq.l; ++i)
-  //   //   mate1_rev.seq.s[i] = complement(mate1->seq.s[mate1->seq.l - i - 1]);
-
-  //   // if (mate1_rev.seq.m > mate1_rev.seq.l)
-  //   //   mate1_rev.seq.s[mate1_rev.seq.l] = 0;
-
-  //   find_mems(&mate1_rev, mems_rev, 1, mate1->seq.l);
-
-  //   MTIME_END(0);   //Timing helper
-  //   MTIME_START(1); //Timing helper
-
-  //   // for (size_t i = 0; i < mems_rev.size(); ++i)
-  //   // {
-  //   //   std::cout << "MEM[" << i << "]: \n";
-  //   //   std::cout << "    len:" << mems_rev[i].len << "\n";
-  //   //   std::cout << "    pos:" << mems_rev[i].pos << "\n";
-  //   //   std::cout << "    idx:" << mems_rev[i].idx << "\n";
-  //   //   std::cout << "   occs:" << mems_rev[i].occs.size() << "\n";
-  //   // }
-
-  //   std::vector<std::pair<size_t, size_t>> anchors_rev;
-  //   std::vector<chain_t> chains_rev;
-
-  //   // Chain MEMs of mate2 and reverse of mate1
-  //   const bool rev_chains = find_chains(mems_rev, anchors_rev, chains_rev);
-
-  //   MTIME_END(1); //Timing helper
-  //   MTIME_START(2); //Timing helper
-  //   if ((not fwd_chains) and (not rev_chains))
-  //   {
-  //     sam_t sam_m1(mate1);
-  //     sam_t sam_m2(mate2);
-
-  //     // Fill sam fields RNEXT, PNEXT and TLEN
-  //     sam_m1.rnext = std::string(mate2->name.s);
-  //     sam_m2.rnext = std::string(mate1->name.s);
-
-  //     sam_m1.flag = sam_m2.flag = SAM_PAIRED | SAM_UNMAPPED | SAM_MATE_UNMAPPED;
-      
-  //     write_sam(out, sam_m1);
-  //     write_sam(out, sam_m2);
-  //     return false;
-  //   }
-
-  //   int32_t min_score = 20 + 8 * log(mate1->seq.l);
-
-
-
-  //   // // Compute the second best score
-  //   std::vector<std::pair<int32_t, size_t>> best_scores;
-  //   // get the occurrences of the top 4 best scores
-  //   std::set<size_t> different_scores;
-  //   size_t i = 0;
-  //   size_t j = 0;
-  //   size_t off = chains.size();
-  //   while (i < chains.size() and j < chains_rev.size() and different_scores.size() < 3)
-  //   {
-  //     if (chains[i].score > chains_rev[j].score)
-  //     {
-  //       different_scores.insert(chains[i].score);
-  //       if (different_scores.size() < 3)
-  //       {
-  //         // Align the chain
-  //         auto chain = chains[i];
-  //         // Reverse the chain order
-  //         std::reverse(chain.anchors.begin(), chain.anchors.end());
-  //         // Compute the score of a chain.
-  //         paired_score_t score = paired_chain_score(chain, anchors, mems, min_score, mate1, &mate2_rev);
-  //         best_scores.push_back(std::make_pair(score.tot, i++));
-  //       }
-  //     }
-  //     else
-  //     {
-  //       different_scores.insert(chains_rev[j].score);
-  //       if (different_scores.size() < 3)
-  //       {
-  //         // Align the chain
-  //         auto chain = chains_rev[j];
-  //         // Reverse the chain order
-  //         std::reverse(chain.anchors.begin(), chain.anchors.end());
-  //         // Compute the score of a chain.
-  //         paired_score_t score = paired_chain_score(chain, anchors_rev, mems_rev, min_score, &mate1_rev, mate2);
-  //         best_scores.push_back(std::make_pair(score.tot, off + j++));
-  //       }
-  //     }
-  //   }
-  //   while (different_scores.size() < 3 and i < chains.size())
-  //   {
-  //     different_scores.insert(chains[i].score);
-  //     if (different_scores.size() < 3)
-  //     {
-  //       // Align the chain
-  //       auto chain = chains[i];
-  //       // Reverse the chain order
-  //       std::reverse(chain.anchors.begin(), chain.anchors.end());
-  //       // Compute the score of a chain.
-  //       paired_score_t score = paired_chain_score(chain, anchors, mems, min_score, mate1, &mate2_rev);
-  //       best_scores.push_back(std::make_pair(score.tot, i++));
-  //     }
-  //   }
-  //   while (different_scores.size() < 3 and j < chains_rev.size())
-  //   {
-  //     different_scores.insert(chains_rev[j].score);
-  //     if (different_scores.size() < 3)
-  //     {
-  //       // Align the chain
-  //       auto chain = chains_rev[j];
-  //       // Reverse the chain order
-  //       std::reverse(chain.anchors.begin(), chain.anchors.end());
-  //       // Compute the score of a chain.
-  //       paired_score_t score = paired_chain_score(chain, anchors_rev, mems_rev, min_score, &mate1_rev, mate2);
-  //       best_scores.push_back(std::make_pair(score.tot, off + j++));
-  //     }
-  //   }
-
-  //   if (best_scores.size() < 2)
-  //     best_scores.push_back(std::make_pair(0, chains.size() + chains_rev.size()));
-
-  //   std::sort(best_scores.begin(), best_scores.end(), std::greater<std::pair<int32_t, size_t>>());
-
-  //   assert(best_scores.size() > 1);
-
-  //   if (best_scores[0].first < min_score)
-  //   {
-  //     sam_t sam_m1(mate1);
-  //     sam_t sam_m2(mate2);
-
-  //     // Fill sam fields RNEXT, PNEXT and TLEN
-  //     sam_m1.rnext = std::string(mate2->name.s);
-  //     sam_m2.rnext = std::string(mate1->name.s);
-
-  //     sam_m1.flag = sam_m2.flag = SAM_PAIRED | SAM_UNMAPPED | SAM_MATE_UNMAPPED;
-
-  //     write_sam(out, sam_m1);
-  //     write_sam(out, sam_m2);
-  //     return false;
-  //   }
-
-  //   int32_t score2 = best_scores[1].first;
-  //   paired_score_t score;
-
-  //   // TODO: Check if the mates are paired or not.
-  //   if (best_scores[0].second >= off)
-  //   { // Reverse case
-  //     j = best_scores[0].second - off;
-  //     // Align the chain
-  //     auto chain = chains_rev[j];
-  //     // Reverse the chain order
-  //     std::reverse(chain.anchors.begin(), chain.anchors.end());
-  //     // Compute the score of a chain.
-  //     score = paired_chain_score(chain, anchors_rev, mems_rev, min_score, &mate1_rev, mate2, false, score2, 1, out);
-  //   }
-  //   else
-  //   { // Forward case
-  //     i = best_scores[0].second;
-  //     // Align the chain
-  //     auto chain = chains[i];
-  //     // Reverse the chain order
-  //     std::reverse(chain.anchors.begin(), chain.anchors.end());
-  //     // Compute the score of a chain.
-  //     score = paired_chain_score(chain, anchors, mems, min_score, mate1, &mate2_rev, false, score2, 0, out);
-  //   }
-
-  //   if (score.tot >= min_score)
-  //     aligned = true;
-
-  //   if (not aligned)
-  //   {
-  //     sam_t sam_m1(mate1);
-  //     sam_t sam_m2(mate2);
-
-  //     // Fill sam fields RNEXT, PNEXT and TLEN
-  //     sam_m1.rnext = std::string(mate2->name.s);
-  //     sam_m2.rnext = std::string(mate1->name.s);
-
-  //     sam_m1.flag = sam_m2.flag = SAM_PAIRED | SAM_UNMAPPED | SAM_MATE_UNMAPPED;
-
-  //     write_sam(out, sam_m1);
-  //     write_sam(out, sam_m2);
-  //     return false;
-  //   }
-
-  //   MTIME_END(2); //Timing helper
-
-  //   return aligned;
-  // }
-
-//   typedef struct{
-//     ll score = 0;
-//     size_t mate = 2;
-//     bool paired = false;
-//     std::vector<size_t> anchors;
-//   } chain_t;
-
-
-//   // Given a set of mems, find the chains
-//   bool find_chains(
-//     const   std::vector<mem_t>& mems,
-//             std::vector< std::pair< size_t, size_t > >& anchors,
-//             std::vector<chain_t>& chains        
-//     )
-//   {
-//     /************* minimap2 dynamic programming for mem chaining ***************/
-//     /* https://github.com/lh3/minimap2/blob/master/chain.c */
-
-//     // Sort anchors
-//     // Lamda helper to sort the anchors
-//     auto cmp = [&] (std::pair<size_t, size_t> i, std::pair<size_t, size_t> j) -> bool {
-//       return (mems[i.first].occs[i.second] + mems[i.first].len - 1) < (mems[j.first].occs[j.second] + mems[j.first].len - 1);
-//     };
-
-//     // TODO: improve this initialization
-//     size_t tot_mem_length = 0;
-
-//     // std::vector< std::pair< size_t, size_t > > anchors;
-//     for(size_t i = 0; i < mems.size(); ++i)
-//     {
-//       for(size_t j = 0; j < mems[i].occs.size(); ++j)
-//         anchors.push_back(make_pair(i,j));
-//       tot_mem_length +=  mems[i].len * mems[i].occs.size();
-//     }
-
-//     float avg_mem_length = (float)tot_mem_length / anchors.size();
-
-//     std::sort(anchors.begin(),anchors.end(),cmp);
-
-//     // Dynamic programming
-
-//     // TODO: Parameters to be defined
-//     const ll G = LLONG_MAX;
-//     const ll max_dist_x = 500;//LLONG_MAX;
-//     // const ll max_dist_x = 100;//LLONG_MAX;
-//     const ll max_dist_y = 100;//LLONG_MAX;
-//     const ll max_iter = 50;
-//     const ll max_pred = 50;
-//     const ll min_chain_score = 1;
-//     const ll min_chain_length = 1;
-
-
-//     std::vector<ll> f(anchors.size(),0); // Score ending in position i
-//     std::vector<ll> p(anchors.size(),0); // Position of the next anchor giving the max when chained with the one in position i
-//     std::vector<ll> msc(anchors.size(),0); // Max score up to position i
-//     std::vector<ll> t(anchors.size(),0); // Stores i in position p[j], if i is chained with j. See heuristics in minimap2
-
-//     ll lb = 0;
-//     // For all the anchors
-//     for(size_t i = 0 ; i < anchors.size(); ++i)
-//     {
-//       // Get anchor i
-//       const auto a_i = anchors[i];
-//       const mem_t mem_i = mems[a_i.first];
-//       // const ll k_i = mem_i.occs[a_i.second];
-//       const ll x_i = mem_i.occs[a_i.second] + mem_i.len - 1;
-//       // const ll z_i = mem_i.idx;
-//       const ll y_i = mem_i.rpos;
-//       // const ll y_i = mem_i.idx + mem_i.len - 1;
-//       const ll w_i = mem_i.len;
-//       const size_t mate_i = mem_i.mate;
-
-//       ll max_f = w_i;
-//       ll max_j = -1;
-//       size_t n_pred = 0;
-//       // For all previous anchors
-//       // Heuristics from minimap2 -> do not try more than 50 anchors
-//       if(i - lb > max_iter) lb = i - max_iter;
-//       for(ll j = i-1; j >= lb; --j)
-//       {
-//         const auto a_j = anchors[j];
-//         const mem_t mem_j = mems[a_j.first];
-//         const ll x_j = mem_j.occs[a_j.second] + mem_j.len - 1;
-//         const ll y_j = mem_j.rpos;
-//         // const ll y_j = mem_j.idx + mem_j.len - 1;
-//         const size_t mate_j = mem_j.mate;
-
-//         // Check if anchors are compatible
-//         // if mate_i == mate_j they are from the same mate and same orientation
-//         // if mate_i ^ mate_j == 3 they are from different mate and withdifferent orientation
-//         // TODO: we can change to same orientation replacing 3 with 1
-//         if((mate_i != mate_j) and ((mate_i ^ mate_j)!= 3)) continue;
-
-//         // If the current anchor is too far, exit.
-//         if(x_i > x_j + max_dist_x)
-//         {
-//           // j = lb - 1;
-//           lb = j;
-//           continue;
-//         }
-//         // // skip if incompatible
-//         // if(k_i < x_j or z_i < y_j) continue;
-
-//         const ll x_d = x_i - x_j;
-//         const ll y_d = y_i - y_j;
-//         const int32_t l = (y_d > x_d ? (y_d - x_d) : (x_d - y_d));
-//         const uint32_t ilog_l = (l > 0? ilog2_32(l): 0);
-
-//         if((mate_i == mate_j and y_j >= y_i) or max(y_d, x_d) > G)
-//           continue;
-
-//         const ll alpha = min(min(y_d,x_d),w_i);
-//         // const ll beta = (l > 0? (ll)(.01 * l * avg_mem_length) + ilog_l >> 1 : 0); 
-//         ll beta = 0;
-//         if(mate_i != mate_j){
-//           if (x_d == 0) ++beta; // possibly due to overlapping paired ends; give a minor bonus
-//           else {
-//             const int c_lin = (int)(l * .01 * avg_mem_length);
-//             beta = c_lin < ilog_l ? c_lin : ilog_l;
-//           }
-//         }else{
-//           beta = (l > 0? (ll)(.01 * l * avg_mem_length) + ilog_l >> 1 : 0);
-//         }
-
-
-
-//         // No gap scale as in minimap2
-//         ll score = f[j] + (alpha - beta);
-
-//         if( score > max_f )
-//         {
-//           max_f = score;
-//           max_j = j;
-//           if( n_pred > 0) --n_pred;
-//         }
-//         else // minimap2: If i is chained wth j, than chaining i with a predecessor of j does not improve the score
-//           if (t[j] == i and (++n_pred > max_pred))            
-//             break;
-          
-//         if(p[j] > 0) t[p[j]] = i;
-//       }
-
-//       f[i] = max_f;
-//       p[i] = max_j;
-//       if( max_j >= 0 and msc[max_j] > max_f)
-//         msc[i] = msc[max_j];
-//       else
-//         msc[i] = max_f;
-//     }
-
-//     // Find the end positions of chains
-//     memset(t.data(),0,sizeof(size_t) * t.size());
-//     for(size_t i = 0; i < anchors.size(); ++i)
-//       if(p[i] >= 0) t[p[i]] = 1;
-    
-//     size_t n_chains = 0;
-//     for(size_t i = 0; i < anchors.size(); ++i)
-//       if(t[i] == 0 and msc[i] > min_chain_score) n_chains ++;
-    
-//     // TODO: check if we want to report also non aligned reads
-//     if(n_chains == 0)
-//       return false;
-
-//     // TODO: replace the vector of pairs with a lambda for the sort
-//     std::vector<std::pair<ll,size_t>> chain_starts(n_chains); // Stores uniqe chains and their index of uniqe chains in anchors
-//     size_t k = 0;
-//     for(size_t i = 0; i < anchors.size(); ++i)
-//     {
-//       if(t[i] == 0 and  msc[i] > min_chain_score)
-//       {
-//         size_t j = i;
-//         while(j >= 0 and f[j] < msc[j]) j = p[j]; // Find teh peak that maximizes f
-//         if (j < 0) i = 0;
-//         chain_starts[k++] = make_pair(f[j],j);
-//       }
-//     }
-
-//     chain_starts.resize(k), chain_starts.shrink_to_fit();
-//     n_chains = chain_starts.size();
-//     std::sort(chain_starts.begin(), chain_starts.end(), std::greater<std::pair<ll,size_t>>());
-    
-//     // std::vector<std::pair<size_t, std::vector<size_t>>> chains;
-
-//     // Backtrack
-//     memset(t.data(),0,sizeof(size_t) * t.size());
-//     for(size_t i = 0; i < n_chains; ++i)
-//     {
-//       ll j = chain_starts[i].second;
-//       chain_t chain;
-//       chain.mate = mems[anchors[j].first].mate;
-//       chain.score = chain_starts[i].first;
-//       do {
-//         size_t tmp_mate = mems[anchors[j].first].mate;
-//         chain.paired = chain.paired or (chain.mate != tmp_mate);
-//         chain.anchors.push_back(j); // stores th reverse of the chain
-//         t[j] = 1;
-//         j = p[j];
-//       } while (j >= 0 && t[j] == 0);
-//       if (j < 0) { // l - prev_l is the length of the chain
-//         if (chain.anchors.size() >= min_chain_length)
-//           chains.push_back(chain);     
-//       } else if (chain_starts[i].first - f[j] >= min_chain_score) { // Two chains share a common prefix
-//         if (chain.anchors.size() >= min_chain_length)
-//           chains.push_back(chain);
-//       }
-//     }
-
-//     // Lamda helper to sort the anchors
-//     auto chain_t_cmp = [](chain_t i, chain_t j) -> bool
-//     {
-//       return i.score > j.score;
-//     };
-
-//     // Sort the chains by max scores.
-//     std::sort(chains.begin(), chains.end(), chain_t_cmp);
- 
-//     // // Backtrack
-//     // memset(t.data(),0,sizeof(size_t) * t.size());
-//     // for(size_t i = 0; i < n_chains; ++i)
-//     // {
-//     //   ll j = chain_starts[i].second;
-//     //   std::vector<size_t> chain;
-//     //   bool paired = true;
-//     //   size_t mate = mems[anchors[j].first].mate; 
-//     //   do {
-//     //     size_t tmp_mate = mems[anchors[j].first].mate;
-//     //     paired = paired and (mate == tmp_mate);
-//     //     chain.push_back(j); // stores th reverse of the chain
-//     //     t[j] = 1;
-//     //     j = p[j];
-//     //   } while (j >= 0 && t[j] == 0);
-//     //   if (j < 0) { // l - prev_l is the length of the chain
-//     //     if (chain.size() >= min_chain_length)
-//     //       chains.push_back(std::make_pair(chain_starts[i].first, chain));     
-//     //   } else if (chain_starts[i].first - f[j] >= min_chain_score) { // Two chains share a common prefix
-//     //     if (chain.size() >= min_chain_length)
-//     //       chains.push_back(std::make_pair((chain_starts[i].first - f[j]), chain));
-//     //   }
-//     // }
-
-//     // // Sort the chains by max scores.
-//     // std::sort(chains.begin(), chains.end(), std::greater<std::pair<ll,std::vector<size_t>>>());
-
-//     // Clear space
-//     p.resize(0), p.shrink_to_fit();
-//     t.resize(0), t.shrink_to_fit();
-//     f.resize(0), f.shrink_to_fit();
-//     msc.resize(0), msc.shrink_to_fit();
-
-//     return true;
-//   }
 
   void find_mems(
     const kseq_t *read,
@@ -1998,14 +1293,14 @@ public:
     ksw_reset_extz(&ez_lc);
     if(lcs_len > 0)
     {
-      size_t lc_occ = (mem_pos > 100 ? mem_pos - 100 : 0);
-      size_t lc_len = (mem_pos > 100 ? 100 : 100 - mem_pos);
-      char *tmp_lc = (char *)malloc(100);
+      size_t lc_occ = (mem_pos > ext_len ? mem_pos - ext_len : 0);
+      size_t lc_len = (mem_pos > ext_len ? ext_len : ext_len - mem_pos);
+      char *tmp_lc = (char *)malloc(ext_len);
       ra.expandSubstr(lc_occ, lc_len, tmp_lc);
       // verbose("lc: " + std::string(lc));
       // Convert A,C,G,T,N into 0,1,2,3,4
       // The left context is reversed
-      uint8_t *lc = (uint8_t *)malloc(100);
+      uint8_t *lc = (uint8_t *)malloc(ext_len);
       for (size_t i = 0; i < lc_len; ++i)
         lc[lc_len -i -1] = seq_nt4_table[(int)tmp_lc[i]];
       
@@ -2031,8 +1326,8 @@ public:
     if(rcs_len > 0)
     {
       size_t rc_occ = mem_pos + mem_len;
-      size_t rc_len = (rc_occ < n-100 ? 100 : n - rc_occ);
-      char *rc = (char *)malloc(100);
+      size_t rc_len = (rc_occ < n-ext_len ? ext_len : n - rc_occ);
+      char *rc = (char *)malloc(ext_len);
       ra.expandSubstr(rc_occ, rc_len, rc);
       // verbose("rc: " + std::string(rc));
       // Convert A,C,G,T,N into 0,1,2,3,4
@@ -2229,14 +1524,14 @@ public:
     {
       size_t mem_pos = mems[anchors[0].first].occs[anchors[0].second];
 
-      size_t lc_occ = (mem_pos > 100 ? mem_pos - 100 : 0);
-      size_t lc_len = (mem_pos > 100 ? 100 : 100 - mem_pos);
-      char *tmp_lc = (char *)malloc(100);
+      size_t lc_occ = (mem_pos > ext_len ? mem_pos - ext_len : 0);
+      size_t lc_len = (mem_pos > ext_len ? ext_len : ext_len - mem_pos);
+      char *tmp_lc = (char *)malloc(ext_len);
       ra.expandSubstr(lc_occ, lc_len, tmp_lc);
       // verbose("lc: " + std::string(lc));
       // Convert A,C,G,T,N into 0,1,2,3,4
       // The left context is reversed
-      uint8_t *lc = (uint8_t *)malloc(100);
+      uint8_t *lc = (uint8_t *)malloc(ext_len);
       for (size_t i = 0; i < lc_len; ++i)
         lc[lc_len -i -1] = seq_nt4_table[(int)tmp_lc[i]];
       
@@ -2265,8 +1560,8 @@ public:
       size_t mem_len =  mems[anchors.back().first].len;
 
       size_t rc_occ = mem_pos + mem_len;
-      size_t rc_len = (rc_occ < n-100 ? 100 : n - rc_occ);
-      char *rc = (char *)malloc(100);
+      size_t rc_len = (rc_occ < n-ext_len ? ext_len : n - rc_occ);
+      char *rc = (char *)malloc(ext_len);
       ra.expandSubstr(rc_occ, rc_len, rc);
       // verbose("rc: " + std::string(rc));
       // Convert A,C,G,T,N into 0,1,2,3,4
@@ -2519,48 +1814,6 @@ public:
     return score;
   }
 
-  // Readapted from https://github.com/lh3/minimap2/blob/c9874e2dc50e32bbff4ded01cf5ec0e9be0a53dd/format.c
-  // tmp is a string of length max(reference length, query length)
-  // it return the mdz string in the msdz parameter, and the number of mismatches as return value
-  static size_t write_MD_core(const uint8_t *tseq, const uint8_t *qseq, const uint32_t *cigar, const size_t n_cigar, char *tmp, int write_tag, std::string& mdz)
-  {
-    // std::string mdz;
-    int i, q_off, t_off, l_MD = 0, NM = 0;
-    if (write_tag) mdz += "MD:Z:"; //printf("MD:Z:");
-    for (i = q_off = t_off = 0; i < (int)n_cigar; ++i) {
-      int j, op = cigar[i]&0xf, len = cigar[i]>>4;
-      assert((op >= 0 && op <= 3) || op == 7 || op == 8);
-      if (op == 0 || op == 7 || op == 8) { // match
-        for (j = 0; j < len; ++j) {
-          if (qseq[q_off + j] != tseq[t_off + j]) {
-            mdz += std::to_string(l_MD) + "ACGTN"[tseq[t_off + j]];
-            // printf("%d%c", l_MD, "ACGTN"[tseq[t_off + j]]);
-            l_MD = 0; 
-            ++NM;
-          } else ++l_MD;
-        }
-        q_off += len, t_off += len;
-      } else if (op == 1) { // insertion to ref
-        q_off += len;
-        NM += len;
-      } else if (op == 2) { // deletion from ref
-        for (j = 0, tmp[len] = 0; j < len; ++j)
-          tmp[j] = "ACGTN"[tseq[t_off + j]];
-        mdz += std::to_string(l_MD) + "^" + std::string(tmp);
-        // printf("%d^%s", l_MD, tmp);
-        l_MD = 0;
-        t_off += len;
-        NM += len;
-      } else if (op == 3) { // reference skip
-        t_off += len;
-      }
-    }
-    if (l_MD > 0) mdz += std::to_string(l_MD);//printf("%d", l_MD);
-    // assert(t_off == r->re - r->rs && q_off == r->qe - r->qs);
-    return NM;
-    // return make_pair(mdz,NM);
-  }
-
   // From https://github.com/lh3/ksw2/blob/master/cli.c
   static void ksw_gen_simple_mat(int m, int8_t *mat, int8_t a, int8_t b)
   {
@@ -2576,143 +1829,6 @@ public:
       mat[(m - 1) * m + j] = 0;
   }
 
-
-//   // Adapted from https://github.com/mengyao/Complete-Striped-Smith-Waterman-Library/blob/master/src/main.c
-//   void write_sam(const int32_t score,
-//                  const int32_t score2,
-//                  const int32_t min_score,
-//                  size_t ref_pos,
-//                  const char *ref_seq_name,
-//                  const kseq_t *read,
-//                  int8_t strand, // 0: forward aligned ; 1: reverse complement aligned
-//                  FILE *out,
-//                  std::string &cigar,
-//                  std::string &md,
-//                  size_t mismatches,
-//                  const char *r_next,  // Reference sequence name of the primary alignment of the NEXT read in the template.
-//                  const size_t p_next, // 0-based Position of the primary alignment of the NEXT read in the template.
-//                  const int32_t t_len  // TLEN: signed observed Template LENgth.
-//   )
-//   {
-//     // Sam format output
-//     fprintf(out, "%s\t", read->name.s);
-//     if (score == 0)
-//       fprintf(out, "4\t*\t0\t255\t*\t*\t0\t0\t*\t*\n");
-//     else
-//     {
-//       int32_t c, p;
-//       // uint32_t mapq = -4.343 * log(1 - (double)abs(score - score2) / (double)score);
-//       // mapq = (uint32_t)(mapq + 4.99);
-//       // mapq = mapq < 254 ? mapq : 254;
-//       uint32_t mapq = compute_mapq(score,score2,min_score,read->seq.l); 
-//       if (strand)
-//         fprintf(out, "16\t");
-//       else
-//         fprintf(out, "0\t");
-//       // TODO: Find the correct reference name.
-//       fprintf(out, "%s\t%d\t%d\t", ref_seq_name, ref_pos + 1, mapq);
-//       fprintf(out, "%s\t", cigar.c_str());
-//       fprintf(out, "%s\t%d\t%d\t", r_next, p_next + 1, t_len);
-//       // fprintf(out, "\t*\t0\t0\t");
-//       fprintf(out, "%s", read->seq.s);
-//       fprintf(out, "\t");
-//       if (read->qual.s && strand)
-//       {
-//         for (p = read->qual.l - 1; p >= 0; --p)
-//           fprintf(out, "%c", read->qual.s[p]);
-//       }
-//       else if (read->qual.s)
-//         fprintf(out, "%s", read->qual.s);
-//       else
-//         fprintf(out, "*");
-//       fprintf(out, "\tAS:i:%d", score);
-//       fprintf(out, "\tNM:i:%d", mismatches);
-//       if (score2 > 0)
-//         fprintf(out, "\tZS:i:%d", score2);
-//       fprintf(out, "\tMD:Z:%s\n", md.c_str());
-//     }
-//   }
-
-//   /*!
-//     Compute the mapping quality of the alignment
-//     Inspired from https://github.com/BenLangmead/bowtie2/blob/4512b199768e562e8627ffdfd9253affc96f6fc6/unique.h
-//   */
-//   size_t compute_mapq(
-//     const int32_t score,      // Best alignment score
-//     const int32_t score2,     // Second best alignemt score
-//     const int32_t min_score,  // Minimum alignemt score
-//     const size_t read_l       // Read length
-//   )
-//   {
-//     int32_t max_score = read_l * smatch;
-//     int32_t best = max_score - score;
-//     size_t best_bin = (size_t)((double)best * (10.0 / (double)(max_score - min_score)) + 0.5);
-//     if(score2 >= min_score)
-//     {
-//       int32_t diff = score - score2;
-//       size_t diff_bin = (size_t)((double)diff * (10.0 / (double)(max_score - min_score)) + 0.5);
-//       if(best == max_score)
-//         return unp_sec_perf[best_bin];
-//       else
-//         return unp_sec[diff_bin][best_bin];
-//     }
-//     else
-//     {
-//       if(best == max_score)
-//         return unp_nosec_perf;
-//       else
-//         return unp_nosec[best_bin];
-//     }
-//   }
-
-//   static std::string print_BLAST_like(const uint8_t *tseq, const uint8_t *qseq, const uint32_t *cigar, const size_t n_cigar)
-//   {
-//     std::string target_o;
-//     std::string bars_o;
-//     std::string seq_o;
-
-
-//     int i, q_off, t_off, l_MD = 0;
-//     for (i = q_off = t_off = 0; i < (int)n_cigar; ++i) {
-//       int j, op = cigar[i]&0xf, len = cigar[i]>>4;
-//       assert((op >= 0 && op <= 3) || op == 7 || op == 8);
-//       if (op == 0 || op == 7 || op == 8) { // match
-//         for (j = 0; j < len; ++j) {
-//           if (qseq[q_off + j] != tseq[t_off + j]) {
-//             bars_o +="*";
-//           } else {
-//             bars_o +="|";
-//           }
-//           target_o += std::to_string(tseq[t_off + j]);
-//           seq_o += std::to_string(qseq[q_off + j]);
-//         }
-//         q_off += len, t_off += len;
-//       } else if (op == 1) { // insertion to ref
-//         for (j = 0; j < len; ++j) {
-//           target_o += " ";
-//           bars_o += " ";
-//           seq_o += std::to_string(qseq[q_off + j]);
-//         }
-//         q_off += len;
-//       } else if (op == 2) { // deletion from ref
-//         for (j = 0; j < len; ++j) {
-//           seq_o += " ";
-//           bars_o += " ";
-//           target_o += std::to_string(tseq[t_off + j]);
-//         }
-//         t_off += len;
-//       } else if (op == 3) { // reference skip
-//         for (j = 0; j < len; ++j) {
-//           seq_o += " ";
-//           bars_o += " ";
-//           target_o += std::to_string(tseq[t_off + j]);
-//         }
-//         t_off += len;
-//       }
-//     }
-//     return target_o + "\n" + bars_o + "\n" + seq_o + "\n";
-//   }
-
   std::string to_sam()
   {
       std::string res = "@HD VN:1.6 SO:unknown\n";
@@ -2722,101 +1838,102 @@ public:
   }
 
 protected:
-  ms_t ms;
-  slp_t ra;
-  seqidx idx;
-  // SelfShapedSlp<uint32_t, DagcSd, DagcSd, SelSd> ra;
+    ms_t ms;
+    slp_t ra;
+    seqidx idx;
+    // SelfShapedSlp<uint32_t, DagcSd, DagcSd, SelSd> ra;
 
-  size_t min_len = 0;
-  size_t aligned_reads = 0;
-  size_t n = 0;
-  size_t top_k = 1; // report the top_k alignments
+    const size_t min_len = 0;
+    const size_t ext_len = 100;   // Extension length
+    size_t aligned_reads = 0;
+    size_t n = 0;
+    size_t top_k = 1; // report the top_k alignments
 
-  unsigned char seq_nt4_table[256] = {
-      0, 1, 2, 3, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,
-      4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,
-      4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,
-      4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,
-      4, 0, 4, 1, 4, 4, 4, 2, 4, 4, 4, 4, 4, 4, 4, 4,
-      4, 4, 4, 4, 3, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,
-      4, 0, 4, 1, 4, 4, 4, 2, 4, 4, 4, 4, 4, 4, 4, 4,
-      4, 4, 4, 4, 3, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,
-      4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,
-      4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,
-      4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,
-      4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,
-      4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,
-      4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,
-      4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,
-      4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4};
+    unsigned char seq_nt4_table[256] = {
+        0, 1, 2, 3, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,
+        4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,
+        4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,
+        4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,
+        4, 0, 4, 1, 4, 4, 4, 2, 4, 4, 4, 4, 4, 4, 4, 4,
+        4, 4, 4, 4, 3, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,
+        4, 0, 4, 1, 4, 4, 4, 2, 4, 4, 4, 4, 4, 4, 4, 4,
+        4, 4, 4, 4, 3, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,
+        4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,
+        4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,
+        4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,
+        4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,
+        4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,
+        4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,
+        4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,
+        4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4};
 
-  int8_t smatch = 2;      // Match score default
-  int8_t smismatch = 4;   // Mismatch score default
-  int8_t gapo = 4;        // Gap open penalty
-  int8_t gapo2 = 13;      // Gap open penalty
-  int8_t gape = 2;        // Gap extension penalty
-  int8_t gape2 = 1;       // Gap extension penalty
-  int end_bonus = 400;    // Bonus to add at the extension score to declare the alignment
-  
-  int w = -1;             // Band width
-  int zdrop = -1;
+    const int8_t smatch = 2;      // Match score default
+    const int8_t smismatch = 4;   // Mismatch score default
+    const int8_t gapo = 4;        // Gap open penalty
+    const int8_t gapo2 = 13;      // Gap open penalty
+    const int8_t gape = 2;        // Gap extension penalty
+    const int8_t gape2 = 1;       // Gap extension penalty
+    const int end_bonus = 400;    // Bonus to add at the extension score to declare the alignment
+    
+    const int w = -1;             // Band width
+    const int zdrop = -1;
 
-	void *km = 0;           // Kalloc
+    void *km = 0;           // Kalloc
 
-  // int8_t max_rseq = 0;
+    // int8_t max_rseq = 0;
 
-  int m = 5;
-  int8_t mat[25];
-  // int minsc = 0, xtra = KSW_XSTART;
-  // uint8_t *rseq = 0;
+    const int m = 5;
+    int8_t mat[25];
+    // int minsc = 0, xtra = KSW_XSTART;
+    // uint8_t *rseq = 0;
 
-  bool forward_only;
+    bool forward_only;
 
 
-//   // From https://github.com/BenLangmead/bowtie2/blob/4512b199768e562e8627ffdfd9253affc96f6fc6/unique.cpp
-//   // There is no valid second-best alignment and the best alignment has a
-//   // perfect score.
-//   const uint32_t unp_nosec_perf = 44;
+    //   // From https://github.com/BenLangmead/bowtie2/blob/4512b199768e562e8627ffdfd9253affc96f6fc6/unique.cpp
+    //   // There is no valid second-best alignment and the best alignment has a
+    //   // perfect score.
+    //   const uint32_t unp_nosec_perf = 44;
 
-//   // There is no valid second-best alignment.  We stratify the alignment
-//   // score of the best alignment into 10 bins.
-//   const uint32_t unp_nosec[11] = {
-//     43, 42, 41, 36, 32, 27, 20, 11, 4, 1, 0
-//   };
+    //   // There is no valid second-best alignment.  We stratify the alignment
+    //   // score of the best alignment into 10 bins.
+    //   const uint32_t unp_nosec[11] = {
+    //     43, 42, 41, 36, 32, 27, 20, 11, 4, 1, 0
+    //   };
 
-//   // The best alignment has a perfect score, and we stratify the distance
-//   // between best and second-best alignment scores into 10 bins.
-//   const uint32_t unp_sec_perf[11] = {
-//     2, 16, 23, 30, 31, 32, 34, 36, 38, 40, 42
-//   };
+    //   // The best alignment has a perfect score, and we stratify the distance
+    //   // between best and second-best alignment scores into 10 bins.
+    //   const uint32_t unp_sec_perf[11] = {
+    //     2, 16, 23, 30, 31, 32, 34, 36, 38, 40, 42
+    //   };
 
-//   // The best alignment has a non-perfect score, and we stratify both by best
-//   // alignment score (specifically, the maximum score minus the best "best")
-//   // and by the distance between the best and second-best alignment scores
-//   // ("difference").  Each is stratified into 10 bins.  Each row is a
-//   // difference (smaller elts = smaller differences) and each column is a
-//   // best score (smaller elts = higher best alignment scores).
-//   const uint32_t unp_sec[11][11] = {
-//     {  2,  2,  2,  1,  1, 0, 0, 0, 0, 0, 0},
-//     { 20, 14,  7,  3,  2, 1, 0, 0, 0, 0, 0},
-//     { 20, 16, 10,  6,  3, 1, 0, 0, 0, 0, 0},
-//     { 20, 17, 13,  9,  3, 1, 1, 0, 0, 0, 0},
-//     { 21, 19, 15,  9,  5, 2, 2, 0, 0, 0, 0},
-//     { 22, 21, 16, 11, 10, 5, 0, 0, 0, 0, 0},
-//     { 23, 22, 19, 16, 11, 0, 0, 0, 0, 0, 0},
-//     { 24, 25, 21, 30,  0, 0, 0, 0, 0, 0, 0},
-//     { 30, 26, 29,  0,  0, 0, 0, 0, 0, 0, 0},
-//     { 30, 27,  0,  0,  0, 0, 0, 0, 0, 0, 0},
-//     { 30,  0,  0,  0,  0, 0, 0, 0, 0, 0, 0},
-//   };
+    //   // The best alignment has a non-perfect score, and we stratify both by best
+    //   // alignment score (specifically, the maximum score minus the best "best")
+    //   // and by the distance between the best and second-best alignment scores
+    //   // ("difference").  Each is stratified into 10 bins.  Each row is a
+    //   // difference (smaller elts = smaller differences) and each column is a
+    //   // best score (smaller elts = higher best alignment scores).
+    //   const uint32_t unp_sec[11][11] = {
+    //     {  2,  2,  2,  1,  1, 0, 0, 0, 0, 0, 0},
+    //     { 20, 14,  7,  3,  2, 1, 0, 0, 0, 0, 0},
+    //     { 20, 16, 10,  6,  3, 1, 0, 0, 0, 0, 0},
+    //     { 20, 17, 13,  9,  3, 1, 1, 0, 0, 0, 0},
+    //     { 21, 19, 15,  9,  5, 2, 2, 0, 0, 0, 0},
+    //     { 22, 21, 16, 11, 10, 5, 0, 0, 0, 0, 0},
+    //     { 23, 22, 19, 16, 11, 0, 0, 0, 0, 0, 0},
+    //     { 24, 25, 21, 30,  0, 0, 0, 0, 0, 0, 0},
+    //     { 30, 26, 29,  0,  0, 0, 0, 0, 0, 0, 0},
+    //     { 30, 27,  0,  0,  0, 0, 0, 0, 0, 0, 0},
+    //     { 30,  0,  0,  0,  0, 0, 0, 0, 0, 0, 0},
+    //   };
 
-//   //
-//   // Paired mapping quality:
-//   //
+    //   //
+    //   // Paired mapping quality:
+    //   //
 
-//   // There is no valid second-best alignment and the best alignment has a
-//   // perfect score.
-//   const uint32_t pair_nosec_perf = 44;
+    //   // There is no valid second-best alignment and the best alignment has a
+    //   // perfect score.
+    //   const uint32_t pair_nosec_perf = 44;
 };
 
 #endif /* end of include guard: _ALIGNER_KSW2_HH */
