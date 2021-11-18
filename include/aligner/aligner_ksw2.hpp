@@ -41,6 +41,7 @@
 #include <PlainSlp.hpp>
 #include <FixedBitLenCode.hpp>
 
+#include <ksw.h>
 #include <ksw2.h>
 
 #include <libgen.h>
@@ -877,11 +878,27 @@ public:
 
   } alignment_t;
 
-  typedef struct{
+  typedef struct orphan_paired_score_t{
+    int32_t tot = 0;
+    int32_t m1 = 0;
+    int32_t m2 = 0; 
+    std::pair<size_t,size_t> pos = std::make_pair(0,0); // Position of the mate
+  } orphan_paired_score_t;
+
+  typedef struct paired_score_t{
     int32_t tot = 0;
     int32_t m1 = 0;
     int32_t m2 = 0; 
     bool paired = false;
+
+
+    paired_score_t& operator=(orphan_paired_score_t const& copy)
+    {
+      tot = copy.tot;
+      m1 = copy.m1;
+      m2 = copy.m2;
+      return *this;
+    }
   } paired_score_t;
 
   typedef struct paired_alignment_t{
@@ -898,16 +915,22 @@ public:
     sam_t sam_m1;
     sam_t sam_m2;
 
+    // TODO: precompute the nt4 version of the mates
+
+    const size_t min_score;
     paired_score_t score;
     int32_t score2 = 0;
 
     std::vector<mem_t> mems;
+    std::vector<std::pair<size_t, size_t>> anchors;
+    std::vector<chain_t> chains;
 
     paired_alignment_t(kseq_t *mate1_, kseq_t *mate2_):
       mate1(mate1_),
       mate2(mate2_),
       sam_m1(mate1),
-      sam_m2(mate2)
+      sam_m2(mate2),
+      min_score(20 + 8 * log(mate1->seq.l))
     {
         rc_copy_kseq_t(&mate1_rev, mate1);
         rc_copy_kseq_t(&mate2_rev, mate2);
@@ -929,6 +952,7 @@ public:
       sam_m1.flag = sam_m2.flag = SAM_PAIRED | SAM_UNMAPPED | SAM_MATE_UNMAPPED;
     }
 
+
   } paired_alignment_t;
 
   // Aligning pair-ended batched sequences
@@ -939,6 +963,12 @@ public:
     std::vector<paired_alignment_t> alignments;
     std::vector<double> mate_abs_distance;
 
+    // Computing Mean and Variance using Welford's algorithm
+    size_t count = 0;   // Number of samples
+    double mean = 0.0;  // Accumulates the mean
+    double m2 = 0.0;    // Accumulates the squared distance from the mean
+
+
     int l = batch->mate1->l;
     for (size_t i = 0; i < l; ++i)
     {
@@ -946,31 +976,37 @@ public:
       if(align(alignment))
       {
         // Get stats
-        mate_abs_distance.push_back((double)(alignment.sam_m1.tlen >= 0?alignment.sam_m1.tlen :-alignment.sam_m1.tlen));
+        // mate_abs_distance.push_back((double)(alignment.sam_m1.tlen >= 0?alignment.sam_m1.tlen :-alignment.sam_m1.tlen));
+        double value = (double)(alignment.sam_m1.tlen >= 0?alignment.sam_m1.tlen :-alignment.sam_m1.tlen);
+        double delta = value - mean;
+        mean += delta / (++count);
+        m2 += delta * (value - mean);
       }
       // Store the alignment informations
       alignments.push_back(alignment);
     }
 
     // Computes stats
-    double variance = 0.0;
-    double mean = mate_abs_distance[0];
-    for(size_t i = 0 ; i < l; ++i )
-    {
-      mean += mate_abs_distance[i];
-      double diff = ((i+1) * mate_abs_distance[i] ) - mean;
-      variance += (diff * diff) / ((i + 1.0 ) * i);
-    }
+    double variance = m2/count;
+    double sampleVariance = m2/(count-1);
+    // double variance = 0.0;
+    // double mean = mate_abs_distance[0];
+    // for(size_t i = 0 ; i < l; ++i )
+    // {
+    //   mean += mate_abs_distance[i];
+    //   double diff = ((i+1) * mate_abs_distance[i] ) - mean;
+    //   variance += (diff * diff) / ((i + 1.0 ) * i);
+    // }
 
-    variance /= (double)(l-1);
-    mean /= (double)l;
+    // variance /= (double)(l-1);
+    // mean /= (double)l;
     double std_dev = sqrt(variance);
 
     // Perform local serach for unaligned mates.
     for(auto alignment : alignments)
     {
-      if(not alignment.aligned)
-        local_search(alignment, mean, std_dev);
+      if(not alignment.aligned and alignment.chained)
+        orphan_recovery(alignment, mean, std_dev);
       // Write alignment to file
       alignment.write(out);
       if(alignment.aligned) ++n_aligned;
@@ -1003,11 +1039,8 @@ public:
     MTIME_END(0); //Timing helper
     MTIME_START(1); //Timing helper
 
-    std::vector<std::pair<size_t, size_t>> anchors;
-    std::vector<chain_t> chains;
-
     // Chain MEMs
-    al.chained = find_chains(al.mems, anchors, chains);
+    al.chained = find_chains(al.mems, al.anchors, al.chains);
 
     MTIME_END(1);   //Timing helper
     MTIME_START(2); //Timing helper
@@ -1023,28 +1056,28 @@ public:
     // get the occurrences of the top 4 best scores
     std::set<size_t> different_scores;
     size_t i = 0;
-    while (i < chains.size() and different_scores.size() < 3)
+    while (i < al.chains.size() and different_scores.size() < 3)
     {
-        different_scores.insert(chains[i].score);
+        different_scores.insert(al.chains[i].score);
         if (different_scores.size() < 3)
         {
           // Align the chain
-          auto chain = chains[i];
+          auto chain = al.chains[i];
           // Reverse the chain order
           std::reverse(chain.anchors.begin(), chain.anchors.end());
           // Compute the score of a chain.
           paired_score_t score;
           if( (chain.mate == 0) || ((chain.mate & MATE_RC) and (chain.mate & MATE_2)) )
-            score = paired_chain_score(chain, anchors, al.mems, min_score, al.mate1, &al.mate2_rev);
+            score = paired_chain_score(chain, al.anchors, al.mems, min_score, al.mate1, &al.mate2_rev);
           else
-            score = paired_chain_score(chain, anchors, al.mems, min_score, &al.mate1_rev, al.mate2);
+            score = paired_chain_score(chain, al.anchors, al.mems, min_score, &al.mate1_rev, al.mate2);
           
           best_scores.push_back(std::make_pair(score.tot, i++));
         }
     }
     
     if (best_scores.size() < 2)
-      best_scores.push_back(std::make_pair(0, chains.size()));
+      best_scores.push_back(std::make_pair(0, al.chains.size()));
 
     std::sort(best_scores.begin(), best_scores.end(), std::greater<std::pair<int32_t, size_t>>());
 
@@ -1061,14 +1094,14 @@ public:
     { // Forward case
       i = best_scores[0].second;
       // Align the chain
-      auto chain = chains[i];
+      auto chain = al.chains[i];
       // Reverse the chain order
       std::reverse(chain.anchors.begin(), chain.anchors.end());
       // Compute the score of a chain.
       if( (chain.mate == 0) || ((chain.mate & MATE_RC) and (chain.mate & MATE_2)) )
-        al.score = paired_chain_score(chain, anchors, al.mems, min_score, al.mate1, &al.mate2_rev, false, al.score2, 0, nullptr);
+        al.score = paired_chain_score(chain, al.anchors, al.mems, min_score, al.mate1, &al.mate2_rev, false, al.score2, 0, &al.sam_m1, &al.sam_m2);
       else
-        al.score = paired_chain_score(chain, anchors, al.mems, min_score, &al.mate1_rev, al.mate2, false, al.score2, 1, nullptr);
+        al.score = paired_chain_score(chain, al.anchors, al.mems, min_score, &al.mate1_rev, al.mate2, false, al.score2, 1, &al.sam_m1, &al.sam_m2);
     }
 
     al.aligned = (al.score.tot >= min_score);
@@ -1082,9 +1115,74 @@ public:
     return al.aligned;
   }
 
-  void local_search(paired_alignment_t& alignment, const double mean, const double std_dev)
+  bool orphan_recovery(
+    paired_alignment_t& alignment, 
+    const double mean, 
+    const double std_dev)
   {
+    // We need to use the local alignment of ksw to perform local search
+    
+    // For all good chaining of both mates of length at least min_length, find the possible distance of the mate
+    // and 
 
+    // Compute the second best score
+    std::vector<std::pair<std::pair<int32_t, std::pair<size_t,size_t> >, size_t>> best_scores;
+    size_t i = 0;
+    while (i < alignment.chains.size())
+    {
+      // Align the chain
+      auto chain = alignment.chains[i];
+      // Reverse the chain order
+      std::reverse(chain.anchors.begin(), chain.anchors.end());
+      // Compute the score of a chain.
+      orphan_paired_score_t score;
+      if( (chain.mate == 0) || ((chain.mate & MATE_RC) and (chain.mate & MATE_2)) )
+        score = paired_chain_orphan_score(chain, alignment.anchors, alignment.mems, alignment.min_score, alignment.mate1, &alignment.mate2_rev, mean, std_dev);
+      else
+        score = paired_chain_orphan_score(chain, alignment.anchors, alignment.mems, alignment.min_score, &alignment.mate1_rev, alignment.mate2, mean, std_dev);
+      
+      best_scores.push_back(std::make_pair(std::make_pair(score.tot,score.pos), i++));
+    }
+
+    orphan_paired_score_t zero;
+    if (best_scores.size() < 2)
+      best_scores.push_back(std::make_pair(std::make_pair(0,std::make_pair(0,0)), alignment.chains.size()));
+
+    std::sort(best_scores.begin(), best_scores.end(), std::greater<std::pair<std::pair<int32_t, std::pair<size_t,size_t> >, size_t>>());
+
+    assert(best_scores.size() > 1);
+
+    if (best_scores[0].first.first < alignment.min_score)
+      return false;
+    alignment.best_score = true;
+
+    alignment.score2 = best_scores[1].first.first;
+
+
+    { // Forward case
+      i = best_scores[0].second;
+      ll start = best_scores[0].first.second.first;
+      ll end = best_scores[0].first.second.second;
+      // Align the chain
+      auto chain = alignment.chains[i];
+      // Reverse the chain order
+      std::reverse(chain.anchors.begin(), chain.anchors.end());
+      // Compute the score of a chain.
+      if( (chain.mate == 0) || ((chain.mate & MATE_RC) and (chain.mate & MATE_2)) )
+        alignment.score = paired_chain_orphan_score(chain, alignment.anchors, alignment.mems, alignment.min_score, alignment.mate1, &alignment.mate2_rev, mean, std_dev, false, alignment.score2, 0, start, end,  &alignment.sam_m1, &alignment.sam_m2);
+      else
+        alignment.score = paired_chain_orphan_score(chain, alignment.anchors, alignment.mems, alignment.min_score, &alignment.mate1_rev, alignment.mate2, mean, std_dev, false, alignment.score2, 1, start, end, &alignment.sam_m1, &alignment.sam_m2);
+    }
+
+    alignment.aligned = (alignment.score.tot >= alignment.min_score);
+
+    if (not alignment.aligned)
+      return false;
+    
+
+    MTIME_END(2); //Timing helper
+
+    return alignment.aligned;
   }
 
   void find_mems(
@@ -1212,7 +1310,8 @@ public:
       const bool score_only = true,
       const int32_t score2 = 0,
       const uint8_t strand = 0,
-      FILE *out = nullptr)
+      sam_t *sam_m1_ = nullptr,
+      sam_t *sam_m2_ = nullptr)
   {
     paired_score_t score;
     if(chain.paired){
@@ -1238,8 +1337,8 @@ public:
       }
       else
       {
-        sam_t sam_m1(mate1);
-        sam_t sam_m2(mate2);
+        sam_t& sam_m1 = *sam_m1_;
+        sam_t& sam_m2 = *sam_m2_;
 
 
         score.m1 = chain_score(mate1_chain, anchors, mems, min_score, mate1, false, score2, strand, nullptr, &sam_m1);
@@ -1312,6 +1411,223 @@ public:
 
     score.tot = score.m1 + score.m2;
     return score;
+  }
+
+
+
+orphan_paired_score_t paired_chain_orphan_score(
+      const chain_t &chain,
+      const std::vector<std::pair<size_t, size_t>> &anchors,
+      const std::vector<mem_t> &mems,
+      const int32_t min_score,
+      const kseq_t *mate1,
+      const kseq_t *mate2,
+      const double mean,
+      const double std_dev,
+      const bool score_only = true,
+      const int32_t score2 = 0,
+      const uint8_t strand = 0,
+      long long int start = 0,  // Start position of the reference
+      long long int end = 0,    //End position of the reference
+      sam_t *sam_m1_ = nullptr,
+      sam_t *sam_m2_ = nullptr)
+  {
+    orphan_paired_score_t score;
+
+    // Extract the anchors
+    std::pair<ll, std::vector<size_t>> mate1_chain;
+    std::pair<ll, std::vector<size_t>> mate2_chain;
+    size_t lm_pos = -1; // Leftmost position
+    size_t rm_pos = 0;  // Rightmost position
+    bool forward = true;
+    for(size_t i = 0; i < chain.anchors.size(); ++i)
+    {
+      size_t anchor_id = chain.anchors[i];
+      auto& mem = mems[anchors[anchor_id].first];
+      maxl(rm_pos, mem.occs[anchors[anchor_id].second] + mem.len);
+      minl(lm_pos, mem.occs[anchors[anchor_id].second]);
+      if ((mem.mate & MATE_2) == 0)
+        mate1_chain.second.push_back(anchor_id);
+      else
+        mate2_chain.second.push_back(anchor_id);
+    }
+
+    if(score_only)
+    {
+      if(mate1_chain.second.size() > 0)
+      {
+        // Chain 
+        score.m1 = chain_score(mate1_chain, anchors, mems, min_score, mate1);
+        // Perform local search
+        // TODO: Check whether we do not cross one boundary
+        start = rm_pos + (ll)std::floor(mean - 4*std_dev);
+        end = rm_pos + (ll)std::ceil(mean + 4*std_dev);
+        maxl(start,(ll)0);
+        minl(end,(ll)n);
+
+        score.m2 = fill_orphan(start,end,mate2);  
+        score.pos = std::pair(start,end);
+
+      }else
+      {
+        score.m2 = chain_score(mate2_chain, anchors, mems, min_score, mate2);
+        // Perform local search
+        // TODO: Check whether we do not cross one boundary
+        start = lm_pos + (ll)std::floor(-mean - 4*std_dev);
+        end = lm_pos + (ll)std::ceil(-mean + 4*std_dev);
+        maxl(start,(ll)0);
+        minl(end,(ll)n);
+
+        score.m1 = fill_orphan(start,end,mate1);  
+        score.pos = std::pair(start,end);
+      }
+    }
+    else
+    {
+      sam_t& sam_m1 = *sam_m1_;
+      sam_t& sam_m2 = *sam_m2_;
+
+      if(mate1_chain.second.size() > 0)
+      {
+        score.m1 = chain_score(mate1_chain, anchors, mems, min_score, mate1, false, score2, strand, nullptr, &sam_m1);
+        score.m2 = fill_orphan(start,end,mate2,false,&sam_m2);
+      }
+      else
+      {
+        score.m1 = fill_orphan(start,end,mate1,false,&sam_m1);
+        score.m2 = chain_score(mate2_chain, anchors, mems, min_score, mate2, false, score2, strand, nullptr, &sam_m2);
+      }
+
+      // Fill sam fields RNEXT, PNEXT and TLEN
+      sam_m1.rnext = std::string(mate2->name.s);
+      sam_m2.rnext = std::string(mate1->name.s);
+
+      if(score.m1 >= min_score and score.m2 >= min_score)
+      {
+
+        sam_m1.pnext = sam_m2.pos;
+        sam_m2.pnext = sam_m1.pos;
+
+        ll tlen = (sam_m2.pos + mate2->seq.l) - sam_m1.pos;
+
+        sam_m1.tlen = tlen;
+        sam_m2.tlen = -tlen;
+
+        sam_m1.rname = idx[sam_m1.pos - 1];
+        sam_m2.rname = idx[sam_m2.pos - 1];
+
+        sam_m1.flag = sam_m2.flag = SAM_PAIRED | SAM_MAPPED_PAIRED;
+        if(strand)
+        {
+          sam_m1.flag |= SAM_REVERSED | SAM_FIRST_IN_PAIR;
+          sam_m2.flag |= SAM_MATE_REVERSED | SAM_SECOND_IN_PAIR;
+        }
+        else
+        {
+          sam_m1.flag |= SAM_MATE_REVERSED | SAM_FIRST_IN_PAIR;
+          sam_m2.flag |= SAM_REVERSED | SAM_SECOND_IN_PAIR;
+        }
+      }else if(score.m1 >= min_score) {
+        sam_m1.rname = idx[sam_m1.pos - 1];
+
+        sam_m1.flag = SAM_PAIRED | SAM_MATE_UNMAPPED | SAM_FIRST_IN_PAIR;
+        sam_m2.flag = SAM_PAIRED | SAM_UNMAPPED | SAM_SECOND_IN_PAIR;
+        if(strand)
+          sam_m1.flag |= SAM_REVERSED;
+      }else if(score.m2 >= min_score) {
+        sam_m2.rname = idx[sam_m2.pos - 1];
+
+        sam_m1.flag = SAM_PAIRED | SAM_UNMAPPED | SAM_FIRST_IN_PAIR;
+        sam_m2.flag = SAM_PAIRED | SAM_MATE_UNMAPPED | SAM_SECOND_IN_PAIR;
+        if(not strand)
+          sam_m2.flag |= SAM_REVERSED;
+      }else {
+        sam_m1.flag = sam_m2.flag = SAM_PAIRED | SAM_UNMAPPED | SAM_MATE_UNMAPPED;
+      }
+    }
+
+
+    score.tot = score.m1 + score.m2;
+    return score;
+  }
+
+  // If score_only is true we compute the score of the alignment. 
+  // If score_only is false, we extend again the read and we write the result
+  // in the SAM file, so we need to give the second best score. 
+  // Return the start and end of the alignment found.
+  int32_t fill_orphan(
+    long long int& start, // Start position of the reference
+    long long int& end, //End position of the reference
+    const kseq_t *paired_mate, // The read that has been aligned
+    const bool score_only = true, // Report only the score
+    sam_t* sam = nullptr,     // The SAM information pointer
+    bool realign = false   // Realign globally the read
+  )
+  {
+    int32_t score = 0;
+    // Extract reference
+    size_t ref_occ = start;
+    size_t ref_len = end - start + 1;
+    char *ref = (char *)malloc(ref_len);
+    ra.expandSubstr(ref_occ, ref_len, ref);
+    // Convert A,C,G,T,N into 0,1,2,3,4
+    for (size_t i = 0; i < ref_len; ++i)
+      ref[i] = seq_nt4_table[(int)ref[i]];
+    
+    // Convert paired_mate in nt4 format
+    size_t seq_len = paired_mate->seq.l;
+    uint8_t *seq = (uint8_t *)malloc(paired_mate->seq.l);
+    // Convert A,C,G,T,N into 0,1,2,3,4
+    for (size_t i = 0; i < (int)paired_mate->seq.l; ++i)
+        seq[i] = seq_nt4_table[(int)paired_mate->seq.s[i]];
+
+    if(score_only or realign)
+    {
+      kswq_t *q = 0;
+      kswr_t r;
+      const int xtra = KSW_XSTART;
+
+      r = ksw_align(seq_len, (uint8_t *)seq, ref_len, (uint8_t *)ref, 5, mat, gapo, gape, xtra, &q);
+
+      // Update start and end
+      end = start + r.te;
+      start += r.tb;
+      score= r.score;
+    }
+
+    if(not score_only)
+    {
+        // Realign the whole sequence globally
+        int flag = KSW_EZ_RIGHT;
+
+        ksw_extz_t ez;
+        memset(&ez, 0, sizeof(ksw_extz_t));
+
+        char* tmp = (char*)calloc(max(ref_len,seq_len),1);
+
+        ksw_reset_extz(&ez);
+        ksw_extd2_sse(km, seq_len, (uint8_t *)seq, ref_len, (uint8_t*)ref, m, mat, gapo, gape, gapo2, gape2, w, zdrop, end_bonus, flag, &ez);
+
+        // Concatenate the CIGAR strings
+        
+        // std::string cigar_s;
+        sam->cigar = "";
+        for(size_t i = 0; i < ez.n_cigar; ++i)
+          sam->cigar += std::to_string(ez.cigar[i] >> 4) + "MID"[ez.cigar[i] & 0xf];
+
+        // Compute the MD:Z field and the number of mismatches
+        sam->nm = write_MD_core((uint8_t*)ref,seq,ez.cigar,ez.n_cigar,tmp,0,sam->md);
+
+        sam->as = ez.score;
+        sam->pos = ref_occ + 1; // ref_occ is 1 based
+        sam->rname = idx[ref_occ];
+        sam->rlen = ref_len;
+
+        score = ez.score;
+        delete tmp;
+    }
+
+    return score;  
   }
 
   size_t get_aligned_reads()

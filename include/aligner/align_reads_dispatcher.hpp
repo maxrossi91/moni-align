@@ -245,13 +245,15 @@ void *mt_align_worker(void *param)
     int l = 0;
     while ((l = mt_kpbseq_read(b, mate1, mate2, b_size)) > 0)
     {
-      for (size_t i = 0; i < l; ++i)
-      {
-        if (p->aligner->align(&b->mate1->buf[i], &b->mate2->buf[i],sam_fd))
-          n_aligned_reads++;
-        n_reads++;
-      }
+      // for (size_t i = 0; i < l; ++i)
+      // {
+      //   if (p->aligner->align(&b->mate1->buf[i], &b->mate2->buf[i],sam_fd))
+      //     n_aligned_reads++;
+      //   n_reads++;
+      // }
       // std::cout << "Block p " << p->wk_id << " end!" << std::endl;
+      n_aligned_reads+=p->aligner->align(b,sam_fd);
+      n_reads += l;
     }
     kpbseq_destroy(b);
   }
@@ -404,13 +406,15 @@ size_t st_align(aligner_t *aligner, std::string pattern_filename, std::string sa
     int l = 0;
     while ((l = kpbseq_read(b, mate1, mate2, b_size)) > 0)
     {
-      for (size_t i = 0; i < l; ++i)
-      {
-        if (aligner->align(&b->mate1->buf[i], &b->mate2->buf[i], sam_fd))
-          n_aligned_reads++;
-        n_reads++;
-      }
+      // for (size_t i = 0; i < l; ++i)
+      // {
+      //   if (aligner->align(&b->mate1->buf[i], &b->mate2->buf[i], sam_fd))
+      //     n_aligned_reads++;
+      //   n_reads++;
+      // }
       // std::cout << "Block p " << p->wk_id << " end!" << std::endl;
+      n_aligned_reads += aligner->align(b,sam_fd);
+      n_reads += l;
     }
     kpbseq_destroy(b);
   }

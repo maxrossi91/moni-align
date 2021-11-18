@@ -21,8 +21,8 @@ target_include_directories(rlebwt_ms_full_build PUBLIC    "../../include/ms"
 target_compile_options(rlebwt_ms_full_build PUBLIC "-std=c++17")
 
 
-add_executable(align_full_ksw2 align_full_ksw2.cpp ${bigbwt_SOURCE_DIR}/xerrors.c)
-target_link_libraries(align_full_ksw2 common sdsl malloc_count divsufsort divsufsort64 ri ksw2 pthread)
+add_executable(align_full_ksw2 align_full_ksw2.cpp ${bigbwt_SOURCE_DIR}/xerrors.c ${klib_SOURCE_DIR}/ksw.c )
+target_link_libraries(align_full_ksw2 common sdsl malloc_count divsufsort divsufsort64 ri ksw2 klib pthread)
 target_include_directories(align_full_ksw2 PUBLIC    "../../include/ms" 
                                             "../../include/common" 
                                             "../../include/aligner" 
@@ -31,6 +31,7 @@ target_include_directories(align_full_ksw2 PUBLIC    "../../include/ms"
                                             "${SUX_SOURCE_DIR}/function" 
                                             "${SUX_SOURCE_DIR}/support"
                                             "${ksw2_SOURCE_DIR}"
+                                            "${klib_SOURCE_DIR}"
                                             "${bigbwt_SOURCE_DIR}"
                                         )
 target_compile_options(align_full_ksw2 PUBLIC "-std=c++17")

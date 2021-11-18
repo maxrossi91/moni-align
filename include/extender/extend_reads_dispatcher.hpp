@@ -211,22 +211,22 @@ std::vector<size_t> split_fastq(std::string filename, size_t n_threads)
     return starts;
 }
 
-inline char complement(const char n)
-{
-    switch (n)
-    {
-    case 'A':
-        return 'T';
-    case 'T':
-        return 'A';
-    case 'G':
-        return 'C';
-    case 'C':
-        return 'G';
-    default:
-        return n;
-    }
-}
+// inline char complement(const char n)
+// {
+//     switch (n)
+//     {
+//     case 'A':
+//         return 'T';
+//     case 'T':
+//         return 'A';
+//     case 'G':
+//         return 'C';
+//     case 'C':
+//         return 'G';
+//     default:
+//         return n;
+//     }
+// }
 
 ////////////////////////////////////////////////////////////////////////////////
 
