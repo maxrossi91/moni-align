@@ -74,6 +74,35 @@ typedef struct sam_t{
 
 } sam_t;
 
+// /**
+//  * @brief Convert the read name accordingly with SAM specifications.
+//  * 
+//  * @param s The read name
+//  * @param remove_slash_mate if true remove the trailing \ mate in the read name. 
+//  * @return std::string the converted name.
+//  */
+// inline std::string sam_read_name(const char* s, const bool remove_slash_mate = true)
+// {
+//   // TODO: Add all extra checks for printing the name.
+//   std::string out(s);
+//   if(remove_slash_mate && )
+// }
+
+/**
+ * @brief Remove the trailing / mate in the read name.
+ * 
+ * @param s The read.
+ */
+inline void remove_slash_mate(kseq_t* read)
+{
+  size_t& len = read->name.l;
+  if( len >= 2 and read->name.s[len-2] == '/' and 
+      (read->name.s[len-1] == '1' or read->name.s[len-1] == '2'))
+  {
+    read->name.s[len-2] = 0;//read->name.s[len];
+    read->name.l -= 2;
+  }
+}
 
 inline void write_sam(FILE *out, const sam_t s)
 {

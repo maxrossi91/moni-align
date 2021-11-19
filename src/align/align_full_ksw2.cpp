@@ -3234,7 +3234,7 @@ struct Args
   std::string mate1 = "";    // path to file with #1 mates paired with mate2.
   std::string mate2 = "";    // path to file with #2 mates paired with mate1.
   std::string output   = ""; // output file prefix
-  size_t b = 100;       // size of the batch of read to be processed
+  size_t b = 32768;       // size of the batch of read to be processed
   size_t l = 25; // minumum MEM length
   size_t th = 1; // number of threads
   bool is_fasta = false; // read a fasta file

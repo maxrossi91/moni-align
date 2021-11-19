@@ -364,7 +364,8 @@ public:
     // Find MEMs in the forward direction
     std::vector<mem_t> mems;
 
-    find_mems(read,mems);
+    // find_mems(read,mems);
+    find_seeds(read,mems);
 
     // for(size_t i = 0; i < mems.size(); ++i){
     //   std::cout << "MEM[" << i <<"]: \n";
@@ -395,7 +396,8 @@ public:
       read_rev.seq.s[read_rev.seq.l] = 0;
 
 
-    find_mems(&read_rev,mems_rev,1);
+    // find_mems(&read_rev,mems_rev,1);
+    find_seeds(&read_rev,mems_rev,1);
 
     // for (size_t i = 0; i < mems_rev.size(); ++i)
     // {
@@ -932,13 +934,26 @@ public:
       sam_m2(mate2),
       min_score(20 + 8 * log(mate1->seq.l))
     {
-        rc_copy_kseq_t(&mate1_rev, mate1);
-        rc_copy_kseq_t(&mate2_rev, mate2);
+      // TODO: Add parameter to decide whether the slash mate has to be removed
+      remove_slash_mate(mate1);
+      remove_slash_mate(mate2);
 
-        // Initialize SAM infos
-        // Fill sam fields RNEXT
+      rc_copy_kseq_t(&mate1_rev, mate1);
+      rc_copy_kseq_t(&mate2_rev, mate2);
+
+      // Initialize SAM infos
+      // Fill sam fields RNEXT
+      if(strcmp(mate1->name.s, mate2->name.s) == 0)
+      {
+        sam_m1.rnext = "=";
+        sam_m2.rnext = "=";
+      }
+      else
+      {
         sam_m1.rnext = std::string(mate2->name.s);
         sam_m2.rnext = std::string(mate1->name.s);
+      }
+
     }
 
     void write(FILE* out)
@@ -1031,10 +1046,14 @@ public:
     MTIME_START(0); // Timing helper
 
     // Find MEMs
-    find_mems(al.mate1, al.mems, 0, MATE_1 | MATE_F);
-    find_mems(&al.mate1_rev, al.mems, al.mate2->seq.l, MATE_1 | MATE_RC );
-    find_mems(al.mate2, al.mems, 0, MATE_2 | MATE_F);
-    find_mems(&al.mate2_rev, al.mems, al.mate1->seq.l, MATE_2 | MATE_RC);
+    find_seeds(al.mate1, al.mems, 0, MATE_1 | MATE_F);
+    find_seeds(&al.mate1_rev, al.mems, al.mate2->seq.l, MATE_1 | MATE_RC );
+    find_seeds(al.mate2, al.mems, 0, MATE_2 | MATE_F);
+    find_seeds(&al.mate2_rev, al.mems, al.mate1->seq.l, MATE_2 | MATE_RC);
+    // find_mems(al.mate1, al.mems, 0, MATE_1 | MATE_F);
+    // find_mems(&al.mate1_rev, al.mems, al.mate2->seq.l, MATE_1 | MATE_RC );
+    // find_mems(al.mate2, al.mems, 0, MATE_2 | MATE_F);
+    // find_mems(&al.mate2_rev, al.mems, al.mate1->seq.l, MATE_2 | MATE_RC);
 
     MTIME_END(0); //Timing helper
     MTIME_START(1); //Timing helper
@@ -1224,6 +1243,55 @@ public:
 
   }
 
+  void find_seeds(
+    const kseq_t *read,
+    std::vector<mem_t>& mems,
+    size_t r_offset = 0,
+    size_t mate = 0
+    ) 
+  {
+    auto pointers = ms.query(read->seq.s, read->seq.l);
+    size_t l = 0;   // Current match length
+    size_t pl = 0;  // Previous match length
+    size_t n_Ns = 0;
+    for (size_t i = 0; i < pointers.size(); ++i)
+    {
+      size_t pos = pointers[i];
+      while ((i + l) < read->seq.l && (pos + l) < n && read->seq.s[i + l] == ra.charAt(pos + l))
+      {
+        if(read->seq.s[i + l] == 'N') n_Ns++;
+        else n_Ns = 0;
+        ++l;
+      }
+
+      // Update MEMs
+      if (l >= pl and n_Ns < l and l >= min_len)
+      {
+        size_t r = r_offset + (i + l - 1); // compatible with minimap2 chaining algorithm
+        mems.push_back(mem_t(pointers[i],l,i,mate,r));
+        find_MEM_occs(mems.back());
+        // Take two halves of the MEM
+        if(l >= (min_len << 1))
+        {
+          size_t ll = l >> 1; 
+          size_t rl = r_offset + (i + ll - 1); // compatible with minimap2 chaining algorithm
+          mems.push_back(mem_t(pointers[i],ll,i,mate,rl));
+          find_MEM_occs(mems.back()); // TODO: Optimize this
+
+          size_t lr = l - ll;
+          size_t rr = r_offset + (i + l - 1); // compatible with minimap2 chaining algorithm
+          mems.push_back(mem_t(pointers[i + ll],lr,i + ll,mate,rr));
+          find_MEM_occs(mems.back()); // TODO: Optimize this
+        }
+      }
+
+      // Compute next match length
+      pl = l;
+      l = (l == 0 ? 0 : (l - 1));
+    }
+
+  }
+
   int32_t chain_score(
       const std::pair<size_t, std::vector<size_t>> &chain,
       const std::vector<std::pair<size_t, size_t>> &anchors,
@@ -1344,9 +1412,11 @@ public:
         score.m1 = chain_score(mate1_chain, anchors, mems, min_score, mate1, false, score2, strand, nullptr, &sam_m1);
         score.m2 = chain_score(mate2_chain, anchors, mems, min_score, mate2, false, score2, strand, nullptr, &sam_m2);
 
+        sam_m1.read = mate1;
+        sam_m2.read = mate2;
         // Fill sam fields RNEXT, PNEXT and TLEN
-        sam_m1.rnext = std::string(mate2->name.s);
-        sam_m2.rnext = std::string(mate1->name.s);
+        // sam_m1.rnext = std::string(mate2->name.s);
+        // sam_m2.rnext = std::string(mate1->name.s);
 
         if(score.m1 >= min_score and score.m2 >= min_score)
         {
@@ -1498,9 +1568,11 @@ orphan_paired_score_t paired_chain_orphan_score(
         score.m2 = chain_score(mate2_chain, anchors, mems, min_score, mate2, false, score2, strand, nullptr, &sam_m2);
       }
 
+      sam_m1.read = mate1;
+      sam_m2.read = mate2;
       // Fill sam fields RNEXT, PNEXT and TLEN
-      sam_m1.rnext = std::string(mate2->name.s);
-      sam_m2.rnext = std::string(mate1->name.s);
+      // sam_m1.rnext = std::string(mate2->name.s);
+      // sam_m2.rnext = std::string(mate1->name.s);
 
       if(score.m1 >= min_score and score.m2 >= min_score)
       {
