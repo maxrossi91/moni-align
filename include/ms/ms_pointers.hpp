@@ -386,7 +386,12 @@ protected:
             }
 
             ms_pointers[m - i - 1] = sample;
+            
+            // Perform one backward step
+            pos = LF(pos, c);
+        }
 
+        return ms_pointers;
     }
     // // From r-index
     // vector<ulint> build_F(std::ifstream &ifs)
