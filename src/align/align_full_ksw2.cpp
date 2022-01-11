@@ -27,8 +27,6 @@ extern "C" {
 #define VERBOSE
 #define MTIME
 
-#include <common.hpp>
-
 
 #include <sdsl/io.hpp>
 
@@ -36,6 +34,7 @@ extern "C" {
 #include <aligner_ksw2.hpp>
 #include <align_reads_dispatcher.hpp>
 
+#include <common.hpp>
 #include <malloc_count.h>
 
 // #include <SelfShapedSlp.hpp>

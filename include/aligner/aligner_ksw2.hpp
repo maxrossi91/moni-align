@@ -25,6 +25,7 @@
 #define MTIME
 
 #include <vector>
+#include <leviosam.hpp> // Included here to avoid conflicts with common.hpp
 #include <common.hpp>
 
 #include <sdsl/io.hpp>
@@ -46,8 +47,8 @@
 
 #include <libgen.h>
 #include <kpbseq.h>
+#include <liftidx.hpp>
 
-#include <seqidx.hpp>
 #include <slp_definitions.hpp>
 #include <chain.hpp>
 
@@ -2068,7 +2069,8 @@ orphan_paired_score_t paired_chain_orphan_score(
 protected:
     ms_t ms;
     slp_t ra;
-    seqidx idx;
+    liftidx idx;
+    // seqidx idx;
     // SelfShapedSlp<uint32_t, DagcSd, DagcSd, SelSd> ra;
 
     const size_t min_len = 0;

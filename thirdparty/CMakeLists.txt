@@ -320,17 +320,23 @@ FetchContent_Declare(
   endif()
   
 
-  # ## Add tlx
-  # FetchContent_Declare(
-  #   tlx
-  #   GIT_REPOSITORY https://github.com/tlx/tlx
-  #   GIT_TAG master
-  #   )
+  
+
+  ## Add leviosam
+  FetchContent_Declare(
+    leviosam
+    GIT_REPOSITORY https://github.com/maxrossi91/levioSAM.git
+    GIT_TAG master
+    )
     
-  # FetchContent_GetProperties(tlx)
-  # if(NOT tlx_POPULATED)
-  #   FetchContent_Populate(tlx)
-  #   add_subdirectory(${tlx_SOURCE_DIR} ${tlx_BINARY_DIR})
-  # endif()
+  FetchContent_GetProperties(leviosam)
+  if(NOT leviosam_POPULATED)
+    FetchContent_Populate(leviosam)
+    set(BUILD_TESTS OFF CACHE BOOL "Avoid building LevioSAM tests")
+
+    add_subdirectory(${leviosam_SOURCE_DIR} ${leviosam_BINARY_DIR} EXCLUDE_FROM_ALL)
+    target_include_directories(lvsam PUBLIC ${leviosam_SOURCE_DIR}/src ${CMAKE_INCLUDE_PATH})
+    target_link_libraries(lvsam ${HTS_LIB})
+  endif()
   
   

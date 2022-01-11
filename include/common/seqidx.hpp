@@ -80,9 +80,9 @@ public:
      */
     seqidx(const std::vector<size_t>& onset, const std::vector<std::string>& names_, const size_t l)
     {
-        assert(onset.size() == names_.size());
+        assert(onset.size() == names_.size() + 1);
         assert(onset[0] == 0);
-        assert(onset.back() < l);
+        assert(onset.back() <= l);
         assert(std::is_sorted(onset.begin(), onset.end()));
 
         u = l;
@@ -93,14 +93,23 @@ public:
         for (auto idx : onset)
             builder.set(idx);
         
-        builder.set(u);
-
         starts = sdsl::sd_vector<>(builder);
         rank1 = sdsl::sd_vector<>::rank_1_type(&starts);
         select1 = sdsl::sd_vector<>::select_1_type(&starts);
     }
 
-    
+    /**
+     * @brief Construct a new seqidx object via copy
+     * 
+     * @param other the other sequidx
+     */
+    seqidx(const seqidx &other):
+        names(other.names),
+        starts(other.starts)
+    {
+        rank1 = sdsl::sd_vector<>::rank_1_type(&starts);
+        select1 = sdsl::sd_vector<>::select_1_type(&starts);        
+    }
 
     /**
      * @brief Return the length of the i-th sequence
@@ -181,7 +190,7 @@ public:
         for(size_t i = 0; i < names.size(); ++i)
         {
             w_bytes += sdsl::serialize(names[i].size(), out);
-            w_bytes = my_serialize_array<char, std::string::size_type>(names[i].data(), names[i].size(), out);
+            w_bytes += my_serialize_array<char, std::string::size_type>(names[i].data(), names[i].size(), out);
         }
         return w_bytes;
     }
