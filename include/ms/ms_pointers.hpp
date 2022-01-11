@@ -340,55 +340,53 @@ protected:
         for (size_t i = 0; i < m; ++i)
         {
             auto c = pattern[m - i - 1];
-
-            if (this->bwt.number_of_letter(c) == 0)
+            const auto n_c = this->bwt.number_of_letter(c);
+            if (n_c == 0)
             {
                 sample = 0;
+                // Perform one backward step
+                pos = LF(pos, c);
             }
             else if (pos < this->bwt.size() && this->bwt[pos] == c)
             {
                 sample--;
+                // Perform one backward step
+                pos = LF(pos, c);
             }
             else
             {
                 // Get threshold
-                ri::ulint rnk = this->bwt.rank(pos, c);
+                ri::ulint run_of_pos = this->bwt.run_of_position(pos);
+                auto rnk_c = this->bwt.run_and_head_rank(run_of_pos, c);
+
                 size_t thr = this->bwt.size() + 1;
 
                 ulint next_pos = pos;
 
-                // if (rnk < (this->F[c] - this->F[c-1]) // I can use F to compute it
-                if (rnk < this->bwt.number_of_letter(c))
+                if( rnk_c.second < n_c)
                 {
-                    // j is the first position of the next run of c's
-                    ri::ulint j = this->bwt.select(rnk, c);
-                    ri::ulint run_of_j = this->bwt.run_of_position(j);
-
-                    thr = thresholds[run_of_j]; // If it is the first run thr = 0
-
-                    // Here we should use Phi_inv that is not implemented yet
-                    // sample = this->Phi(this->samples_last[run_of_j - 1]) - 1;
+                    size_t run_of_j = this->bwt.run_head_select(rnk_c.first + 1, c);
                     sample = samples_start[run_of_j];
-
-                    next_pos = j;
+                    thr = thresholds[run_of_j]; // If it is the first run thr = 0
+                    // Perform one backward step
+                    next_pos = this->F[c] + rnk_c.second;
                 }
 
                 if (pos < thr)
                 {
-
-                    rnk--;
-                    ri::ulint j = this->bwt.select(rnk, c);
-                    ri::ulint run_of_j = this->bwt.run_of_position(j);
+                    // Jump up
+                    size_t run_of_j = this->bwt.run_head_select(rnk_c.first, c);
                     sample = this->samples_last[run_of_j];
-
-                    next_pos = j;
+                    // Perform one backward step
+                    next_pos = this->F[c] + rnk_c.second - 1;
                 }
 
                 pos = next_pos;
+
             }
 
             ms_pointers[m - i - 1] = sample;
-
+            
             // Perform one backward step
             pos = LF(pos, c);
         }

@@ -5,6 +5,7 @@ FetchContent_GetProperties(ssw)
 FetchContent_GetProperties(ksw2)
 FetchContent_GetProperties(klib)
 FetchContent_GetProperties(bigbwt)
+FetchContent_GetProperties(leviosam)
 
 set(FOLCA_SOURCE_DIR ${shaped_slp_SOURCE_DIR}/folca)
 set(SUX_SOURCE_DIR ${shaped_slp_SOURCE_DIR}/external/sux/sux)
@@ -88,3 +89,18 @@ target_include_directories(thr_test PUBLIC    "../../include/ms"
                                             "${SUX_SOURCE_DIR}/support"
                                         )
 target_compile_options(thr_test PUBLIC "-std=c++17")
+
+add_executable(lifting_test lifting_test.cpp)
+target_link_libraries(lifting_test common sdsl divsufsort divsufsort64 malloc_count lvsam)
+target_include_directories(lifting_test PUBLIC
+                                            "../../include/common" 
+                                        )
+target_compile_options(lifting_test PUBLIC "-std=c++17")
+
+add_executable(liftidx_test liftidx_test.cpp)
+target_link_libraries(liftidx_test common sdsl divsufsort divsufsort64 malloc_count klib z lvsam)
+target_include_directories(liftidx_test PUBLIC
+                                            "../../include/common" 
+                                            "../../include/aligner" 
+                                        )
+target_compile_options(liftidx_test PUBLIC "-std=c++17")
