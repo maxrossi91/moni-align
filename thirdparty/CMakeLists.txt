@@ -1,4 +1,273 @@
+# Thirdparty libraries
 include(FetchContent)
+include(FetchContent_Install)
+
+# Log directory for external content builds
+make_directory(${CMAKE_CURRENT_BINARY_DIR}/logs)
+set(INSTALL_FILE  ${CMAKE_CURRENT_BINARY_DIR}/install.cmake)
+
+# Set environment
+
+list(APPEND CMAKE_LIBRARY_PATH "${CMAKE_CURRENT_BINARY_DIR}/lib ")
+list(APPEND CMAKE_INCLUDE_PATH "${CMAKE_CURRENT_BINARY_DIR}/include ")
+list(APPEND CMAKE_PREFIX_PATH  "${CMAKE_CURRENT_BINARY_DIR}")
+
+# External Project resources
+# ------------------------------------------------------------------------------
+
+# DIVSUFSORT
+find_library(DIVSUFSORT_LIB divsufsort HINTS ${CMAKE_CURRENT_BINARY_DIR}/lib PATHS ${CONDA_PREFIX}/lib)
+if(NOT DIVSUFSORT_LIB)
+    message(STATUS "divsufsort library not found. Building as an external content")
+else()
+    message(STATUS "divsufsort library found at ${DIVSUFSORT_LIB}.")
+endif()
+
+# DIVSUFSORT64
+find_library(DIVSUFSORT64_LIB divsufsort64 HINTS ${CMAKE_CURRENT_BINARY_DIR}/lib PATHS ${CONDA_PREFIX}/lib)
+if(NOT DIVSUFSORT64_LIB)
+    message(STATUS "divsufsort64 library not found. Building as an external content")
+else()
+    message(STATUS "divsufsort64 library found at ${DIVSUFSORT64_LIB}.")
+endif()
+
+# SDSL
+find_library(SDSL_LIB sdsl HINTS ${CMAKE_CURRENT_BINARY_DIR}/lib PATHS ${CONDA_PREFIX}/lib)
+find_path(SDSL_SRC sdsl HINTS ${CMAKE_CURRENT_BINARY_DIR}/include PATHS ${CONDA_PREFIX}/include)
+if(NOT SDSL_LIB)
+    message(STATUS "sdsl library not found. Building as an external content")
+    FetchContent_Declare(sdsl
+            GIT_REPOSITORY "https://github.com/simongog/sdsl-lite.git"
+            # GIT_TAG "v2.1.1"
+    )
+
+    if(NOT sdsl_POPULATED)
+        FetchContent_Populate(sdsl)
+        # Install in the current binary dir
+        execute_process(COMMAND ./install.sh ${CMAKE_CURRENT_BINARY_DIR}
+                RESULT_VARIABLE result
+                WORKING_DIRECTORY ${sdsl_SOURCE_DIR} 
+                OUTPUT_FILE ${CMAKE_CURRENT_BINARY_DIR}/logs/sdsl.log
+                ERROR_FILE ${CMAKE_CURRENT_BINARY_DIR}/logs/sdsl.log)
+        file(APPEND ${INSTALL_FILE} "MESSAGE(STATUS \"Installing sdsl.\")\n")
+        file(APPEND ${INSTALL_FILE} "execute_process(COMMAND ./install.sh \${CMAKE_INSTALL_PREFIX}
+                WORKING_DIRECTORY ${sdsl_SOURCE_DIR} 
+                OUTPUT_FILE ${CMAKE_CURRENT_BINARY_DIR}/logs/sdsl.log
+                ERROR_FILE ${CMAKE_CURRENT_BINARY_DIR}/logs/sdsl.log)\n")
+        if(result)
+            message(FATAL_ERROR "CMake step for sdsl-lite failed: ${result}")
+        endif()
+    endif()
+
+    set(SDSL_SRC ${CMAKE_CURRENT_BINARY_DIR}/include)
+    set(DIVSUFSORT_SRC ${CMAKE_CURRENT_BINARY_DIR}/include)
+    set(SDSL_LIB ${CMAKE_CURRENT_BINARY_DIR}/lib/libsdsl.a)
+    set(DIVSUFSORT_LIB ${CMAKE_CURRENT_BINARY_DIR}/lib/libdivsufsort.a)
+    set(DIVSUFSORT64_LIB ${CMAKE_CURRENT_BINARY_DIR}/lib/libdivsufsort64.a)
+
+else()
+    message(STATUS "sdsl library found at ${SDSL_LIB}.")
+    message(STATUS "sdsl sources found at ${SDSL_SRC}.")
+endif()
+
+add_library(sdsl STATIC IMPORTED GLOBAL)
+set_property(TARGET sdsl PROPERTY IMPORTED_LOCATION ${SDSL_LIB})
+target_include_directories(sdsl INTERFACE ${SDSL_SRC})
+
+add_library(divsufsort STATIC IMPORTED GLOBAL)
+set_property(TARGET divsufsort PROPERTY IMPORTED_LOCATION ${DIVSUFSORT_LIB})
+    
+add_library(divsufsort64 STATIC IMPORTED GLOBAL)
+set_property(TARGET divsufsort64 PROPERTY IMPORTED_LOCATION ${DIVSUFSORT64_LIB})
+
+# HTSLIB
+find_library(HTS_LIB hts)
+find_path(HTS_SRC htslib)
+if(NOT HTS_LIB)
+    message(STATUS "htslib library not found. Building as an external content.")
+    FetchContent_Declare(htslib
+            GIT_REPOSITORY "https://github.com/samtools/htslib"
+            GIT_TAG "1.14"
+    )
+
+    if(NOT htslib_POPULATED)
+        FetchContent_Populate(htslib)
+        # Install in the current binary dir
+        execute_process(COMMAND autoreconf -i
+                RESULT_VARIABLE result
+                WORKING_DIRECTORY ${htslib_SOURCE_DIR} 
+                OUTPUT_FILE ${CMAKE_CURRENT_BINARY_DIR}/logs/htslib-autoreconf.log
+                ERROR_FILE ${CMAKE_CURRENT_BINARY_DIR}/logs/htslib-autoreconf.log)
+                
+        file(APPEND ${INSTALL_FILE} "MESSAGE(STATUS \"Installing sdsl.\")\n")
+        file(APPEND ${INSTALL_FILE} "execute_process(COMMAND autoreconf -i
+                WORKING_DIRECTORY ${htslib_SOURCE_DIR} 
+                OUTPUT_FILE ${CMAKE_CURRENT_BINARY_DIR}/logs/htslib-autoreconf.log
+                ERROR_FILE ${CMAKE_CURRENT_BINARY_DIR}/logs/htslib-autoreconf.log)\n")
+        if(result)
+            message(FATAL_ERROR "CMake step for htslib failed: ${result}")
+        endif()
+
+        execute_process(COMMAND ./configure --prefix=${CMAKE_CURRENT_BINARY_DIR}
+                RESULT_VARIABLE result
+                WORKING_DIRECTORY ${htslib_SOURCE_DIR} 
+                OUTPUT_FILE ${CMAKE_CURRENT_BINARY_DIR}/logs/htslib-configure.log
+                ERROR_FILE ${CMAKE_CURRENT_BINARY_DIR}/logs/htslib-configure.log)
+        file(APPEND ${INSTALL_FILE} "execute_process(COMMAND ./configure --prefix=\${CMAKE_INSTALL_PREFIX}
+                WORKING_DIRECTORY ${htslib_SOURCE_DIR} 
+                OUTPUT_FILE ${CMAKE_CURRENT_BINARY_DIR}/logs/htslib-configure.log
+                ERROR_FILE ${CMAKE_CURRENT_BINARY_DIR}/logs/htslib-configure.log)\n")
+
+        if(result)
+            message(FATAL_ERROR "CMake step for htslib failed: ${result}")
+        endif()
+
+        execute_process(COMMAND make
+                RESULT_VARIABLE result
+                WORKING_DIRECTORY ${htslib_SOURCE_DIR} 
+                OUTPUT_FILE ${CMAKE_CURRENT_BINARY_DIR}/logs/htslib-make.log
+                ERROR_FILE ${CMAKE_CURRENT_BINARY_DIR}/logs/htslib-make.log)
+        file(APPEND ${INSTALL_FILE} "execute_process(COMMAND make
+                WORKING_DIRECTORY ${htslib_SOURCE_DIR} 
+                OUTPUT_FILE ${CMAKE_CURRENT_BINARY_DIR}/logs/htslib-make.log
+                ERROR_FILE ${CMAKE_CURRENT_BINARY_DIR}/logs/htslib-make.log)\n")
+        if(result)
+            message(FATAL_ERROR "CMake step for htslib failed: ${result}")
+        endif()
+
+        execute_process(COMMAND make install
+                RESULT_VARIABLE result
+                WORKING_DIRECTORY ${htslib_SOURCE_DIR} 
+                OUTPUT_FILE ${CMAKE_CURRENT_BINARY_DIR}/logs/htslib-install.log
+                ERROR_FILE ${CMAKE_CURRENT_BINARY_DIR}/logs/htslib-install.log)
+        file(APPEND ${INSTALL_FILE} "execute_process(COMMAND make install
+                WORKING_DIRECTORY ${htslib_SOURCE_DIR} 
+                OUTPUT_FILE ${CMAKE_CURRENT_BINARY_DIR}/logs/htslib-install.log
+                ERROR_FILE ${CMAKE_CURRENT_BINARY_DIR}/logs/htslib-install.log)\n")
+        if(result)
+            message(FATAL_ERROR "CMake step for htslib failed: ${result}")
+        endif()
+    endif()
+
+    set(HTS_SRC ${CMAKE_CURRENT_BINARY_DIR}/include)
+    set(HTS_LIB ${CMAKE_CURRENT_BINARY_DIR}/lib/libsdsl.a)
+
+else()
+    message(STATUS "htslib library found at ${HTS_LIB}.")
+    message(STATUS "htslib sources found at ${HTS_SRC}.")
+endif()
+
+add_library(htslib STATIC IMPORTED GLOBAL)
+set_property(TARGET htslib PROPERTY IMPORTED_LOCATION ${HTS_LIB})
+target_include_directories(htslib INTERFACE ${HTS_SRC})
+
+# PFP++
+find_program(PFP pfp++)
+if(NOT PFP)
+    message(STATUS "pfp not found. Building as an external content.")
+    FetchContent_Declare(pfp
+            GIT_REPOSITORY "https://github.com/maxrossi91/pfp"
+            GIT_TAG leviosam_integration
+    )
+
+    if(NOT pfp_POPULATED)
+        FetchContent_Populate(pfp)
+        FetchContent_Install(   pfp  
+                                SOURCE ${pfp_SOURCE_DIR} 
+                                BINARY ${pfp_BINARY_DIR} 
+                                DESTINATION ${CMAKE_CURRENT_BINARY_DIR} 
+                                LOG ${CMAKE_CURRENT_BINARY_DIR}/logs
+                                FILE ${INSTALL_FILE})
+
+    endif()
+    set(PFP ${CMAKE_CURRENT_BINARY_DIR}/bin/pfp++)
+
+else()
+    message(STATUS "pfp found at ${PFP}.")
+endif()
+
+
+## BigRePair
+find_program(largerepair largeb_irepair)
+find_program(preprocess procdic)
+find_program(postproc postproc)
+if(NOT largerepair OR NOT preprocess OR NOT postproc)
+    message(STATUS "BigRePair not found. Building as an external content.")
+    FetchContent_Declare(
+        bigrepair
+        GIT_REPOSITORY https://gitlab.com/maxrossi91/bigrepair.git
+    )
+    
+    FetchContent_GetProperties(bigrepair)
+    if(NOT bigrepair_POPULATED)
+
+        FetchContent_Populate(bigrepair)
+        FetchContent_Install(   bigrepair  
+                                SOURCE ${bigrepair_SOURCE_DIR} 
+                                BINARY ${bigrepair_BINARY_DIR} 
+                                DESTINATION ${CMAKE_CURRENT_BINARY_DIR} 
+                                LOG ${CMAKE_CURRENT_BINARY_DIR}/logs
+                                FILE ${INSTALL_FILE})
+
+    endif()
+
+    set(largerepair ${CMAKE_CURRENT_BINARY_DIR}/bin/largeb_irepair)
+    set(preprocess ${CMAKE_CURRENT_BINARY_DIR}/bin/procdic)
+    set(postproc ${CMAKE_CURRENT_BINARY_DIR}/bin/irepair)
+
+
+else()
+    message(STATUS "BigRePair components found at ${largerepair} ${preprocess} ${prostproc}.")
+endif()
+
+## pfp-thresholds
+find_program(pfp_thresholds pfp_thresholds)
+if(NOT pfp_thresholds)
+    message(STATUS "pfp_thresholds not found. Building as an external content.")
+    FetchContent_Declare(
+        pfp_thresholds
+        GIT_REPOSITORY https://github.com/maxrossi91/pfp-thresholds.git
+        GIT_TAG reorganization
+    )
+    
+    FetchContent_GetProperties(pfp_thresholds)
+    if(NOT pfp_thresholds_POPULATED)
+
+        FetchContent_Populate(pfp_thresholds)
+        FetchContent_Install(   pfp_thresholds  
+                                SOURCE ${pfp_thresholds_SOURCE_DIR} 
+                                BINARY ${pfp_thresholds_BINARY_DIR} 
+                                DESTINATION ${CMAKE_CURRENT_BINARY_DIR} 
+                                LOG ${CMAKE_CURRENT_BINARY_DIR}/logs
+                                FILE ${INSTALL_FILE})
+
+    endif()
+
+    set(pfp_thresholds ${CMAKE_CURRENT_BINARY_DIR}/bin/pfp_thresholds)
+
+else()
+    message(STATUS "pfp_thresholds found at ${pfp_thresholds}.")
+endif()
+
+
+install(SCRIPT ${INSTALL_FILE})
+
+
+# In project libraries
+# ------------------------------------------------------------------------------
+
+## Add Big-BWT
+FetchContent_Declare(
+  bigbwt
+  GIT_REPOSITORY https://github.com/alshai/Big-BWT.git
+  )
+  
+FetchContent_GetProperties(bigbwt)
+if(NOT bigbwt_POPULATED)
+  FetchContent_Populate(bigbwt)
+  add_subdirectory(${bigbwt_SOURCE_DIR} ${bigbwt_BINARY_DIR})
+  
+endif()
 
 ## Add malloc_count
 FetchContent_Declare(
@@ -28,160 +297,9 @@ FetchContent_GetProperties(klib)
 if(NOT klib_POPULATED)
   FetchContent_Populate(klib)
   
-  # add_subdirectory(${klib_SOURCE_DIR} ${klib_BINARY_DIR} EXCLUDE_FROM_ALL)
   add_library(klib INTERFACE)
 
   target_include_directories(klib INTERFACE ${klib_SOURCE_DIR})
-endif()
-
-## Add Big-BWT
-FetchContent_Declare(
-  bigbwt
-  GIT_REPOSITORY https://github.com/alshai/Big-BWT.git
-  )
-  
-FetchContent_GetProperties(bigbwt)
-if(NOT bigbwt_POPULATED)
-  FetchContent_Populate(bigbwt)
-  add_subdirectory(${bigbwt_SOURCE_DIR} ${bigbwt_BINARY_DIR})
-
-  # add_library(gsacak OBJECT ${bigbwt_SOURCE_DIR}/gsa/gsacak.c ${bigbwt_SOURCE_DIR}/gsa/gsacak.h)
-  # target_include_directories(gsacak PUBLIC "${bigbwt_SOURCE_DIR}/gsa")
-  
-  # add_library(malloc_count OBJECT ${bigbwt_SOURCE_DIR}/malloc_count.c ${bigbwt_SOURCE_DIR}/malloc_count.h)
-  # target_link_libraries(malloc_count dl)
-  # target_include_directories(malloc_count PUBLIC "${bigbwt_SOURCE_DIR}")
-  
-  endif()
-
-
-  
-## Add gsacak
-FetchContent_Declare(
-  gsacak
-  GIT_REPOSITORY https://github.com/felipelouza/gsa-is.git
-)
-
-FetchContent_GetProperties(gsacak)
-if(NOT gsacak_POPULATED)
-    FetchContent_Populate(gsacak)
-    add_library(gsacak OBJECT ${gsacak_SOURCE_DIR}/gsacak.c ${gsacak_SOURCE_DIR}/gsacak.h)
-    target_include_directories(gsacak PUBLIC "${gsacak_SOURCE_DIR}")
-    
-    add_library(gsacak64 OBJECT ${gsacak_SOURCE_DIR}/gsacak.c ${gsacak_SOURCE_DIR}/gsacak.h)
-    target_include_directories(gsacak64 PUBLIC "${gsacak_SOURCE_DIR}")
-    target_compile_options(gsacak64 PUBLIC -DM64)
-  # add_subdirectory(${gsacak_SOURCE_DIR} ${gsacak_BINARY_DIR} EXCLUDE_FROM_ALL)
-endif()
-
-
-## Google benchmark
-FetchContent_Declare(
-  benchmark
-  GIT_REPOSITORY https://github.com/google/benchmark.git
-  GIT_TAG        master
-  )
-  
-FetchContent_GetProperties(benchmark)
-if(NOT benchmark_POPULATED)
-  FetchContent_Populate(benchmark)
-  set(BENCHMARK_ENABLE_TESTING OFF CACHE BOOL "Enable testing of the benchmark library." FORCE)
-  add_subdirectory(${benchmark_SOURCE_DIR} ${benchmark_BINARY_DIR} EXCLUDE_FROM_ALL)
-endif()
-
-
-## Add sdsl
-FetchContent_Declare(
-  sdsl
-  # GIT_REPOSITORY https://github.com/elarielcl/sdsl-lite.git
-  GIT_REPOSITORY https://github.com/simongog/sdsl-lite
-)
-
-FetchContent_GetProperties(sdsl)
-if(NOT sdsl_POPULATED)
-  FetchContent_Populate(sdsl)
-
-  set(GENERATE_DOC OFF CACHE BOOL "Do not generate doxygen for sdsl-lite")
-  
-  add_subdirectory(${sdsl_SOURCE_DIR} ${sdsl_BINARY_DIR} EXCLUDE_FROM_ALL)
-endif()
-
-## Add divsuffsort
-FetchContent_Declare(
-  divsufsort
-  GIT_REPOSITORY https://github.com/simongog/libdivsufsort.git
-  GIT_TAG        2.0.1
-)
-
-FetchContent_GetProperties(divsufsort)
-if(NOT divsufsort_POPULATED)
-  FetchContent_Populate(divsufsort)
-
-  set(BUILD_SHARED_LIBS OFF CACHE BOOL "Do not build a shared library for libdivsufsort")
-  set(BUILD_EXAMPLES OFF CACHE BOOL "Do not build libdivsufsort example")
-  set(BUILD_DIVSUFSORT64 ON CACHE BOOL "Build libdivsufsort in 64-bits mode")
-
-  add_subdirectory(${divsufsort_SOURCE_DIR} ${divsufsort_BINARY_DIR} EXCLUDE_FROM_ALL)
-
-  target_include_directories(divsufsort PUBLIC "${divsufsort_BINARY_DIR}/include")
-  target_include_directories(divsufsort64 PUBLIC "${divsufsort_BINARY_DIR}/include")
-endif()
-
-
-
-# ## Add pfp_ds
-# FetchContent_Declare(
-#   pfp_ds
-#   GIT_REPOSITORY https://github.com/maxrossi91/pfp-data-structures
-# )
-
-# FetchContent_GetProperties(pfp_ds)
-# if(NOT pfp_ds_POPULATED)
-#   FetchContent_Populate(pfp_ds)
-
-#   add_subdirectory(${pfp_ds_SOURCE_DIR} ${pfp_ds_BINARY_DIR} EXCLUDE_FROM_ALL)
-# endif()
-
-## Add rlbwt2lcp
-FetchContent_Declare(
-  rlbwt2lcp
-  GIT_REPOSITORY https://github.com/nicolaprezza/rlbwt2lcp
-)
-
-FetchContent_GetProperties(rlbwt2lcp)
-if(NOT rlbwt2lcp_POPULATED)
-  FetchContent_Populate(rlbwt2lcp)
-
-  add_subdirectory(${rlbwt2lcp_SOURCE_DIR} ${rlbwt2lcp_BINARY_DIR} )#EXCLUDE_FROM_ALL)
-  # add_library(rlbwt2lcp OBJECT  ${rlbwt2lcp_SOURCE_DIR}/internal/include.hpp 
-  #                               ${rlbwt2lcp_SOURCE_DIR}/internal/lcp.hpp 
-  #                               ${rlbwt2lcp_SOURCE_DIR}/internal/dna_string.hpp 
-  #                               ${rlbwt2lcp_SOURCE_DIR}/internal/dna_string_n.hpp
-  #                               ${rlbwt2lcp_SOURCE_DIR}/internal/dna_bwt.hpp
-  #                               ${rlbwt2lcp_SOURCE_DIR}/internal/dna_bwt_n.hpp
-  #                               )
-  # target_include_directories(rlbwt2lcp PUBLIC "${rlbwt2lcp_BINARY_DIR}/internal")
-endif()
-
-## Add bwt2lcp
-FetchContent_Declare(
-  bwt2lcp
-  GIT_REPOSITORY https://github.com/nicolaprezza/bwt2lcp
-)
-
-FetchContent_GetProperties(bwt2lcp)
-if(NOT bwt2lcp_POPULATED)
-  FetchContent_Populate(bwt2lcp)
-
-  add_subdirectory(${bwt2lcp_SOURCE_DIR} ${bwt2lcp_BINARY_DIR} )#EXCLUDE_FROM_ALL)
-  # add_library(rlbwt2lcp OBJECT  ${rlbwt2lcp_SOURCE_DIR}/internal/include.hpp 
-  #                               ${rlbwt2lcp_SOURCE_DIR}/internal/lcp.hpp 
-  #                               ${rlbwt2lcp_SOURCE_DIR}/internal/dna_string.hpp 
-  #                               ${rlbwt2lcp_SOURCE_DIR}/internal/dna_string_n.hpp
-  #                               ${rlbwt2lcp_SOURCE_DIR}/internal/dna_bwt.hpp
-  #                               ${rlbwt2lcp_SOURCE_DIR}/internal/dna_bwt_n.hpp
-  #                               )
-  # target_include_directories(rlbwt2lcp PUBLIC "${rlbwt2lcp_BINARY_DIR}/internal")
 endif()
 
 ## Add r-index
@@ -200,44 +318,10 @@ if(NOT r-index_POPULATED)
   target_include_directories(ri INTERFACE ${r-index_SOURCE_DIR}/internal)
 endif()
 
-## Add pfp-thresholds
-FetchContent_Declare(
-  pfp_thresholds
-  GIT_REPOSITORY https://github.com/maxrossi91/pfp-thresholds.git
-  GIT_TAG develop
-  )
-  
-FetchContent_GetProperties(pfp_thresholds)
-if(NOT pfp_thresholds_POPULATED)
-  FetchContent_Populate(pfp_thresholds)
-  add_subdirectory(${pfp_thresholds_SOURCE_DIR} ${pfp_thresholds_BINARY_DIR})
-  
-endif()
-
-## Add bigrepair
-FetchContent_Declare(
-  bigrepair
-  GIT_REPOSITORY https://gitlab.com/manzai/bigrepair.git
-  )
-  
-FetchContent_GetProperties(bigrepair)
-if(NOT bigrepair_POPULATED)
-  FetchContent_Populate(bigrepair)
-  # add_subdirectory(${bigrepair_SOURCE_DIR} ${bigrepair_BINARY_DIR})
-
-  execute_process(COMMAND make
-        RESULT_VARIABLE result
-        WORKING_DIRECTORY ${bigrepair_SOURCE_DIR} )
-  if(result)
-      message(FATAL_ERROR "CMake step for bigrepair failed: ${result}")
-  endif()
-  
-endif()
-
 ## Add ShapedSlp
 FetchContent_Declare(
   shaped_slp
-  GIT_REPOSITORY https://github.com/koeppl/ShapedSlp.git
+  GIT_REPOSITORY https://github.com/maxrossi91/ShapedSlp.git
   GIT_TAG master
   )
   
@@ -259,35 +343,10 @@ FetchContent_Declare(
   FetchContent_GetProperties(ssw)
   if(NOT ssw_POPULATED)
     FetchContent_Populate(ssw)
-    # execute_process(COMMAND make
-    #       RESULT_VARIABLE result
-    #       WORKING_DIRECTORY ${ssw_SOURCE_DIR} )
-    # if(result)
-    #     message(FATAL_ERROR "CMake step for ssw failed: ${result}")
-    # endif()
     
     add_library(ssw OBJECT ${ssw_SOURCE_DIR}/src/ssw_cpp.cpp ${ssw_SOURCE_DIR}/src/ssw.c)
     target_include_directories(ssw PUBLIC ${ssw_SOURCE_DIR}/src)
   endif()
-
-# ## Add edlib
-# FetchContent_Declare(
-#     edlib
-#     GIT_REPOSITORY https://github.com/Martinsos/edlib.git
-#     GIT_TAG master
-#   )
-  
-#   FetchContent_GetProperties(edlib)
-#   if(NOT edlib_POPULATED)
-#     FetchContent_Populate(edlib)
-#     execute_process(COMMAND make
-#           RESULT_VARIABLE result
-#           WORKING_DIRECTORY ${edlib_SOURCE_DIR} )
-#     if(result)
-#         message(FATAL_ERROR "CMake step for edlib failed: ${result}")
-#     endif()
-#   endif()
-
 
 ## Add Ksw2
 FetchContent_Declare(
@@ -299,12 +358,6 @@ FetchContent_Declare(
   FetchContent_GetProperties(ksw2)
   if(NOT ksw2_POPULATED)
     FetchContent_Populate(ksw2)
-    # execute_process(COMMAND make
-    #       RESULT_VARIABLE result
-    #       WORKING_DIRECTORY ${ksw2_SOURCE_DIR} )
-    # if(result)
-    #     message(FATAL_ERROR "CMake step for ksw2 failed: ${result}")
-    # endif()
     
     add_library(ksw2 OBJECT ${ksw2_SOURCE_DIR}/kalloc.c 
                             ${ksw2_SOURCE_DIR}/ksw2_gg.c 
@@ -318,9 +371,6 @@ FetchContent_Declare(
                             ${ksw2_SOURCE_DIR}/ksw2_exts2_sse.c)
     target_include_directories(ksw2 PUBLIC ${ksw2_SOURCE_DIR}/src)
   endif()
-  
-
-  
 
   ## Add leviosam
   FetchContent_Declare(
@@ -336,7 +386,7 @@ FetchContent_Declare(
 
     add_subdirectory(${leviosam_SOURCE_DIR} ${leviosam_BINARY_DIR} EXCLUDE_FROM_ALL)
     target_include_directories(lvsam PUBLIC ${leviosam_SOURCE_DIR}/src ${CMAKE_INCLUDE_PATH})
-    target_link_libraries(lvsam ${HTS_LIB})
+    target_link_libraries(lvsam htslib)
   endif()
   
   

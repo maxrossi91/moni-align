@@ -13,7 +13,6 @@ FetchContent_GetProperties(bigbwt)
 set(FOLCA_SOURCE_DIR ${shaped_slp_SOURCE_DIR}/folca)
 set(SUX_SOURCE_DIR ${shaped_slp_SOURCE_DIR}/external/sux/sux)
 
-
 add_executable(ms matching_statistics.cpp ${bigbwt_SOURCE_DIR}/xerrors.c)
 target_link_libraries(ms common sdsl divsufsort divsufsort64 malloc_count ri pthread)
 target_include_directories(ms PUBLIC    "../include/ms" 
