@@ -23,7 +23,7 @@ SET(VERSION "${VERSION_MAJOR}.${VERSION_MINOR}.${VERSION_PATCH}")
 
 find_package(Git)
 if(GIT_FOUND)
-    message("git found: ${GIT_EXECUTABLE}")
+    message(STATUS "git found: ${GIT_EXECUTABLE}")
 else()
     message(WARNING "git not found. Cloning of submodules will not work.")
 endif()
