@@ -3,7 +3,6 @@
 # Edited from bigbwt script file
 
 import sys, time, argparse, subprocess, os.path, threading, tempfile
-from psutil import virtual_memory
 
 Description = """
                   __  __  ____  _   _ _____
@@ -85,6 +84,17 @@ run_moni_extend_exe     = os.path.join(extend_dirname, "extend_ksw2")
 run_phoni_ms_exe        = os.path.join(phoni_dirname, "run_phoni")
 run_spumoni_exe         = os.path.join(spumoni_dirname, "run_spumoni")
 
+def get_max_memory():
+  try:
+    from psutil import virtual_memory
+    return virtual_memory().total
+  except ImportError as e:
+    print("psutil not found! Using system calls to get maximum memory size.")
+    if sys.platform == "linux" or sys.platform == "linux2":
+      return int(os.popen('free -b').readlines()[1].split()[1])
+    elif sys.platform == "darwin":
+      return int(os.popen('sysctl -n hw.memsize').readlines()[0].split()[0])
+    
 class PFP(threading.Thread):
   def __init__(self, name, counter, args):
     threading.Thread.__init__(self)
@@ -185,8 +195,8 @@ class bigrepair(threading.Thread):
       logfile_name = args.logfile_name
       print("{} bigrepair started!".format(self.getName()), flush=True)        # "Thread-x started!"
 
-      mem = virtual_memory()
-      repair_mem  = round(mem.total / 1024 / 1024) # total physical memory available in MB
+      mem = get_max_memory()
+      repair_mem  = round(mem / 1024 / 1024) # total physical memory available in MB
       print("RePair maximum memory: {}".format(repair_mem), flush=True)
 
       sstart = time.time()
@@ -637,6 +647,11 @@ def main():
   align_parser.set_defaults(which='align')
   args = parser.parse_args()
 
+
+  # Create directory for output
+  if args.output != ".":
+    basepath = os.path.dirname(args.output)
+    os.makedirs(basepath, exist_ok=True)
 
   # Set default flags for build and ms
   if args.which == 'build':
