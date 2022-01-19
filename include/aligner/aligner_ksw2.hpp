@@ -187,6 +187,7 @@ public:
         size_t min_len = 25;    // Minimum MEM length
         size_t ext_len = 100;   // Extension length
         size_t top_k = 1;       // Report the top_k alignments
+        size_t check_k = 5;     // Check the scores of the check_k chains with different scores alignments
 
         // ksw2 parameters
         int8_t smatch = 2;      // Match score default
@@ -210,6 +211,7 @@ public:
                 min_len(config.min_len),        // Minimum MEM length
                 ext_len(config.ext_len),        // Extension length
                 top_k(config.top_k),            // Report the top_k alignments
+                check_k(config.check_k),        // Check the scores of the check_k chains
                 smatch(config.smatch),          // Match score default
                 smismatch(config.smismatch),    // Mismatch score default
                 gapo(config.gapo),              // Gap open penalty
@@ -430,12 +432,12 @@ public:
     size_t i = 0;
     size_t j = 0;
     size_t off = chains.size();
-    while (i < chains.size() and j < chains_rev.size() and different_scores.size() < 3)
+    while (i < chains.size() and j < chains_rev.size() and different_scores.size() < check_k)
     {
       if(chains[i].score > chains_rev[j].score)
       {
         different_scores.insert(chains[i].score);
-        if (different_scores.size() < 3)
+        if (different_scores.size() < check_k)
         {
           // Align the chain
           auto chain = std::make_pair(chains[i].score, chains[i].anchors);
@@ -449,7 +451,7 @@ public:
       else
       {
         different_scores.insert(chains_rev[j].score);
-        if (different_scores.size() < 3)
+        if (different_scores.size() < check_k)
         {
           // Align the chain
           auto chain = std::make_pair(chains_rev[j].score, chains_rev[j].anchors);
@@ -461,10 +463,10 @@ public:
         }
       }
     }
-    while (different_scores.size() < 3 and i < chains.size())
+    while (different_scores.size() < check_k and i < chains.size())
     {
       different_scores.insert(chains[i].score);
-      if (different_scores.size() < 3)
+      if (different_scores.size() < check_k)
       {
         // Align the chain
         auto chain = std::make_pair(chains[i].score, chains[i].anchors);
@@ -475,10 +477,10 @@ public:
         best_scores.push_back(std::make_pair(score.score, i++));
       }
     }
-    while (different_scores.size() < 3 and j < chains_rev.size())
+    while (different_scores.size() < check_k and j < chains_rev.size())
     {
       different_scores.insert(chains_rev[j].score);
-      if(different_scores.size() < 3)
+      if(different_scores.size() < check_k)
       {
         // Align the chain
         auto chain = std::make_pair(chains_rev[j].score, chains_rev[j].anchors);
@@ -1085,7 +1087,7 @@ public:
     // get the occurrences of the top 4 best scores
     std::set<size_t> different_scores;
     size_t i = 0;
-    while (i < al.chains.size() and different_scores.size() < 3)
+    while (i < al.chains.size() and different_scores.size() < check_k)
     {
         different_scores.insert(al.chains[i].score);
         if (different_scores.size() < 3)
@@ -2096,6 +2098,7 @@ protected:
     size_t aligned_reads = 0;
     size_t n = 0;
     size_t top_k = 1; // report the top_k alignments
+    size_t check_k = 5; // report the top_k alignments
 
     unsigned char seq_nt4_table[256] = {
         0, 1, 2, 3, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,
