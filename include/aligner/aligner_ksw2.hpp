@@ -442,8 +442,8 @@ public:
           // Reverse the chain order
           std::reverse(chain.second.begin(), chain.second.end());
           // Compute the score of a chain.
-          int32_t score = chain_score(chain, anchors, mems, min_score, read);
-          best_scores.push_back(std::make_pair(score, i++));
+          score_t score = chain_score(chain, anchors, mems, min_score, read);
+          best_scores.push_back(std::make_pair(score.score, i++));
         }
       }
       else
@@ -456,8 +456,8 @@ public:
           // Reverse the chain order
           std::reverse(chain.second.begin(), chain.second.end());
           // Compute the score of a chain.
-          int32_t score = chain_score(chain, anchors_rev, mems_rev, min_score, &read_rev);
-          best_scores.push_back(std::make_pair(score, off + j++));
+          score_t score = chain_score(chain, anchors_rev, mems_rev, min_score, &read_rev);
+          best_scores.push_back(std::make_pair(score.score, off + j++));
         }
       }
     }
@@ -471,8 +471,8 @@ public:
         // Reverse the chain order
         std::reverse(chain.second.begin(), chain.second.end());
         // Compute the score of a chain.
-        int32_t score = chain_score(chain, anchors, mems, min_score, read);
-        best_scores.push_back(std::make_pair(score, i++));
+        score_t score = chain_score(chain, anchors, mems, min_score, read);
+        best_scores.push_back(std::make_pair(score.score, i++));
       }
     }
     while (different_scores.size() < 3 and j < chains_rev.size())
@@ -485,8 +485,8 @@ public:
         // Reverse the chain order
         std::reverse(chain.second.begin(), chain.second.end());
         // Compute the score of a chain.
-        int32_t score = chain_score(chain, anchors_rev, mems_rev, min_score, &read_rev);
-        best_scores.push_back(std::make_pair(score, off + j++));
+        score_t score = chain_score(chain, anchors_rev, mems_rev, min_score, &read_rev);
+        best_scores.push_back(std::make_pair(score.score, off + j++));
       }
     }
 
@@ -505,7 +505,7 @@ public:
     }
 
     int32_t score2 = best_scores[1].first;
-    int32_t score = 0;
+    score_t score = {0,0};
 
     if(best_scores[0].second >= off)
     { // Reverse case
@@ -528,7 +528,7 @@ public:
       score = chain_score(chain, anchors, mems, min_score, read, false, score2, 0, out);
     }
 
-    if (score >= min_score) aligned = true;
+    if (score.score >= min_score) aligned = true;
     // TODO: Implement the topk retrival
 
     // std::vector<std::pair<size_t, size_t>> top4;
@@ -866,6 +866,10 @@ public:
     return aligned;
   }
 
+  /**
+   * @brief Store the read, its reverse-complement, and the set of mems.
+   * 
+   */
   typedef struct alignment_t{
     bool aligned = false;
 
@@ -881,17 +885,22 @@ public:
 
   } alignment_t;
 
+  typedef struct score_t{
+    int32_t score = 0;
+    size_t pos = 0; // Position of the leftmost match of the read in the global reference
+  } score_t;
+
   typedef struct orphan_paired_score_t{
     int32_t tot = 0;
-    int32_t m1 = 0;
-    int32_t m2 = 0; 
+    score_t m1;
+    score_t m2; 
     std::pair<size_t,size_t> pos = std::make_pair(0,0); // Position of the mate
   } orphan_paired_score_t;
 
   typedef struct paired_score_t{
     int32_t tot = 0;
-    int32_t m1 = 0;
-    int32_t m2 = 0; 
+    score_t m1;
+    score_t m2; 
     bool paired = false;
 
 
@@ -1293,7 +1302,7 @@ public:
 
   }
 
-  int32_t chain_score(
+  score_t chain_score(
       const std::pair<size_t, std::vector<size_t>> &chain,
       const std::vector<std::pair<size_t, size_t>> &anchors,
       const std::vector<mem_t> &mems,
@@ -1330,7 +1339,7 @@ public:
       rcs[i] = seq_nt4_table[(int)read->seq.s[ rcs_occ + i]];
 
     // Fill between MEMs
-    int32_t score = fill_chain(
+    score_t score = fill_chain(
         mems,
         chain_anchors,
         lcs,   // Left context of the read
@@ -1340,7 +1349,7 @@ public:
         read
       );
 
-      if(!score_only and score >= min_score)
+      if(!score_only and score.score >= min_score)
       {
         bool output = (sam == nullptr);
 
@@ -1419,7 +1428,7 @@ public:
         // sam_m1.rnext = std::string(mate2->name.s);
         // sam_m2.rnext = std::string(mate1->name.s);
 
-        if(score.m1 >= min_score and score.m2 >= min_score)
+        if(score.m1.score >= min_score and score.m2.score >= min_score)
         {
 
           sam_m1.pnext = sam_m2.pos;
@@ -1444,14 +1453,14 @@ public:
             sam_m1.flag |= SAM_MATE_REVERSED | SAM_FIRST_IN_PAIR;
             sam_m2.flag |= SAM_REVERSED | SAM_SECOND_IN_PAIR;
           }
-        }else if(score.m1 >= min_score) {
+        }else if(score.m1.score >= min_score) {
           sam_m1.rname = idx[sam_m1.pos - 1];
 
           sam_m1.flag = SAM_PAIRED | SAM_MATE_UNMAPPED | SAM_FIRST_IN_PAIR;
           sam_m2.flag = SAM_PAIRED | SAM_UNMAPPED | SAM_SECOND_IN_PAIR;
           if(strand)
             sam_m1.flag |= SAM_REVERSED;
-        }else if(score.m2 >= min_score) {
+        }else if(score.m2.score >= min_score) {
           sam_m2.rname = idx[sam_m2.pos - 1];
 
           sam_m1.flag = SAM_PAIRED | SAM_UNMAPPED | SAM_FIRST_IN_PAIR;
@@ -1480,7 +1489,7 @@ public:
     }
 
 
-    score.tot = score.m1 + score.m2;
+    score.tot = score.m1.score + score.m2.score;
     return score;
   }
 
@@ -1575,7 +1584,7 @@ orphan_paired_score_t paired_chain_orphan_score(
       // sam_m1.rnext = std::string(mate2->name.s);
       // sam_m2.rnext = std::string(mate1->name.s);
 
-      if(score.m1 >= min_score and score.m2 >= min_score)
+      if(score.m1.score >= min_score and score.m2.score >= min_score)
       {
 
         sam_m1.pnext = sam_m2.pos;
@@ -1600,14 +1609,14 @@ orphan_paired_score_t paired_chain_orphan_score(
           sam_m1.flag |= SAM_MATE_REVERSED | SAM_FIRST_IN_PAIR;
           sam_m2.flag |= SAM_REVERSED | SAM_SECOND_IN_PAIR;
         }
-      }else if(score.m1 >= min_score) {
+      }else if(score.m1.score >= min_score) {
         sam_m1.rname = idx[sam_m1.pos - 1];
 
         sam_m1.flag = SAM_PAIRED | SAM_MATE_UNMAPPED | SAM_FIRST_IN_PAIR;
         sam_m2.flag = SAM_PAIRED | SAM_UNMAPPED | SAM_SECOND_IN_PAIR;
         if(strand)
           sam_m1.flag |= SAM_REVERSED;
-      }else if(score.m2 >= min_score) {
+      }else if(score.m2.score >= min_score) {
         sam_m2.rname = idx[sam_m2.pos - 1];
 
         sam_m1.flag = SAM_PAIRED | SAM_UNMAPPED | SAM_FIRST_IN_PAIR;
@@ -1620,7 +1629,7 @@ orphan_paired_score_t paired_chain_orphan_score(
     }
 
 
-    score.tot = score.m1 + score.m2;
+    score.tot = score.m1.score + score.m2.score;
     return score;
   }
 
@@ -1628,7 +1637,7 @@ orphan_paired_score_t paired_chain_orphan_score(
   // If score_only is false, we extend again the read and we write the result
   // in the SAM file, so we need to give the second best score. 
   // Return the start and end of the alignment found.
-  int32_t fill_orphan(
+  score_t fill_orphan(
     long long int& start, // Start position of the reference
     long long int& end, //End position of the reference
     const kseq_t *paired_mate, // The read that has been aligned
@@ -1637,7 +1646,7 @@ orphan_paired_score_t paired_chain_orphan_score(
     bool realign = false   // Realign globally the read
   )
   {
-    int32_t score = 0;
+    score_t score = {0,0};
     // Extract reference
     size_t ref_occ = start;
     size_t ref_len = end - start + 1;
@@ -1665,7 +1674,8 @@ orphan_paired_score_t paired_chain_orphan_score(
       // Update start and end
       end = start + r.te;
       start += r.tb;
-      score= r.score;
+      score.score= r.score;
+      score.pos = start;
     }
 
     if(not score_only)
@@ -1691,12 +1701,14 @@ orphan_paired_score_t paired_chain_orphan_score(
         // Compute the MD:Z field and the number of mismatches
         sam->nm = write_MD_core((uint8_t*)ref,seq,ez.cigar,ez.n_cigar,tmp,0,sam->md);
 
+        const auto ref = idx.index(ref_occ);
         sam->as = ez.score;
-        sam->pos = ref_occ + 1; // ref_occ is 1 based
-        sam->rname = idx[ref_occ];
+        sam->pos = ref.second + 1; //ref_occ + 1; // ref_occ is 1 based
+        sam->rname = ref.first; // idx[ref_occ];
         sam->rlen = ref_len;
 
-        score = ez.score;
+        score.score = ez.score;
+        score.pos = ref_occ;
         delete tmp;
     }
 
@@ -1712,7 +1724,7 @@ orphan_paired_score_t paired_chain_orphan_score(
   // If score_only is true we compute the score of the alignment. 
   // If score_only is false, we extend again the read and we write the result
   // in the SAM file, so we need to give the second best score. 
-  int32_t fill_chain(
+  score_t fill_chain(
     const std::vector<mem_t>& mems, // pairs of pos/lengths of the mems
     const std::vector<std::pair<size_t,size_t>>& anchors, // pairs of mem index/occ index
     const uint8_t* lcs,   // Left context of the read
@@ -1734,6 +1746,8 @@ orphan_paired_score_t paired_chain_orphan_score(
 
     if(score_only) 
       flag = KSW_EZ_SCORE_ONLY;
+    
+    score_t score;
 
     int score_lc = 0;
     int score_rc = 0;
@@ -1772,7 +1786,7 @@ orphan_paired_score_t paired_chain_orphan_score(
       ksw_extz2_sse(km, lcs_len, (uint8_t*)lcs, lc_len, (uint8_t*)lc, m, mat, gapo, gape, w, zdrop, end_bonus, flag, &ez_lc);
       score_lc =  ez_lc.mqe;
       // verbose("lc score: " + std::to_string(score_lc));
-      // Check if the extension reached the end or the query
+      // Check if the extension reached the end of the query
       assert(score_only or ez_lc.reach_end);
 
       // std::string blc = print_BLAST_like((uint8_t*)lc,(uint8_t*)lcs,ez_lc.cigar,ez_lc.n_cigar);
@@ -1803,7 +1817,7 @@ orphan_paired_score_t paired_chain_orphan_score(
       ksw_extz2_sse(km, rcs_len, (uint8_t*)rcs, rc_len, (uint8_t*)rc, m, mat, gapo, gape, w, zdrop, end_bonus, flag, &ez_rc);
       score_rc = ez_rc.mqe;
       // verbose("rc score: " + std::to_string(score_rc));
-      // Check if the extension reached the end or the query
+      // Check if the extension reached the end of the query
       assert(score_only or ez_rc.reach_end);
 
       // std::string brc = print_BLAST_like((uint8_t*)rc,(uint8_t*)rcs,ez_rc.cigar,ez_rc.n_cigar);
@@ -1813,7 +1827,7 @@ orphan_paired_score_t paired_chain_orphan_score(
 
 
     // Compute the partial score score
-    int32_t score = score_lc + score_rc;
+    score.score = score_lc + score_rc;
     // int32_t score = mem_len * smatch + score_lc + score_rc;
 
     // Compute starting position in reference
@@ -1834,6 +1848,9 @@ orphan_paired_score_t paired_chain_orphan_score(
     uint8_t* seq = (uint8_t*) malloc(seq_len);
     for (size_t i = 0; i < seq_len; ++i)
       seq[i] = seq_nt4_table[(int)read->seq.s[i]];
+
+    // Store the starting position of the allignment
+    score.pos = ref_pos;
 
     // TODO: fix the gap fill when MEMs overlap. The quick fix is a full alignment between the first and last MEM
     // // Fill the gaps between each mem
@@ -1890,8 +1907,8 @@ orphan_paired_score_t paired_chain_orphan_score(
     ksw_reset_extz(&ez);
     ksw_extz2_sse(km, seq_len, (uint8_t *)seq, ref_len, (uint8_t *)ref, m, mat, gapo, gape, w, zdrop, end_bonus, flag, &ez);
 
-    score = ez.score;
-
+    score.score = ez.score;
+    // TODO: Check if we have to update also the position
     realign = true;
 
 //******************************************************************************
@@ -1931,7 +1948,7 @@ orphan_paired_score_t paired_chain_orphan_score(
         // The original occurrence of the MEM has been shifted to the left by 6 positions, 
         // reducing the gap in the right context, and moving in to the left context.
 
-        assert(ez.score >= score);
+        assert(ez.score >= score.score);
 
         // Concatenate the CIGAR strings
         
@@ -1943,9 +1960,10 @@ orphan_paired_score_t paired_chain_orphan_score(
         // Compute the MD:Z field and the number of mismatches
         sam->nm = write_MD_core((uint8_t*)ref,seq,ez.cigar,ez.n_cigar,tmp,0,sam->md);
 
+        const auto ref = idx.index(ref_pos);
         sam->as = ez.score;
-        sam->pos = ref_pos + 1; // ref_pos is 1 based
-        sam->rname = idx[ref_pos];
+        sam->pos = ref.second + 1; //ref_pos + 1; // ref_pos is 1 based
+        sam->rname = ref.first; // idx[ref_pos];
         sam->rlen = ref_len;
         // write_sam(ez.score, score2, min_score, ref_pos, "human", read, strand, out, cigar_s, mdz_s, nm, "*", 0, 0);
       }
