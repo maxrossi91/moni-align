@@ -3388,7 +3388,7 @@ void dispatcher(Args &args){
 
   if(args.patterns != "")
   {
-    std::string sam_filename = args.patterns + "_" + base_name + "_" + std::to_string(args.l);
+    std::string sam_filename = args.patterns + "_" + base_name + "_" + std::to_string(args.l) + ".sam";
     if(args.output != "")
       sam_filename = args.output;
 
@@ -3406,7 +3406,7 @@ void dispatcher(Args &args){
   }
   else
   {
-    std::string sam_filename = args.mate1 + "_" + base_name + "_" + std::to_string(args.l);
+    std::string sam_filename = args.mate1 + "_" + base_name + "_" + std::to_string(args.l) + ".sam";
     if(args.output != "")
       sam_filename = args.output;
 
