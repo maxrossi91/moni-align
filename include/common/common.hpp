@@ -598,6 +598,7 @@ static inline int ilog2_32(uint32_t v)
 
 #define maxl(a,b) (a) = std::max((a),(b))
 #define minl(a,b) (a) = std::min((a),(b))
+#define dist(a,b) ( (a) > (b)? ((a) - (b)) : ((b) - (a)))
 
 ////////////////////////////////////////////////////////////////////////////////
 /// helper functions
