@@ -225,7 +225,7 @@ public:
     }
 
 protected:
-    size_t u;
+    size_t u; // Total length
     
     sdsl::sd_vector<> starts;
     sdsl::sd_vector<>::rank_1_type rank1;
