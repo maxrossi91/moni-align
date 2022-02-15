@@ -328,8 +328,8 @@ size_t mt_align(aligner_t *aligner, std::string pattern_filename, std::string sa
 
   FILE *fd;
 
-  if ((fd = fopen(std::string(sam_filename + ".sam").c_str(), "w")) == nullptr)
-    error("open() file " + std::string(sam_filename + ".sam") + " failed");
+  if ((fd = fopen(std::string(sam_filename).c_str(), "w")) == nullptr)
+    error("open() file " + std::string(sam_filename) + " failed");
 
   fprintf(fd, "%s", aligner->to_sam().c_str());
 
@@ -378,7 +378,7 @@ size_t st_align(aligner_t *aligner, std::string pattern_filename, std::string sa
   int l;
   FILE *sam_fd;
 
-  sam_filename += ".sam";
+  // sam_filename += ".sam";
 
   if ((sam_fd = fopen(sam_filename.c_str(), "w")) == nullptr)
     error("open() file " + sam_filename + " failed");

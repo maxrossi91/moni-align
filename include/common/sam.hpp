@@ -63,6 +63,7 @@ typedef struct sam_t{
     size_t zs = 0; // ZS: Second best score
 
     std::string md = ""; // MD: String encoding mismatched and deleted reference bases
+    std::string oa = ""; // OA: The original alignment information of the record prior to realignment or unalignment by a subsequent tool.
 
     size_t rlen = 0; // Length of the match in the referenc. Requiredd to compute TLEN
 
@@ -129,7 +130,8 @@ inline void write_sam(FILE *out, const sam_t s)
         fprintf(out, "\tNM:i:%d", s.nm);            // NM
         if (s.zs > 0)
         fprintf(out, "\tZS:i:%d", s.zs);          // ZS
-        fprintf(out, "\tMD:Z:%s\n", s.md.c_str());  // MD
+        fprintf(out, "\tMD:Z:%s", s.md.c_str());  // MD
+        fprintf(out, "\tOA:Z:%s\n", s.oa.c_str());  // OA
     }else
         fprintf(out, "\n");
 }

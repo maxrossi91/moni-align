@@ -23,7 +23,7 @@ SET(VERSION "${VERSION_MAJOR}.${VERSION_MINOR}.${VERSION_PATCH}")
 
 find_package(Git)
 if(GIT_FOUND)
-    message("git found: ${GIT_EXECUTABLE}")
+    message(STATUS "git found: ${GIT_EXECUTABLE}")
 else()
     message(WARNING "git not found. Cloning of submodules will not work.")
 endif()
@@ -56,6 +56,13 @@ add_subdirectory(test/src)
 add_subdirectory(utils)
 # add_subdirectory(benchmarks/src)
 
+set(PFP_EXE ${PFP})
+set(PFP_THRESHOLDS_EXE ${pfp_thresholds})
+set(LARGEREPAIR_EXE ${largerepair})
+set(PREPROCESS_EXE ${preprocess})
+set(POSTPROCESS_EXE ${postproc})
+set(MONI_VERSION ${VERSION})
+
 # Configure pipeline for build folder
 set(USE_INSTALL_PATH False)
 configure_file(${PROJECT_SOURCE_DIR}/pipeline/moni.in ${PROJECT_BINARY_DIR}/moni @ONLY)
@@ -67,5 +74,6 @@ configure_file(${PROJECT_SOURCE_DIR}/pipeline/moni.in ${PROJECT_BINARY_DIR}/moni
 
 install(TARGETS ms mems rlebwt_ms_build extend_ksw2 compress_dictionary build_seqidx TYPE RUNTIME)
 install(TARGETS rlebwt_ms_full_build align_full_ksw2 TYPE RUNTIME)
-install(TARGETS SlpEncBuild pfp_thresholds pfp_thresholds64 TYPE RUNTIME)
+install(TARGETS SlpEncBuild TYPE RUNTIME)
+# isntall(TARGETS pfp_thresholds pfp_thresholds64 TYPE RUNTIME)
 install(PROGRAMS ${PROJECT_BINARY_DIR}/moni.install RENAME moni TYPE BIN)
