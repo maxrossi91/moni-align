@@ -18,132 +18,152 @@
    \date 19/11/2021
 */
 
+#define CATCH_CONFIG_RUNNER
+#include <catch2/catch_all.hpp>
+
 #include <iostream>
 
 #define VERBOSE
 
-#include <leviosam.hpp>
-#include <common.hpp>
+#include <kseq.h>
+#include <zlib.h>
 
-#include <malloc_count.h>
+KSEQ_DECLARE(gzFile);
+#include <liftidx.hpp>
 
 
-//*********************** Argument options ***************************************
-// struct containing command line parameters and other globals
-struct Args
+// //*********************** Catch2 listener update *******************************
+
+// struct listener : Catch::TestEventListenerBase
+// {
+//     using TestEventListenerBase::TestEventListenerBase;
+    
+//     virtual void testCaseStarting(Catch::TestCaseInfo const& testInfo) override
+//     {
+//         std::cout << testInfo.tagsAsString() << " " << testInfo.name << std::endl;
+//     }
+// };
+// CATCH_REGISTER_LISTENER(listener)
+// //*********************** End Catch2 listener update ***************************
+
+//*********************** Global variables *************************************
+
+std::string test_dir = "../data";
+
+//*********************** End global variables *********************************
+
+//*********************** Tests LevioSAM ***************************************
+
+TEST_CASE("LevioSAM Chr19 pangenome", "[LevioSAM]")
 {
-  std::string filename = "";
-  size_t w = 10;             // sliding window size and its default
-  bool store = false;        // store the data structure in the file
-  bool memo = false;         // print the memory usage
-  bool csv = false;          // print stats on stderr in csv format
-  bool rle = false;          // outpt RLBWT
-  std::string patterns = ""; // path to patterns file
-  size_t l = 25;             // minumum MEM length
-  size_t th = 1;             // number of threads
-  bool is_fasta = false;     // read a fasta file
-};
 
-void parseArgs(int argc, char *const argv[], Args &arg)
-{
-  int c;
-  extern char *optarg;
-  extern int optind;
-
-  std::string usage("usage: " + std::string(argv[0]) + " infile [-s store] [-m memo] [-c csv] [-p patterns] [-f fasta] [-r rle] [-t threads] [-l len]\n\n" +
-                    "Computes the pfp data structures of infile, provided that infile.parse, infile.dict, and infile.occ exists.\n" +
-                    "  wsize: [integer] - sliding window size (def. 10)\n" +
-                    "  store: [boolean] - store the data structure in infile.pfp.ds. (def. false)\n" +
-                    "   memo: [boolean] - print the data structure memory usage. (def. false)\n" +
-                    "  fasta: [boolean] - the input file is a fasta file. (def. false)\n" +
-                    "    rle: [boolean] - output run length encoded BWT. (def. false)\n" +
-                    "pattens: [string]  - path to patterns file.\n" +
-                    "    len: [integer] - minimum MEM lengt (def. 25)\n" +
-                    " thread: [integer] - number of threads (def. 1)\n" +
-                    "    csv: [boolean] - print the stats in csv form on strerr. (def. false)\n");
-
-  std::string sarg;
-  while ((c = getopt(argc, argv, "w:smcfl:rhp:t:")) != -1)
-  {
-    switch (c)
-    {
-    case 'w':
-      sarg.assign(optarg);
-      arg.w = stoi(sarg);
-      break;
-    case 's':
-      arg.store = true;
-      break;
-    case 'm':
-      arg.memo = true;
-      break;
-    case 'c':
-      arg.csv = true;
-      break;
-    case 'r':
-      arg.rle = true;
-      break;
-    case 'p':
-      arg.patterns.assign(optarg);
-      break;
-    case 'l':
-      sarg.assign(optarg);
-      arg.l = stoi(sarg);
-      break;
-    case 't':
-      sarg.assign(optarg);
-      arg.th = stoi(sarg);
-      break;
-    case 'f':
-      arg.is_fasta = true;
-      break;
-    case 'h':
-      error(usage);
-    case '?':
-      error("Unknown option.\n", usage);
-      exit(1);
-    }
+  // Load contigs lengths and structures  
+  verbose("Loading contigs lengths and names...");
+  std::ifstream in_lidx(test_dir + "/Chr21.10.lidx");
+  std::vector<std::string> from_lidx_file_names;
+  std::vector<size_t> from_lidx_file_lengths;
+  while (not in_lidx.eof()) 
+  { 
+      std::string tmp_name;
+      std::size_t tmp_length;
+      in_lidx >> tmp_name >> tmp_length;
+      if (tmp_name != "")
+      {
+          from_lidx_file_names.push_back(tmp_name);
+          from_lidx_file_lengths.push_back(tmp_length);
+      }
   }
-  // the only input parameter is the file name
-  if (argc == optind + 1)
+
+
+  // Check lifting data   
+  verbose("Loading ldx data structure...");
+  std::ifstream in_ldx(test_dir + "/Chr21.10.ldx");
+  liftidx ldx;
+  ldx.load(in_ldx);
+  in_ldx.close();
+
+  // Loding golden truth lifting
+  verbose("Loading LevioSAM indicies...");
+  std::vector< std::string > filenames = {
+    "HG00096_H1_21.lft",
+    "HG00096_H2_21.lft",
+    "HG00097_H1_21.lft",
+    "HG00097_H2_21.lft",
+    "HG00099_H1_21.lft",
+    "HG00099_H2_21.lft",
+    "HG00100_H1_21.lft",
+    "HG00100_H2_21.lft"
+  };
+  // those are necessary because the construction of LevioSAM is buggy
+  std::vector< size_t > limits = {
+    46708362,
+    46708362,
+    46708095,
+    46708070,
+    46708362,
+    46708362,
+    46708362,
+    46708362
+  };
+
+  std::vector< lift::LiftMap > lifts(filenames.size());
+
+  for ( size_t i = 0; i < filenames.size(); ++i )
   {
-    arg.filename.assign(argv[optind]);
+    verbose("Loading ", test_dir + "/lifts/" + filenames[i]);
+    std::ifstream in_lft(test_dir + "/lifts/" + filenames[i]);
+    if ( not in_lft.is_open() ) error("Error opening file...");
+    lifts[i].load(in_lft);
+    in_lft.close();
   }
-  else
+
+  verbose("Checking correctness of ldx data structure");
+
+  bool check = true;
+  size_t i = 0;
+  for( i = 0; i < from_lidx_file_lengths[0] and check; ++i)
+      check = check and (ldx.lift(i) == i);
+  verbose("First missmatch: ", i);
+  REQUIRE(check);
+
+  for (size_t j = 1; j < from_lidx_file_lengths.size(); ++j)
   {
-    error("Invalid number of arguments\n", usage);
+    const std::string& contig_name = from_lidx_file_names[0];
+    size_t k = 0 ;
+    auto s1_lengths = lifts[j-1].get_s1_lens();
+    auto length_map = lifts[j-1].get_lengthmap();
+    for( k = 0 ; k < from_lidx_file_lengths[j] and check; ++i, ++k)
+      if( k < limits[j-1])
+        check = check and ((ldx.lift(i)) == lifts[j-1].lift_pos(contig_name,k));
+      else
+        check = check and ((ldx.lift(i)) == ((k - limits[j-1] + 1) + lifts[j-1].lift_pos(contig_name,limits[j-1]-1)));
+    verbose("First missmatch: ", i);
+    if ( not check )
+      verbose("Left: ", ldx.lift(i-1) , " Right: ", lifts[j-1].lift_pos(contig_name,k-1), " Pos: ", ldx.index(i-1).first, " ", ldx.index(i-1).second);
+
+    REQUIRE(check);
   }
 }
 
-//********** end argument options ********************
+//*********************** End tests LevioSAM ***********************************
 
-int main(int argc, char *const argv[])
+
+int main( int argc, char* argv[] )
 {
-  Args args;
-  parseArgs(argc, argv, args);
+  Catch::Session session; // There must be exactly one instance
+  
+  // Build a new parser on top of Catch2's
+  using namespace Catch::Clara;
+  auto cli = session.cli() |
+  Opt( test_dir, "dir" ) ["--test-dir"] ("test directory");
 
-  verbose("Loading the lifting index");
-  std::chrono::high_resolution_clock::time_point t_insert_start = std::chrono::high_resolution_clock::now();
+  // Now pass the new composite back to Catch2 so it uses that
+  session.cli( cli );
 
-  verbose("Index filename: " + args.filename);
+  // Let Catch2 (using Clara) parse the command line
+  int returnCode = session.applyCommandLine( argc, argv );
+  if( returnCode != 0 ) // Indicates a command line error
+      return returnCode;
 
-  std::ifstream in(args.filename);
-  lift::LiftMap lift(in);
-  in.close();
-
-  std::chrono::high_resolution_clock::time_point t_insert_end = std::chrono::high_resolution_clock::now();
-
-  verbose("Lifting index loading complete");
-  verbose("Memory peak: ", malloc_count_peak());
-  verbose("Elapsed time (s): ", std::chrono::duration<double, std::ratio<1>>(t_insert_end - t_insert_start).count());
-
-
-  verbose("Lifting positions");
-  for(size_t i = 48126296; i < 48126395; ++i)
-    verbose("Lifting position ", i, ": ", lift.lift_pos("21", i));
-
-  auto mem_peak = malloc_count_peak();
-  verbose("Memory peak: ", malloc_count_peak());
-
-  return 0;
+  session.run();
 }
