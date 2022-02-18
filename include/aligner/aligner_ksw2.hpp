@@ -514,6 +514,7 @@ public:
       if( (chain.mate & MATE_RC) )
       {
         al.score = chain_score(anchors_chain, al.anchors, al.mems, min_score, &al.read_rev, false, al.score2, 1, nullptr, &al.sam);
+        al.sam.read = &al.read_rev;
         al.sam.flag |= SAM_REVERSED;
       }
       else
@@ -1026,7 +1027,7 @@ public:
         sam->zs = score2;
         sam->mapq = compute_mapq(sam->as, sam->zs, min_score, sam->read->seq.l * smatch);
         // sam->reverse = (strand != 0);
-        sam->rname = idx[sam->pos - 1];
+        // sam->rname = idx[sam->pos - 1];
         if(output)
         {
           write_sam(out,*sam);
@@ -1259,8 +1260,8 @@ orphan_paired_score_t paired_chain_orphan_score(
         sam_m1.tlen = tlen;
         sam_m2.tlen = -tlen;
 
-        sam_m1.rname = idx[sam_m1.pos - 1];
-        sam_m2.rname = idx[sam_m2.pos - 1];
+        // sam_m1.rname = idx[sam_m1.pos - 1];
+        // sam_m2.rname = idx[sam_m2.pos - 1];
 
         sam_m1.flag = sam_m2.flag = SAM_PAIRED | SAM_MAPPED_PAIRED;
         if(strand)
@@ -1274,14 +1275,14 @@ orphan_paired_score_t paired_chain_orphan_score(
           sam_m2.flag |= SAM_REVERSED | SAM_SECOND_IN_PAIR;
         }
       }else if(score.m1.score >= min_score) {
-        sam_m1.rname = idx[sam_m1.pos - 1];
+        // sam_m1.rname = idx[sam_m1.pos - 1];
 
         sam_m1.flag = SAM_PAIRED | SAM_MATE_UNMAPPED | SAM_FIRST_IN_PAIR;
         sam_m2.flag = SAM_PAIRED | SAM_UNMAPPED | SAM_SECOND_IN_PAIR;
         if(strand)
           sam_m1.flag |= SAM_REVERSED;
       }else if(score.m2.score >= min_score) {
-        sam_m2.rname = idx[sam_m2.pos - 1];
+        // sam_m2.rname = idx[sam_m2.pos - 1];
 
         sam_m1.flag = SAM_PAIRED | SAM_UNMAPPED | SAM_FIRST_IN_PAIR;
         sam_m2.flag = SAM_PAIRED | SAM_MATE_UNMAPPED | SAM_SECOND_IN_PAIR;
