@@ -67,6 +67,12 @@ typedef struct sam_t{
 
     size_t rlen = 0; // Length of the match in the referenc. Requiredd to compute TLEN
 
+    std::string lift_rname = "*"; // RNAME: Reference sequence NAME
+    std::string lift_cigar = "*"; // RNAME: Reference sequence NAME
+    size_t lift_pos    = 0;    // POS: 1-based leftmost mapping POSition
+    size_t lift_mapq   = 255;  // MAPQ: MAPping Quality
+    size_t lift_nm = 0; // NM: Edit distance to the reference
+
     // Quind the sam_t struct for a read
     sam_t(const kseq_t* read_)
     {

@@ -1372,6 +1372,16 @@ orphan_paired_score_t paired_chain_orphan_score(
         sam->rname = ref.first; // idx[ref_occ];
         sam->rlen = ref_len;
 
+        // Temporary patch before moving to bam1_t
+        sam->lift_rname = ref.first;
+        sam->lift_cigar = sam->cigar;
+        sam->lift_pos = sam->pos;
+        sam->lift_nm = sam->nm;
+
+        const auto lift = idx.lift(ref_occ);
+        sam->pos = lift + 1; //ref_occ + 1; // ref_occ is 1 based
+        sam->rname = idx.index(lift).first; // idx[ref_occ];
+
         score.score = ez.score;
         score.pos = ref_occ;
         delete tmp;
@@ -1630,6 +1640,17 @@ orphan_paired_score_t paired_chain_orphan_score(
         sam->pos = ref.second + 1; //ref_pos + 1; // ref_pos is 1 based
         sam->rname = ref.first; // idx[ref_pos];
         sam->rlen = ref_len;
+
+        // Temporary patch before moving to bam1_t
+        sam->lift_rname = ref.first;
+        sam->lift_cigar = sam->cigar;
+        sam->lift_pos = sam->pos;
+        sam->lift_nm = sam->nm;
+
+        const auto lift = idx.lift(ref_pos);
+        sam->pos = lift + 1; //ref_occ + 1; // ref_occ is 1 based
+        sam->rname = idx.index(lift).first; // idx[ref_occ];
+
         // write_sam(ez.score, score2, min_score, ref_pos, "human", read, strand, out, cigar_s, mdz_s, nm, "*", 0, 0);
       }
       else
