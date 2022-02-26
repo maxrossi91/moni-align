@@ -173,6 +173,16 @@ public:
         return res;    
     }
 
+    /**
+     * @brief Get the names object
+     * 
+     * @return const std::vector<std::string>& 
+     */
+    const std::vector<std::string>& get_names()
+    {
+        return names;
+    }
+
     size_t serialize(std::ostream &out)
     {
 
