@@ -52,6 +52,8 @@
 #include <slp_definitions.hpp>
 #include <chain.hpp>
 
+#include <htslib/sam.h>
+
 #define _REALIGN
 
 MTIME_INIT(3);
@@ -225,7 +227,9 @@ public:
 
       kseq_t* read;
       kseq_t read_rev;
+
       sam_t sam;
+      bam1_t bam;
 
       const size_t min_score;
       score_t score;
@@ -242,6 +246,11 @@ public:
           min_score(20 + 8 * log(read->seq.l))
       {
         rc_copy_kseq_t(&read_rev, read);
+      }
+
+      void write(samFile* out, const sam_hdr_t *hdr)
+      {
+        sam_write1(out, hdr, &bam);
       }
 
       void write(FILE* out)
@@ -408,7 +417,17 @@ public:
   }
 
 
-  // TODO: Fix top score anc chaining as for paired end reads.
+
+  bool align(kseq_t *read, samFile* out, const sam_hdr_t *hdr)
+  {
+    // std::vector<mem_t> mems;
+    alignment_t alignment(read);
+    if(not align(alignment))
+      alignment.set_sam_not_aligned();
+    alignment.write(out, hdr);
+    return alignment.aligned;
+  }
+
   bool align(kseq_t *read, FILE* out)
   {
     // std::vector<mem_t> mems;
@@ -621,7 +640,7 @@ public:
       sam_m1.flag = sam_m2.flag = SAM_PAIRED | SAM_UNMAPPED | SAM_MATE_UNMAPPED;
     }
 
-
+  
   } paired_alignment_t;
 
   // Aligning pair-ended batched sequences
@@ -1357,26 +1376,61 @@ orphan_paired_score_t paired_chain_orphan_score(
         ksw_extd2_sse(km, seq_len, (uint8_t *)seq, ref_len, (uint8_t*)ref, m, mat, gapo, gape, gapo2, gape2, w, zdrop, end_bonus, flag, &ez);
 
         // Concatenate the CIGAR strings
-        
+
         // std::string cigar_s;
-        sam->cigar = "";
-        for(size_t i = 0; i < ez.n_cigar; ++i)
-          sam->cigar += std::to_string(ez.cigar[i] >> 4) + "MID"[ez.cigar[i] & 0xf];
+        sam->lift_cigar = "";
+        for (size_t i = 0; i < ez.n_cigar; ++i)
+          sam->lift_cigar += std::to_string(ez.cigar[i] >> 4) + "MID"[ez.cigar[i] & 0xf];
+
+        // sam->n_cigar = ez.n_cigar;
+        // sam->cigar_b = (uint32_t*) malloc(ez.n_cigar * sizeof(uint32_t));
+        // std::memcopy(sam->cigar_b, ez.cigar, ez.n_cigar * sizeof(uint32_t));
 
         // Compute the MD:Z field and the number of mismatches
-        sam->nm = write_MD_core((uint8_t*)ref,seq,ez.cigar,ez.n_cigar,tmp,0,sam->md);
+        sam->lift_nm = write_MD_core((uint8_t *)ref, seq, ez.cigar, ez.n_cigar, tmp, 0, sam->lift_md);
 
         const auto ref = idx.index(ref_occ);
         sam->as = ez.score;
-        sam->pos = ref.second + 1; //ref_occ + 1; // ref_occ is 1 based
-        sam->rname = ref.first; // idx[ref_occ];
+        sam->lift_pos = ref.second + 1; // ref_occ + 1; // ref_occ is 1 based
+        sam->lift_rname = ref.first;    // idx[ref_occ];
+        sam->lift_rlen = ref_len;
+
+        bam1_t* bam = bam_init1();
+        bam_set1(bam, paired_mate->name.l, paired_mate->name.s, sam->flag, 0, ref.second, 0, ez.n_cigar, ez.cigar, 0, 0, 0, 0, NULL, NULL, 0);
+        idx.lift_cigar(bam, ref_occ);
+
+
+        const auto lift = idx.lift(ref_occ);
+        const auto lft_ref = idx.index(lift);
+        sam->pos = lft_ref.second + 1; // ref_occ + 1; // ref_occ is 1 based
+        sam->rname = lft_ref.first;    // idx[ref_occ];
+
+        uint32_t *cigar = bam_get_cigar(bam);
+        sam->cigar = "";
+        for (size_t i = 0; i < bam->core.n_cigar; ++i)
+          sam->cigar += std::to_string(cigar[i] >> 4) + "MID"[cigar[i] & 0xf];
+
+        ref_occ = lift; // This is correct since it is the position in the concatenation.
+        ref_len = bam_cigar2rlen(bam->core.n_cigar, cigar);
+        char * l_ref = (char *)malloc( ref_len );
+        ra.expandSubstr(ref_occ, ref_len, l_ref);
+
+        // Convert A,C,G,T,N into 0,1,2,3,4
+        for (size_t i = 0; i < ref_len; ++i)
+          l_ref[i] = seq_nt4_table[(int)l_ref[i]];
+        // Compute the MD:Z field and the number of mismatches
+        sam->nm = write_MD_core((uint8_t *)l_ref, seq, cigar, bam->core.n_cigar, tmp, 0, sam->md);
         sam->rlen = ref_len;
 
         score.score = ez.score;
         score.pos = ref_occ;
         delete tmp;
+        delete l_ref;
+        bam_destroy1(bam);
     }
 
+    delete ref;
+    delete seq;
     return score;  
   }
 
@@ -1618,18 +1672,52 @@ orphan_paired_score_t paired_chain_orphan_score(
         // Concatenate the CIGAR strings
         
         // std::string cigar_s;
-        sam->cigar = "";
+        sam->lift_cigar = "";
         for(size_t i = 0; i < ez.n_cigar; ++i)
-          sam->cigar += std::to_string(ez.cigar[i] >> 4) + "MID"[ez.cigar[i] & 0xf];
+          sam->lift_cigar += std::to_string(ez.cigar[i] >> 4) + "MID"[ez.cigar[i] & 0xf];
+
+        // sam->n_cigar = ez.n_cigar;
+        // sam->cigar_b = (uint32_t*) malloc(ez.n_cigar * sizeof(uint32_t));
+        // std::memcopy(sam->cigar_b, ez.cigar, ez.n_cigar * sizeof(uint32_t));
 
         // Compute the MD:Z field and the number of mismatches
-        sam->nm = write_MD_core((uint8_t*)ref,seq,ez.cigar,ez.n_cigar,tmp,0,sam->md);
+        sam->lift_nm = write_MD_core((uint8_t*)ref,seq,ez.cigar,ez.n_cigar,tmp,0,sam->lift_md);
 
         const auto ref = idx.index(ref_pos);
         sam->as = ez.score;
-        sam->pos = ref.second + 1; //ref_pos + 1; // ref_pos is 1 based
-        sam->rname = ref.first; // idx[ref_pos];
+        sam->lift_pos = ref.second + 1; //ref_pos + 1; // ref_pos is 1 based
+        sam->lift_rname = ref.first; // idx[ref_pos];
+        sam->lift_rlen = ref_len;
+
+        bam1_t* bam = bam_init1();
+        bam_set1(bam, read->name.l, read->name.s, sam->flag, 0, ref.second, 0, ez.n_cigar, ez.cigar, 0, 0, 0, 0, NULL, NULL, 0);
+        idx.lift_cigar(bam, ref_pos);
+
+
+        const auto lift = idx.lift(ref_pos);
+        const auto lft_ref = idx.index(lift);
+        sam->pos = lft_ref.second + 1; //ref_occ + 1; // ref_occ is 1 based
+        sam->rname = lft_ref.first; // idx[ref_occ];
+
+        uint32_t *cigar = bam_get_cigar(bam);
+        sam->cigar = "";
+        for (size_t i = 0; i < bam->core.n_cigar; ++i)
+          sam->cigar += std::to_string(cigar[i] >> 4) + "MID"[cigar[i] & 0xf];
+
+        ref_pos = lift; // This is correct since it is the position in the concatenation.
+        ref_len = bam_cigar2rlen(bam->core.n_cigar, cigar);
+        char* l_ref = (char *)malloc(ref_len);
+        ra.expandSubstr(ref_pos, ref_len, l_ref);
+
+        // Convert A,C,G,T,N into 0,1,2,3,4
+        for (size_t i = 0; i < ref_len; ++i)
+          l_ref[i] = seq_nt4_table[(int)l_ref[i]];
+        // Compute the MD:Z field and the number of mismatches
+        sam->nm = write_MD_core((uint8_t *)l_ref, seq, cigar, bam->core.n_cigar, tmp, 0, sam->md);
         sam->rlen = ref_len;
+
+        delete l_ref;
+        bam_destroy1(bam);
         // write_sam(ez.score, score2, min_score, ref_pos, "human", read, strand, out, cigar_s, mdz_s, nm, "*", 0, 0);
       }
       else
@@ -1747,6 +1835,15 @@ orphan_paired_score_t paired_chain_orphan_score(
       res += idx.to_sam();
       res += "@PG\tID:moni\tPN:moni\tVN:0.1.0\n";
       return res; 
+  }
+
+  void to_sam_header(sam_hdr_t *h)
+  {
+    sam_hdr_add_line(h, "HD", "VN", "1.6", "SO", "unknown", NULL);
+    const std::vector<std::string>& names = idx.get_names();
+    for (size_t i = 0; i < names.size(); ++i)
+        sam_hdr_add_line(h, "SQ", "SN", names[i].c_str(), "LN", std::to_string(idx.length(i)).c_str(), NULL);
+    sam_hdr_add_line(h, "PG", "ID", "moni", "VN", "0.1.0", NULL);
   }
 
 protected:

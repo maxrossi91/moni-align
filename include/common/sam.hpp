@@ -67,12 +67,29 @@ typedef struct sam_t{
 
     size_t rlen = 0; // Length of the match in the referenc. Requiredd to compute TLEN
 
+    std::string lift_rname = "*"; // RNAME: Reference sequence NAME
+    std::string lift_cigar = "*"; // RNAME: Reference sequence NAME
+    size_t lift_pos    = 0;    // POS: 1-based leftmost mapping POSition
+    size_t lift_mapq   = 255;  // MAPQ: MAPping Quality
+    size_t lift_nm = 0; // NM: Edit distance to the reference
+    std::string lift_md = ""; // MD: String encoding mismatched and deleted reference bases
+    size_t lift_rlen = 0; // Length of the match in the referenc. Requiredd to compute TLEN
+    
+    uint32_t *cigar_b = nullptr;
+    uint32_t n_cigar;
+
     // Quind the sam_t struct for a read
     sam_t(const kseq_t* read_)
     {
         read = read_;
     }
 
+    // Destructor
+    ~sam_t()
+    {
+      if( cigar_b != nullptr )
+        delete cigar_b;
+    }
 } sam_t;
 
 // /**
@@ -131,9 +148,16 @@ inline void write_sam(FILE *out, const sam_t s)
         if (s.zs > 0)
         fprintf(out, "\tZS:i:%d", s.zs);          // ZS
         fprintf(out, "\tMD:Z:%s", s.md.c_str());  // MD
-        fprintf(out, "\tOA:Z:%s\n", s.oa.c_str());  // OA
-    }else
-        fprintf(out, "\n");
+        // Printing OA
+        fprintf(out, "\tOA:Z:%s,", s.lift_rname.c_str());  // OA
+        fprintf(out, "%d,", s.lift_pos);  // OA
+        if (s.flag & SAM_REVERSED) fprintf(out, "-,");  // OA
+        else fprintf(out, "+,");  // OA
+        fprintf(out, "%s,", s.lift_cigar.c_str());  // OA
+        fprintf(out, "%d,", s.mapq);  // OA
+        fprintf(out, "%d;", s.lift_nm);  // OA
+    }
+    fprintf(out, "\n");
 }
 
 // Adapted from https://github.com/mengyao/Complete-Striped-Smith-Waterman-Library/blob/master/src/main.c
@@ -234,4 +258,13 @@ inline void write_sam(FILE *out, const sam_t s)
     // return make_pair(mdz,NM);
   }
 
+
+
+inline std::string cigar_to_string(const uint8_t* cigar, const size_t n_cigar)
+{
+  std::string out = "";
+  for (size_t i = 0; i < n_cigar; ++i)
+    out += std::to_string(cigar[i] >> 4) + "MID"[cigar[i] & 0xf];
+  return out;
+}
 #endif /* end of include guard: _SAM_HH */

@@ -155,6 +155,13 @@ public:
         return lift::Lift(ibv, dbv, sbv);
     }
 
+    inline void lift_cigar(bam1_t* b, const size_t pos)
+    {
+        size_t rank = rank1(pos + 1);
+        auto &lift_ = lifts[rank - 1];
+        lift_.first.lift_cigar(b);
+    }
+
 protected:
 // Pairs of lift and start position of the reference
     std::vector<std::pair<lift::Lift,size_t>> lifts; 
