@@ -108,7 +108,7 @@ target_include_directories(liftidx_test PUBLIC
 target_compile_options(liftidx_test PUBLIC "-std=c++17")
 
 
-list(APPEND CMAKE_MODULE_PATH ${Catch2_SOURCE_DIR}/extras)
-include(CTest)
-include(Catch)
-catch_discover_tests(lifting_test)
+# list(APPEND CMAKE_MODULE_PATH ${Catch2_SOURCE_DIR}/extras)
+# include(CTest)
+# include(Catch)
+# catch_discover_tests(lifting_test)
