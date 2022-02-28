@@ -263,6 +263,16 @@ public:
         sam.flag = SAM_UNMAPPED;
       }
 
+      void release_memory()
+      {
+        free_kseq_t(&read_rev);
+      }
+      
+      ~alignment_t()
+      {
+        release_memory();
+      }
+
     } alignment_t;
 
 
@@ -581,8 +591,8 @@ public:
     bool chained = false;
     bool best_score = false;
 
-    kseq_t* mate1;
-    kseq_t* mate2;
+    kseq_t* mate1 = nullptr;
+    kseq_t* mate2 = nullptr;
 
     kseq_t mate1_rev;
     kseq_t mate2_rev;
@@ -592,7 +602,7 @@ public:
 
     // TODO: precompute the nt4 version of the mates
 
-    const size_t min_score;
+    size_t min_score = 0;
     paired_score_t score;
     int32_t score2 = 0;
 
@@ -629,6 +639,37 @@ public:
 
     }
 
+    paired_alignment_t() {}
+    
+    void init(kseq_t *mate1_, kseq_t *mate2_)
+    {
+      mate1 = mate1_;
+      mate2 = mate2_;
+      sam_m1 = sam_t(mate1);
+      sam_m2 = sam_t(mate2);
+      min_score = 20 + 8 * log(mate1->seq.l);
+      // TODO: Add parameter to decide whether the slash mate has to be removed
+      remove_slash_mate(mate1);
+      remove_slash_mate(mate2);
+
+      rc_copy_kseq_t(&mate1_rev, mate1);
+      rc_copy_kseq_t(&mate2_rev, mate2);
+
+      // Initialize SAM infos
+      // Fill sam fields RNEXT
+      if(strcmp(mate1->name.s, mate2->name.s) == 0)
+      {
+        sam_m1.rnext = "=";
+        sam_m2.rnext = "=";
+      }
+      else
+      {
+        sam_m1.rnext = std::string(mate2->name.s);
+        sam_m2.rnext = std::string(mate1->name.s);
+      }
+
+    }
+
     void write(FILE* out)
     {
       write_sam(out, sam_m1);
@@ -640,7 +681,17 @@ public:
       sam_m1.flag = sam_m2.flag = SAM_PAIRED | SAM_UNMAPPED | SAM_MATE_UNMAPPED;
     }
 
-  
+    void release_memory()
+    {
+      free_kseq_t(&mate1_rev);
+      free_kseq_t(&mate2_rev);
+    }
+
+    ~paired_alignment_t()
+    {
+      release_memory();
+    }
+
   } paired_alignment_t;
 
   // Aligning pair-ended batched sequences
@@ -648,7 +699,7 @@ public:
   {
     size_t n_aligned = 0;
 
-    std::vector<paired_alignment_t> alignments;
+    std::vector<paired_alignment_t> alignments(batch->mate1->l);
     std::vector<double> mate_abs_distance;
 
     // Computing Mean and Variance using Welford's algorithm
@@ -660,7 +711,9 @@ public:
     int l = batch->mate1->l;
     for (size_t i = 0; i < l; ++i)
     {
-      paired_alignment_t alignment(&batch->mate1->buf[i], &batch->mate2->buf[i]);
+      // paired_alignment_t alignment(&batch->mate1->buf[i], &batch->mate2->buf[i]);
+      paired_alignment_t& alignment = alignments[i];
+      alignment.init(&batch->mate1->buf[i], &batch->mate2->buf[i]);
       if(align(alignment))
       {
         // Get stats
@@ -671,7 +724,7 @@ public:
         m2 += delta * (value - mean);
       }
       // Store the alignment informations
-      alignments.push_back(alignment);
+      // alignments.push_back(alignment);
     }
 
     // Computes stats
@@ -691,7 +744,7 @@ public:
     double std_dev = sqrt(variance);
 
     // Perform local serach for unaligned mates.
-    for(auto alignment : alignments)
+    for(auto& alignment : alignments)
     {
       if(not alignment.aligned and alignment.chained)
         orphan_recovery(alignment, mean, std_dev);

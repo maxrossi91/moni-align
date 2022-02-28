@@ -97,6 +97,17 @@ inline static void copy_kstring_t(kstring_t &l, kstring_t &r)
     for (size_t i = 0; i < r.m; ++i)
         l.s[i] = r.s[i];
 }
+
+inline static void free_kstring_t(kstring_t &s)
+{
+    if (s.s != nullptr)
+        free(s.s);
+    s.s = nullptr;
+}
+
+
+
+
 inline static void copy_kseq_t(kseq_t *l, kseq_t *r)
 {
     copy_kstring_t(l->name, r->name);
@@ -154,6 +165,14 @@ inline static void rc_copy_kseq_t(kseq_t *l, kseq_t *r)
     rc_copy_kstring_t(l->seq, r->seq);
     r_copy_kstring_t(l->qual, r->qual);
     l->last_char = r->last_char;
+}
+
+inline static void free_kseq_t(kseq_t *s)
+{
+    free_kstring_t(s->name);
+    free_kstring_t(s->comment);
+    free_kstring_t(s->seq);
+    free_kstring_t(s->qual);
 }
 ////////////////////////////////////////////////////////////////////////////////
 

@@ -83,6 +83,8 @@ typedef struct sam_t{
     {
         read = read_;
     }
+    // Quind the sam_t struct for a read
+    sam_t(){}
 
     // Destructor
     ~sam_t()
