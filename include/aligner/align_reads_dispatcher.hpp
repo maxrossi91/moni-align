@@ -419,7 +419,16 @@ size_t st_align(aligner_t *aligner, std::string pattern_filename, std::string sa
     kpbseq_destroy(b);
   }
   verbose("Number of aligned reads: ", n_aligned_reads, "/", n_reads);
-  kseq_destroy(seq);
+  if (fp_mate2 != nullptr)
+  {
+    kseq_destroy(mate1);
+    kseq_destroy(mate2);
+    gzclose(fp_mate2);
+  }
+  else
+  {
+    kseq_destroy(seq);
+  }
   gzclose(fp);
   fclose(sam_fd);
 
