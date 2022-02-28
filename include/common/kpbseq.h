@@ -141,7 +141,7 @@ inline static void r_copy_kstring_t(kstring_t &l, kstring_t &r)
     l.l = r.l;
     l.m = r.m;
     l.s = (char *)malloc(l.m);
-    for (size_t i = 0; i < r.m; ++i)
+    for (size_t i = 0; i < r.l; ++i)
         l.s[i] = r.s[r.l - i - 1];
     if (l.m > l.l)
       l.s[l.l] = 0;
@@ -152,7 +152,7 @@ inline static void rc_copy_kstring_t(kstring_t &l, kstring_t &r)
     l.l = r.l;
     l.m = r.m;
     l.s = (char *)malloc(l.m);
-    for (size_t i = 0; i < r.m; ++i)
+    for (size_t i = 0; i < r.l; ++i)
         l.s[i] = seq_compl_table[r.s[r.l - i - 1]];
     if (l.m > l.l)
       l.s[l.l] = 0;
