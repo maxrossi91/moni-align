@@ -1624,73 +1624,124 @@ orphan_paired_score_t paired_chain_orphan_score(
     // Store the starting position of the allignment
     score.pos = ref_pos;
 
+    bool mems_overlap = false;
+    size_t last_ref = mem_pos + mems[anchors[0].first].len;
+    size_t last_seq = mems[anchors[0].first].idx + mems[anchors[0].first].len;
+    for(size_t i = 1; i < anchors.size() and not mems_overlap; ++i)
+    {
+      const size_t& ref_occ  = mems[anchors[i].first].occs[anchors[i].second];
+      const size_t& seq_occ = mems[anchors[i].first].idx;
+      const size_t& mem_len = mems[anchors[i].first].len;
+      // Check with > because last is the first position not covered
+      if (last_ref > ref_occ or last_seq > seq_occ) mems_overlap = true;
+      last_ref = ref_occ + mem_len;
+      last_seq = seq_occ + mem_len;
+    }
     // TODO: fix the gap fill when MEMs overlap. The quick fix is a full alignment between the first and last MEM
-    // // Fill the gaps between each mem
-    // std::vector<ksw_extz_t> ez_cc(anchors.size()-1);
-    // for(size_t i = 1; i < anchors.size(); ++i)
-    // {
-    //   flag = KSW_EZ_RIGHT;
-    //   ksw_reset_extz(&ez_cc[i-1]);
+    // Fill the gaps between each mem
+    std::vector<ksw_extz_t> ez_cc(anchors.size()-1);
+    if (not mems_overlap and not realign)
+    {
+      // Check if we need to extend between anchors or not.
+      size_t last_ref = mem_pos + mems[anchors[0].first].len;
+      size_t last_seq = mems[anchors[0].first].idx + mems[anchors[0].first].len;
 
-    //   // size_t cc_occ = mems[anchors[i-1].first].occs[anchors[i-1].second] + mems[anchors[i-1].first].len;
-    //   // size_t cc_len = mems[anchors[i].first].occs[anchors[i].second] - cc_occ; 
-    //   // char *cc = (char *)malloc(cc_len);
-    //   // ra.expandSubstr(cc_occ, cc_len, cc); // TODO: Replace all expand substrings with only one expand at the beginning.
-    //   // // verbose("rc: " + std::string(rc));
-    //   // // Convert A,C,G,T,N into 0,1,2,3,4
-    //   // for (size_t i = 0; i < cc_len; ++i)
-    //   //   cc[i] = seq_nt4_table[(int)cc[i]];
+      for(size_t i = 1; i < anchors.size(); ++i)
+      {
 
-    //   size_t cc_occ = mems[anchors[i-1].first].occs[anchors[i-1].second] + mems[anchors[i-1].first].len;
-    //   size_t cc_len = mems[anchors[i].first].occs[anchors[i].second] - cc_occ; 
-    //   cc_occ -= ref_pos;
-    //   char *cc = (char *)malloc(cc_len);
-    //   // Convert A,C,G,T,N into 0,1,2,3,4
-    //   for (size_t i = 0; i < cc_len; ++i)
-    //     cc[i] = ref[cc_occ + i];
+        const size_t& ref_occ  = mems[anchors[i].first].occs[anchors[i].second];
+        const size_t& seq_occ = mems[anchors[i].first].idx;
+        const size_t& mem_len = mems[anchors[i].first].len;
+        if(last_ref == ref_occ)
+        {
+          if(last_seq < seq_occ)
+          {
+            size_t l = (seq_occ - last_seq);
+            ez_cc[i-1].score = -std::min(gapo + l*gape, gapo2 + l*gape2);
+            ez_cc[i-1].m_cigar = 1;
+            ez_cc[i-1].n_cigar = 1;
+            ez_cc[i-1].cigar = (uint32_t*) malloc(ez_cc[i-1].m_cigar * sizeof(uint32_t));
+            ez_cc[i-1].cigar[0] = (l << 4) |  1; // Insertion to ref
+          }
+          else
+          {
+            ez_cc[i-1].score = 0;
+            ez_cc[i-1].m_cigar = 0;
+            ez_cc[i-1].n_cigar = 0;
+          }
+        }
+        else // last_ref < seq_occ
+        {
+          if(last_seq == seq_occ)
+          {
+            size_t l = (seq_occ - last_seq);
+            ez_cc[i-1].score = -std::min(gapo + l*gape, gapo2 + l*gape2);
+            ez_cc[i-1].m_cigar = 1;
+            ez_cc[i-1].n_cigar = 1;
+            ez_cc[i-1].cigar = (uint32_t*) malloc(ez_cc[i-1].m_cigar * sizeof(uint32_t));
+            ez_cc[i-1].cigar[0] = (l << 4) |  2; // Deletion from ref
+          }
+          else
+          {
+            flag = KSW_EZ_RIGHT;
+            ksw_reset_extz(&ez_cc[i-1]);
+
+            size_t cc_occ = mems[anchors[i-1].first].occs[anchors[i-1].second] + mems[anchors[i-1].first].len;
+            size_t cc_len = mems[anchors[i].first].occs[anchors[i].second] - cc_occ; 
+            cc_occ -= ref_pos;
+            // char *cc = (char *)malloc(cc_len);
+            // // Convert A,C,G,T,N into 0,1,2,3,4
+            // for (size_t i = 0; i < cc_len; ++i)
+            //   cc[i] = ref[cc_occ + i];
 
 
-    //   size_t ccs_pos = mems[anchors[i-1].first].idx + mems[anchors[i-1].first].len;
-    //   size_t ccs_len = mems[anchors[i].first].idx - ccs_pos;
+            size_t ccs_pos = mems[anchors[i-1].first].idx + mems[anchors[i-1].first].len;
+            size_t ccs_len = mems[anchors[i].first].idx - ccs_pos;
 
-    //   // Query: rcs
-    //   // Target: rc
-    //   // verbose("aligning rc and rcs");
-    //   ksw_extz2_sse(km, ccs_len, (uint8_t*)(seq + ccs_pos), cc_len, (uint8_t*)cc, m, mat, gapo, gape, w, zdrop, end_bonus, flag, &ez_cc[i-1]);
-    //   // score_cc = ez_cc.mqe;
-    //   // verbose("rc score: " + std::to_string(score_rc));
-    //   // Check if the extension reached the end or the query
-    //   // assert(score_only or ez_cc[i-1].reach_end);
+            // Query: rcs
+            // Target: rc
+            ksw_extz2_sse(km, ccs_len, (uint8_t*)(seq + ccs_pos), cc_len, (uint8_t*)(ref + cc_occ), m, mat, gapo, gape, w, zdrop, end_bonus, flag, &ez_cc[i-1]);
 
-    //   // Update score
-    //   score +=  mems[anchors[i-1].first].len * smatch + ez_cc[i-1].mqe;
+          }
+        }
+        last_ref = ref_occ + mem_len;
+        last_seq = seq_occ + mem_len;
 
-    //   // std::string brc = print_BLAST_like((uint8_t*)rc,(uint8_t*)rcs,ez_rc.cigar,ez_rc.n_cigar);
-    //   // std::cout<<brc;
-    //   delete cc;
-    // }
+        // Update score
+        // Here we use the score because we need to take into account eventual deletions
+        // at the end of the reference.
+        score.score +=  mems[anchors[i-1].first].len * smatch + ez_cc[i-1].score;
 
-    // score +=  mems[anchors.back().first].len * smatch;
+      }
 
-//******************************************************************************
-// BEGIN RAPID PROTOTYPING HACK
-//******************************************************************************
-    // Realign the whole sequence globally
-    ksw_reset_extz(&ez);
-    ksw_extz2_sse(km, seq_len, (uint8_t *)seq, ref_len, (uint8_t *)ref, m, mat, gapo, gape, w, zdrop, end_bonus, flag, &ez);
+      score.score +=  mems[anchors.back().first].len * smatch;
+    }
+    else
+    {
+  //******************************************************************************
+  // BEGIN RAPID PROTOTYPING HACK
+  //******************************************************************************
+      // Realign the whole sequence globally
+      ksw_reset_extz(&ez);
+      ksw_extz2_sse(km, seq_len, (uint8_t *)seq, ref_len, (uint8_t *)ref, m, mat, gapo, gape, w, zdrop, end_bonus, flag, &ez);
 
-    score.score = ez.score;
-    // TODO: Check if we have to update also the position
-    realign = true;
+      score.score = ez.score;
+      // TODO: Check if we have to update also the position
+      realign = true;
 
-//******************************************************************************
-// END RAPID PROTOTYPING HACK
-//******************************************************************************
+  //******************************************************************************
+  // END RAPID PROTOTYPING HACK
+  //******************************************************************************
+    }
+
     if(not score_only)
     {
       // Compute starting position in reference
 
       char* tmp = (char*)calloc(max(ref_len,seq_len),1);
+
+      size_t n_cigar = 0;
+      uint32_t *cigar = nullptr;
 
       if(realign)
       {
@@ -1723,135 +1774,132 @@ orphan_paired_score_t paired_chain_orphan_score(
         assert(ez.score >= score.score);
 
         // Concatenate the CIGAR strings
-        
-        // std::string cigar_s;
-        sam->lift_cigar = "";
-        for(size_t i = 0; i < ez.n_cigar; ++i)
-          sam->lift_cigar += std::to_string(ez.cigar[i] >> 4) + "MID"[ez.cigar[i] & 0xf];
-
-        // sam->n_cigar = ez.n_cigar;
-        // sam->cigar_b = (uint32_t*) malloc(ez.n_cigar * sizeof(uint32_t));
-        // std::memcopy(sam->cigar_b, ez.cigar, ez.n_cigar * sizeof(uint32_t));
-
-        // Compute the MD:Z field and the number of mismatches
-        sam->lift_nm = write_MD_core((uint8_t*)ref,seq,ez.cigar,ez.n_cigar,tmp,0,sam->lift_md);
-
-        const auto ref = idx.index(ref_pos);
-        sam->as = ez.score;
-        sam->lift_pos = ref.second + 1; //ref_pos + 1; // ref_pos is 1 based
-        sam->lift_rname = ref.first; // idx[ref_pos];
-        sam->lift_rlen = ref_len;
-
-        bam1_t* bam = bam_init1();
-        bam_set1(bam, read->name.l, read->name.s, sam->flag, 0, ref.second, 0, ez.n_cigar, ez.cigar, 0, 0, 0, 0, NULL, NULL, 0);
-        idx.lift_cigar(bam, ref_pos);
-
-
-        const auto lift = idx.lift(ref_pos);
-        const auto lft_ref = idx.index(lift);
-        sam->pos = lft_ref.second + 1; //ref_occ + 1; // ref_occ is 1 based
-        sam->rname = lft_ref.first; // idx[ref_occ];
-
-        uint32_t *cigar = bam_get_cigar(bam);
-        sam->cigar = "";
-        for (size_t i = 0; i < bam->core.n_cigar; ++i)
-          sam->cigar += std::to_string(cigar[i] >> 4) + "MID"[cigar[i] & 0xf];
-
-        ref_pos = lift; // This is correct since it is the position in the concatenation.
-        ref_len = bam_cigar2rlen(bam->core.n_cigar, cigar);
-        char* l_ref = (char *)malloc(ref_len);
-        ra.expandSubstr(ref_pos, ref_len, l_ref);
-
-        // Convert A,C,G,T,N into 0,1,2,3,4
-        for (size_t i = 0; i < ref_len; ++i)
-          l_ref[i] = seq_nt4_table[(int)l_ref[i]];
-        // Compute the MD:Z field and the number of mismatches
-        sam->nm = write_MD_core((uint8_t *)l_ref, seq, cigar, bam->core.n_cigar, tmp, 0, sam->md);
-        sam->rlen = ref_len;
-
-        delete l_ref;
-        bam_destroy1(bam);
-        // write_sam(ez.score, score2, min_score, ref_pos, "human", read, strand, out, cigar_s, mdz_s, nm, "*", 0, 0);
+        n_cigar = ez.n_cigar;
+        cigar = ez.cigar;
+        score.score = ez.score;
+        ez.m_cigar = 0; // To avoid double free
       }
       else
       {
-        // // Concatenate the CIGAR strings
-        // size_t n_cigar = ez_lc.n_cigar + ez_rc.n_cigar + 1;
-        // for(size_t i = 0; i < anchors.size()-1; ++i)
-        //   n_cigar += ez_cc[i].n_cigar + 1;
+        // Concatenate the CIGAR strings
+        n_cigar = ez_lc.n_cigar + ez_rc.n_cigar + 1;
+        for(size_t i = 0; i < anchors.size()-1; ++i)
+          n_cigar += ez_cc[i].n_cigar + 1;
 
-        // uint32_t *cigar = (uint32_t*)calloc(n_cigar,sizeof(uint32_t));
-        // size_t i = 0;
+        cigar = (uint32_t*)calloc(n_cigar,sizeof(uint32_t));
+        size_t i = 0;
 
-        // for(size_t j = 0; j < ez_lc.n_cigar; ++j)
-        //   cigar[i++] = ez_lc.cigar[ez_lc.n_cigar -j -1];
+        for(size_t j = 0; j < ez_lc.n_cigar; ++j)
+          cigar[i++] = ez_lc.cigar[ez_lc.n_cigar -j -1];
 
-        // // CIGARs between MEMs
-        // for(size_t j = 0; j < anchors.size(); ++j)
-        // {
-        //   // CIGAR for the MEM
-        //   size_t mem_len = mems[anchors[j].first].len;
-        //   if(i > 0 and ((cigar[i-1]& 0xf) == 0))
-        //   { // If the previous operation is also an M then merge the two operations
-        //     cigar[i-1] += (((uint32_t)mem_len) << 4);
-        //     --n_cigar;
-        //   }
-        //   else
-        //     cigar[i++] = (((uint32_t)mem_len) << 4);
+        // CIGARs between MEMs
+        for(size_t j = 0; j < anchors.size(); ++j)
+        {
+          // CIGAR for the MEM
+          const size_t& mem_len = mems[anchors[j].first].len;
+          if(i > 0 and ((cigar[i-1]& 0xf) == 0))
+          { // If the previous operation is also an M then merge the two operations
+            cigar[i-1] += (((uint32_t)mem_len) << 4);
+            --n_cigar;
+          }
+          else
+            cigar[i++] = (((uint32_t)mem_len) << 4);
 
-        //   // CIGAR of the gap between the j-th MEM and the j+1-th MEM
-        //   if(j < anchors.size() - 1)
-        //   {
-        //     if(ez_cc[j].n_cigar > 0)
-        //     {
-        //       // Check the first element
-        //       if((ez_cc[j].cigar[0]& 0xf) == 0)
-        //       { // If the next operation is also an M then merge the two operations
-        //         cigar[i-1] += ez_cc[j].cigar[0];
-        //         --n_cigar;
-        //       }
-        //       else
-        //         cigar[i++] = ez_cc[j].cigar[0];
-        //     } 
+          // CIGAR of the gap between the j-th MEM and the j+1-th MEM
+          if(j < anchors.size() - 1)
+          {
+            if(ez_cc[j].n_cigar > 0)
+            {
+              // Check the first element
+              if((ez_cc[j].cigar[0]& 0xf) == 0)
+              { // If the next operation is also an M then merge the two operations
+                cigar[i-1] += ez_cc[j].cigar[0];
+                --n_cigar;
+              }
+              else
+                cigar[i++] = ez_cc[j].cigar[0];
+            } 
                       
-        //       // Copy all the other elements
-        //       for(size_t k = 1; k < ez_cc[j].n_cigar; ++k)
-        //         cigar[i++] = ez_cc[j].cigar[k];
-        //   }
-        // }
+              // Copy all the other elements
+              for(size_t k = 1; k < ez_cc[j].n_cigar; ++k)
+                cigar[i++] = ez_cc[j].cigar[k];
+          }
+        }
 
-        // // CIGAR of the right context
-        // if(ez_rc.n_cigar > 0)
-        // {
-        //   if((ez_rc.cigar[0]& 0xf) == 0)
-        //   { // If the next operation is also an M then merge the two operations
-        //     cigar[i-1] += ez_rc.cigar[0];
-        //     --n_cigar;
-        //   }
-        //   else
-        //     cigar[i++] = ez_rc.cigar[0];
-        // }
+        // CIGAR of the right context
+        if(ez_rc.n_cigar > 0)
+        {
+          if((ez_rc.cigar[0]& 0xf) == 0)
+          { // If the next operation is also an M then merge the two operations
+            cigar[i-1] += ez_rc.cigar[0];
+            --n_cigar;
+          }
+          else
+            cigar[i++] = ez_rc.cigar[0];
+        }
 
-        // for(size_t j = 1; j < ez_rc.n_cigar; ++j)
-        //   cigar[i++] = ez_rc.cigar[j];
+        for(size_t j = 1; j < ez_rc.n_cigar; ++j)
+          cigar[i++] = ez_rc.cigar[j];
         
-        // assert(i <= n_cigar);
+        assert(i <= n_cigar);
 
-        // // std::string bfull = print_BLAST_like((uint8_t*)ref,seq,cigar,n_cigar);
-        // // std::cout << bfull;
-
-        // std::string cigar_s;
-        // for(size_t i = 0; i < n_cigar; ++i)
-        //   cigar_s += std::to_string(cigar[i] >> 4) + "MID"[cigar[i] & 0xf];
-
-
-        // // Compute the MD:Z field and thenumber of mismatches
-        // std::pair<std::string,size_t> md_nm = write_MD_core((uint8_t*)ref,seq,cigar,n_cigar,tmp,0);
-
-        // write_sam(score,score2,min_score,ref_pos,"human",read,strand,out,cigar_s,md_nm.first,md_nm.second);
-
-        // delete cigar;
       }
+
+
+
+
+      // report output
+      sam->lift_cigar = "";
+      for(size_t i = 0; i < n_cigar; ++i)
+        sam->lift_cigar += std::to_string(cigar[i] >> 4) + "MID"[cigar[i] & 0xf];
+
+      // sam->n_cigar = n_cigar;
+      // sam->cigar_b = (uint32_t*) malloc(n_cigar * sizeof(uint32_t));
+      // std::memcopy(sam->cigar_b, cigar, n_cigar * sizeof(uint32_t));
+
+      // Compute the MD:Z field and the number of mismatches
+      sam->lift_nm = write_MD_core((uint8_t*)ref,seq,cigar,n_cigar,tmp,0,sam->lift_md);
+
+      const auto ref = idx.index(ref_pos);
+      sam->as = score.score;
+      sam->lift_pos = ref.second + 1; //ref_pos + 1; // ref_pos is 1 based
+      sam->lift_rname = ref.first; // idx[ref_pos];
+      sam->lift_rlen = ref_len;
+
+      bam1_t* bam = bam_init1();
+      bam_set1(bam, read->name.l, read->name.s, sam->flag, 0, ref.second, 0, n_cigar, cigar, 0, 0, 0, 0, NULL, NULL, 0);
+      idx.lift_cigar(bam, ref_pos);
+
+
+      const auto lift = idx.lift(ref_pos);
+      const auto lft_ref = idx.index(lift);
+      sam->pos = lft_ref.second + 1; //ref_occ + 1; // ref_occ is 1 based
+      sam->rname = lft_ref.first; // idx[ref_occ];
+
+      uint32_t *lft_cigar = bam_get_cigar(bam); // This has not to be deleted later
+      sam->cigar = "";
+      for (size_t i = 0; i < bam->core.n_cigar; ++i)
+        sam->cigar += std::to_string(lft_cigar[i] >> 4) + "MID"[lft_cigar[i] & 0xf];
+
+      ref_pos = lift; // This is correct since it is the position in the concatenation.
+      ref_len = bam_cigar2rlen(bam->core.n_cigar, lft_cigar);
+      char* l_ref = (char *)malloc(ref_len);
+      ra.expandSubstr(ref_pos, ref_len, l_ref);
+
+      // Convert A,C,G,T,N into 0,1,2,3,4
+      for (size_t i = 0; i < ref_len; ++i)
+        l_ref[i] = seq_nt4_table[(int)l_ref[i]];
+      // Compute the MD:Z field and the number of mismatches
+      sam->nm = write_MD_core((uint8_t *)l_ref, seq, lft_cigar, bam->core.n_cigar, tmp, 0, sam->md);
+      sam->rlen = ref_len;
+
+      delete l_ref;
+      bam_destroy1(bam);
+    
+
+
+
+      delete cigar;
       delete tmp;
     }
     delete ref;
@@ -1863,6 +1911,9 @@ orphan_paired_score_t paired_chain_orphan_score(
       delete ez_rc.cigar;
     if (ez.m_cigar > 0)
       delete ez.cigar;
+    for( size_t i = 0; i < ez_cc.size(); ++i )
+      if(ez_cc[i].n_cigar > 0)
+        delete ez_cc[i].cigar;
 
     return score;
   }
