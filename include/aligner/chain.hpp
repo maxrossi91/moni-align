@@ -80,6 +80,8 @@ bool find_chains(
             const chain_config_t config = chain_config_t()        
     )
 {
+    MTIME_INIT(4);   
+    MTIME_START(3); // Timing helper
     /************* minimap2 dynamic programming for mem chaining ***************/
     /* https://github.com/lh3/minimap2/blob/master/chain.c */
 
@@ -103,6 +105,8 @@ bool find_chains(
     float avg_mem_length = (float)tot_mem_length / anchors.size();
 
     std::sort(anchors.begin(),anchors.end(),cmp);
+    MTIME_END(3); //Timing helper
+    MTIME_TSAFE_MERGE;
 
     // Dynamic programming
     const ll G = config.G;

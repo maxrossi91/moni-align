@@ -3447,7 +3447,7 @@ int main(int argc, char *const argv[])
     dispatcher<aligner<plain_slp_t, ms_pointers<>>>(args);
   }
 
-  MTIME_REPORT_ALL;
+  MTIME_TSAFE_REPORT_ALL;
 
   return 0;
 }

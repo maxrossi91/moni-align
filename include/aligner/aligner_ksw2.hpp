@@ -49,6 +49,7 @@
 #include <kpbseq.h>
 #include <liftidx.hpp>
 
+MTIME_TSAFE_INIT(4);
 #include <slp_definitions.hpp>
 #include <chain.hpp>
 
@@ -56,7 +57,6 @@
 
 #define _REALIGN
 
-MTIME_INIT(3);
 
 // KSEQ_INIT(gzFile, gzread);
 
@@ -451,6 +451,7 @@ public:
   // Aligning unpaired sequences
   bool align(alignment_t &al)
   {    
+    MTIME_INIT(3);
     MTIME_START(0); // Timing helper
 
     find_seeds(al.read,al.mems, 0, MATE_1 | MATE_F);
@@ -466,7 +467,11 @@ public:
     MTIME_START(2); //Timing helper
 
     if (not al.chained)
+    {
+      MTIME_END(2); //Timing helper
+      MTIME_TSAFE_MERGE;
       return false;
+    }
 
     int32_t min_score = 20 + 8 * log(al.read->seq.l);
 
@@ -522,7 +527,11 @@ public:
     assert(best_scores.size() > 1);
 
     if (std::get<0>(best_scores[0]) < min_score)
+    {
+      MTIME_END(2); //Timing helper
+      MTIME_TSAFE_MERGE;
       return false;
+    }
 
     al.best_score = true;
 
@@ -553,10 +562,10 @@ public:
     al.aligned = (al.score.score >= min_score);
 
     MTIME_END(2); //Timing helper
+    MTIME_TSAFE_MERGE;
     if (not al.aligned)
       return false;
     
-
 
     return al.aligned;
   
@@ -768,7 +777,8 @@ public:
 
   // Aligning pair-ended sequences
   bool align(paired_alignment_t &al)
-  {    
+  { 
+    MTIME_INIT(3);   
     MTIME_START(0); // Timing helper
 
     // Find MEMs
@@ -791,7 +801,11 @@ public:
     MTIME_START(2); //Timing helper
 
     if (not al.chained)
+    {
+      MTIME_END(2); //Timing helper
+      MTIME_TSAFE_MERGE;
       return false;
+    }
 
 
     int32_t min_score = 20 + 8 * log(al.mate1->seq.l);
@@ -850,7 +864,11 @@ public:
     assert(best_scores.size() > 1);
 
     if (std::get<0>(best_scores[0]) < min_score)
+    {
+      MTIME_END(2); //Timing helper
+      MTIME_TSAFE_MERGE;
       return false;
+    }
 
     al.best_score = true;
 
@@ -873,10 +891,10 @@ public:
     al.aligned = (al.score.tot >= min_score);
 
     MTIME_END(2); //Timing helper
+    MTIME_TSAFE_MERGE;
     if (not al.aligned)
       return false;
     
-
 
     return al.aligned;
   }
@@ -886,6 +904,8 @@ public:
     const double mean, 
     const double std_dev)
   {
+    MTIME_INIT(3);   
+    MTIME_START(2); //Timing helper
     // We need to use the local alignment of ksw to perform local search
     
     // For all good chaining of both mates of length at least min_length, find the possible distance of the mate
@@ -919,7 +939,11 @@ public:
     assert(best_scores.size() > 1);
 
     if (best_scores[0].first.first < alignment.min_score)
+    {
+      MTIME_END(2); //Timing helper
+      MTIME_TSAFE_MERGE;
       return false;
+    }
     alignment.best_score = true;
 
     alignment.score2 = best_scores[1].first.first;
@@ -942,11 +966,11 @@ public:
 
     alignment.aligned = (alignment.score.tot >= alignment.min_score);
 
+    MTIME_END(2); //Timing helper
+    MTIME_TSAFE_MERGE;
     if (not alignment.aligned)
       return false;
     
-
-    MTIME_END(2); //Timing helper
 
     return alignment.aligned;
   }

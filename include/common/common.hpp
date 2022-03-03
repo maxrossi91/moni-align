@@ -46,6 +46,7 @@
 #include <sdsl/io.hpp>  // serialize and load
 #include <type_traits>  // enable_if_t and is_fundamental
 
+#include <mutex>
 //**************************** From  Big-BWT ***********************************
 // special symbols used by the construction algorithm:
 //   they cannot appear in the input file
@@ -549,6 +550,10 @@ void my_load(std::vector<X> &x, std::istream &in, typename std::enable_if<std::i
 #ifndef _MTIME
 #define _MTIME
 
+#define MTIME_TSAFE_INIT(_n)                                                    \
+  std::mutex __mtime_mtx;                                                       \
+  std::vector<double> __tsafe_durations(_n, 0.0);
+
 #define MTIME_INIT(_n)                                                                                                                \
   std::vector<std::chrono::high_resolution_clock::time_point> __watches(_n);                                                          \
   std::vector<double> __durations(_n, 0.0);
@@ -565,14 +570,34 @@ void my_load(std::vector<X> &x, std::istream &in, typename std::enable_if<std::i
 #define MTIME_REPORT_ALL                          \
   for (size_t i = 0; i < __durations.size(); ++i) \
   MTIME_REPORT(i)
+
+#define MTIME_TSAFE_REPORT(_i) \
+  verbose("Timing variable: ", _i, " ", __tsafe_durations[_i]);
+
+#define MTIME_TSAFE_REPORT_ALL                          \
+  for (size_t i = 0; i < __tsafe_durations.size(); ++i) \
+  MTIME_TSAFE_REPORT(i)
+
+#define MTIME_TSAFE_MERGE                         \
+  __mtime_mtx.lock();                             \
+  for (size_t i = 0; i < __durations.size(); ++i) \
+    __tsafe_durations[i] += __durations[i];       \
+  __mtime_mtx.unlock();
+
+
+
 #endif /* _MTIME */
 
 #else
+  #define MTIME_TSAFE_INIT(_n)
   #define MTIME_INIT(_n)
   #define MTIME_START(_i)
   #define MTIME_END(_i)
   #define MTIME_REPORT(_i)
   #define MTIME_REPORT_ALL
+  #define MTIME_TSAFE_REPORT(_i)
+  #define MTIME_TSAFE_REPORT_ALL
+  #define MTIME_TSAFE_MERGE
 #endif
 
 
