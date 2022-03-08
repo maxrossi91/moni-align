@@ -70,7 +70,7 @@ typedef struct sam_t{
     std::string lift_rname = "*"; // RNAME: Reference sequence NAME
     std::string lift_cigar = "*"; // RNAME: Reference sequence NAME
     size_t lift_pos    = 0;    // POS: 1-based leftmost mapping POSition
-    size_t lift_mapq   = 255;  // MAPQ: MAPping Quality
+    size_t lift_mapq   = 0;  // MAPQ: MAPping Quality
     size_t lift_nm = 0; // NM: Edit distance to the reference
     std::string lift_md = ""; // MD: String encoding mismatched and deleted reference bases
     size_t lift_rlen = 0; // Length of the match in the referenc. Requiredd to compute TLEN
@@ -92,6 +92,15 @@ typedef struct sam_t{
       if( cigar_b != nullptr )
         delete cigar_b;
     }
+
+    // Validate sam 
+    const inline bool validate()
+    {
+      bool res = true;
+      res = res and (mapq >= 0 and mapq < 256);
+      return res;
+    }
+
 } sam_t;
 
 // /**
@@ -126,38 +135,41 @@ inline void remove_slash_mate(kseq_t* read)
 
 inline void write_sam(FILE *out, const sam_t s)
 {
-    fprintf(out, "%s\t", s.read->name.s);         // QNAME
-    fprintf(out, "%d\t", s.flag);                 // FLAG
-    fprintf(out, "%s\t", s.rname.c_str());        // RNAME
-    fprintf(out, "%d\t", s.pos);                  // POS
-    fprintf(out, "%d\t", s.mapq);                 // MAPQ
-    fprintf(out, "%s\t", s.cigar.c_str());        // CIGAR
-    fprintf(out, "%s\t", s.rnext.c_str());        // RNEXT
-    fprintf(out, "%d\t", s.pnext);                // PNEXT
-    fprintf(out, "%d\t", s.tlen);                 // TLEN
-    fprintf(out, "%s\t", s.read->seq.s);          // SEQ
+  assert((s.mapq >= 0 and s.mapq < 256));
+  fprintf(out, "%s\t", s.read->name.s);  // QNAME
+  fprintf(out, "%d\t", s.flag);          // FLAG
+  fprintf(out, "%s\t", s.rname.c_str()); // RNAME
+  fprintf(out, "%d\t", s.pos);           // POS
+  fprintf(out, "%d\t", s.mapq);          // MAPQ
+  fprintf(out, "%s\t", s.cigar.c_str()); // CIGAR
+  fprintf(out, "%s\t", s.rnext.c_str()); // RNEXT
+  fprintf(out, "%d\t", s.pnext);         // PNEXT
+  fprintf(out, "%d\t", s.tlen);          // TLEN
+  fprintf(out, "%s\t", s.read->seq.s);   // SEQ
 
-    if (s.read->qual.s)                           // QUAL
-        fprintf(out, "%s", s.read->qual.s);
+  if (s.read->qual.s) // QUAL
+    fprintf(out, "%s", s.read->qual.s);
+  else
+    fprintf(out, "*");
+
+  // Optional TAGs
+  if (!(s.flag & SAM_UNMAPPED))
+  {
+    fprintf(out, "\tAS:i:%d", s.as); // AS
+    fprintf(out, "\tNM:i:%d", s.nm); // NM
+    if (s.zs > 0)
+      fprintf(out, "\tZS:i:%d", s.zs);       // ZS
+    fprintf(out, "\tMD:Z:%s", s.md.c_str()); // MD
+    // Printing OA
+    fprintf(out, "\tOA:Z:%s,", s.lift_rname.c_str()); // OA
+    fprintf(out, "%d,", s.lift_pos);                  // OA
+    if (s.flag & SAM_REVERSED)
+      fprintf(out, "-,"); // OA
     else
-        fprintf(out, "*");
-
-    // Optional TAGs
-    if (!(s.flag & SAM_UNMAPPED))
-    {
-        fprintf(out, "\tAS:i:%d", s.as);            // AS
-        fprintf(out, "\tNM:i:%d", s.nm);            // NM
-        if (s.zs > 0)
-        fprintf(out, "\tZS:i:%d", s.zs);          // ZS
-        fprintf(out, "\tMD:Z:%s", s.md.c_str());  // MD
-        // Printing OA
-        fprintf(out, "\tOA:Z:%s,", s.lift_rname.c_str());  // OA
-        fprintf(out, "%d,", s.lift_pos);  // OA
-        if (s.flag & SAM_REVERSED) fprintf(out, "-,");  // OA
-        else fprintf(out, "+,");  // OA
-        fprintf(out, "%s,", s.lift_cigar.c_str());  // OA
-        fprintf(out, "%d,", s.mapq);  // OA
-        fprintf(out, "%d;", s.lift_nm);  // OA
+      fprintf(out, "+,");                      // OA
+    fprintf(out, "%s,", s.lift_cigar.c_str()); // OA
+    fprintf(out, "%d,", s.mapq);               // OA
+    fprintf(out, "%d;", s.lift_nm);            // OA
     }
     fprintf(out, "\n");
 }

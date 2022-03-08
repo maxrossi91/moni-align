@@ -79,6 +79,9 @@ size_t compute_mapq(
     const int32_t max_score   // Maximum alignment score
     )
     {
+    if(score2 > score)
+        return 0;
+    assert(score2 <= score);
     int32_t best = max_score - score;
     size_t best_bin = (size_t)((double)best * (10.0 / (double)(max_score - min_score)) + 0.5);
     if(score2 >= min_score)
@@ -98,5 +101,37 @@ size_t compute_mapq(
         return unp_nosec[best_bin];
     }
 }
+
+// /*!
+//     Compute the mapping quality of the alignment
+//     Inspired from https://github.com/BenLangmead/bowtie2/blob/4512b199768e562e8627ffdfd9253affc96f6fc6/unique.h
+//   */
+// size_t compute_mapq(
+//     const int32_t score,      // Best alignment score
+//     const int32_t score2,     // Second best alignemt score
+//     const int32_t min_score,  // Minimum alignemt score
+//     const int32_t max_score   // Maximum alignment score
+//     )
+//     {
+//     assert(score2 <= score);
+//     int32_t best = max_score - score;
+//     size_t best_bin = (size_t)((double)best * (10.0 / (double)(max_score - min_score)) + 0.5);
+//     if(score2 >= min_score)
+//     {
+//         int32_t diff = score - score2;
+//         size_t diff_bin = (size_t)((double)diff * (10.0 / (double)(max_score - min_score)) + 0.5);
+//         if(best == max_score)
+//         return unp_sec_perf[best_bin];
+//         else
+//         return unp_sec[diff_bin][best_bin];
+//     }
+//     else
+//     {
+//         if(best == max_score)
+//         return unp_nosec_perf;
+//         else
+//         return unp_nosec[best_bin];
+//     }
+// }
 
 #endif /* end of include guard: _MAPQ_HH */

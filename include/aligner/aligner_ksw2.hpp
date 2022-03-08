@@ -1173,6 +1173,7 @@ public:
       {
           score.m1 = chain_score(mate1_chain, anchors, mems, min_score, mate1);
           score.m2 = chain_score(mate2_chain, anchors, mems, min_score, mate2);
+          score.tot = score.m1.score + score.m2.score;
       }
       else
       {
@@ -1182,6 +1183,7 @@ public:
 
         score.m1 = chain_score(mate1_chain, anchors, mems, min_score, mate1, false, score2, strand, nullptr, &sam_m1);
         score.m2 = chain_score(mate2_chain, anchors, mems, min_score, mate2, false, score2, strand, nullptr, &sam_m2);
+        score.tot = score.m1.score + score.m2.score;
 
         sam_m1.read = mate1;
         sam_m2.read = mate2;
@@ -1202,6 +1204,11 @@ public:
 
           sam_m1.rname = idx[sam_m1.pos - 1]; // Check if necessary
           sam_m2.rname = idx[sam_m2.pos - 1];
+
+          size_t mapq = compute_mapq(score.tot, score2, min_score, (sam_m1.read->seq.l + sam_m2.read->seq.l) * smatch);
+          
+          sam_m1.mapq = mapq;
+          sam_m2.mapq = mapq;
 
           sam_m1.flag = sam_m2.flag = SAM_PAIRED | SAM_MAPPED_PAIRED;
           if(strand)
@@ -1250,7 +1257,6 @@ public:
     }
 
 
-    score.tot = score.m1.score + score.m2.score;
     return score;
   }
 
@@ -1322,6 +1328,7 @@ orphan_paired_score_t paired_chain_orphan_score(
         score.m1 = fill_orphan(start,end,mate1);  
         score.pos = std::pair(start,end);
       }
+      score.tot = score.m1.score + score.m2.score;
     }
     else
     {
@@ -1338,6 +1345,7 @@ orphan_paired_score_t paired_chain_orphan_score(
         score.m1 = fill_orphan(start,end,mate1,false,&sam_m1);
         score.m2 = chain_score(mate2_chain, anchors, mems, min_score, mate2, false, score2, strand, nullptr, &sam_m2);
       }
+      score.tot = score.m1.score + score.m2.score;
 
       sam_m1.read = mate1;
       sam_m2.read = mate2;
@@ -1358,6 +1366,11 @@ orphan_paired_score_t paired_chain_orphan_score(
 
         // sam_m1.rname = idx[sam_m1.pos - 1];
         // sam_m2.rname = idx[sam_m2.pos - 1];
+        size_t mapq = compute_mapq(score.tot, score2, min_score, (sam_m1.read->seq.l + sam_m2.read->seq.l) * smatch);
+        
+        sam_m1.mapq = mapq;
+        sam_m2.mapq = mapq;
+
 
         sam_m1.flag = sam_m2.flag = SAM_PAIRED | SAM_MAPPED_PAIRED;
         if(strand)
@@ -1390,7 +1403,7 @@ orphan_paired_score_t paired_chain_orphan_score(
     }
 
 
-    score.tot = score.m1.score + score.m2.score;
+
     return score;
   }
 
