@@ -99,7 +99,7 @@ if(NOT HTS_LIB)
                 OUTPUT_FILE ${CMAKE_CURRENT_BINARY_DIR}/logs/htslib-autoreconf.log
                 ERROR_FILE ${CMAKE_CURRENT_BINARY_DIR}/logs/htslib-autoreconf.log)
                 
-        file(APPEND ${INSTALL_FILE} "MESSAGE(STATUS \"Installing sdsl.\")\n")
+        file(APPEND ${INSTALL_FILE} "MESSAGE(STATUS \"Installing htslib.\")\n")
         file(APPEND ${INSTALL_FILE} "execute_process(COMMAND autoreconf -i
                 WORKING_DIRECTORY ${htslib_SOURCE_DIR} 
                 OUTPUT_FILE ${CMAKE_CURRENT_BINARY_DIR}/logs/htslib-autoreconf.log
