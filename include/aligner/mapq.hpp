@@ -158,10 +158,10 @@ size_t compute_mapq_se_bwa(
     const double frac_rep          // Length of the region covered by seeds (https://github.com/lh3/bwa/blob/0747fcc09d96ff44ce555f0c258d0f9762c20611/bwamem.c#L291)
     )
     {
-    assert(score2 <= score);
+
     int32_t mapq = 0; // Mapping quality 
     int32_t l = std::max(rlen, qlen); // Length of the longest segment
-    int32_t sub = score2 ? min_seed_length * match_score: score2;
+    int32_t sub = score2 ? score2: min_seed_length * match_score;
     if( sub >= score) return mapq;
 
     double identity = 1. - (double)(l * match_score - score) / (match_score + mismatch_score) / l;

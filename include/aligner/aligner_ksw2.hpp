@@ -1155,10 +1155,15 @@ public:
     const size_t mate = 0
     ) 
   {
+    // TODO: find a right value for max_occ
+    return 0.0; 
+
+
+    size_t max_occ = -1;
     size_t begin = 0;
     size_t end = 0;
     size_t l_rep = 0;
-    std::vector< std::pair<size_t, size_t> > segments;
+    std::vector< std::tuple<size_t, size_t, size_t> > segments;
     segments.reserve(mems.size());
     // Collect the segments
     for ( size_t i = 0; i < mems.size(); ++i) 
@@ -1166,15 +1171,17 @@ public:
       const mem_t& mem = mems[i];
       if( mem.mate != mate )
         continue;
-      segments.push_back( std::make_pair(mem.idx, mem.idx + mem.len -1) );
+      segments.push_back( std::make_tuple(mem.idx, mem.idx + mem.len -1, mem.occs.size()) );
     }
     // Sort the segments by starting position
     std::sort( segments.begin(), segments.end() );
     // Compute the fraction of repetitive seeds
     for ( size_t i = 0; i < segments.size(); ++i )
     {    
-      const size_t s_begin = segments[i].first;
-      const size_t s_end = segments[i].second;
+      const size_t s_begin = std::get<0>(segments[i]);
+      const size_t s_end = std::get<1>(segments[i]);
+      const size_t occs = std::get<2>(segments[i]);
+      if (occs <= max_occ) continue;
       if (s_begin > end)
       {
         l_rep += end - begin;
