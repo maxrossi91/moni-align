@@ -134,4 +134,89 @@ size_t compute_mapq(
 //     }
 // }
 
+
+// o->mapQ_coef_len = 50; o->mapQ_coef_fac = log(o->mapQ_coef_len);
+/*!
+    Compute the mapping quality of the alignment
+    Inspired from https://github.com/lh3/bwa/blob/34374c56139b7a08b3ef7dae38aca36f43f3cdd1/bwamem.c#L981
+  */
+#define MEM_MAPQ_COEF 30.0
+#define raw_mapq(diff, a) ((int)(6.02 * (diff) / (a) + .499))
+
+size_t compute_mapq_se_bwa(
+    const int32_t score,        // Best alignment score
+    const int32_t score2,       // Second best alignemt score
+    const int32_t rlen,         // Length of the reference in the alignment
+    const int32_t qlen,             // Length of the read in the alignment
+    const int32_t min_seed_length,  // Minimum seed lenght
+    const int32_t match_score,      // Match score
+    const int32_t mismatch_score,   // Mismatch score
+    const double mapq_coeff_len,    // MAPQ coefficient length
+    const int32_t mapq_coeff_fac,   // MAPQ coefficient factor
+    const int32_t sub_n,            // Number of sub-optimal alignments
+    const int32_t seed_cov,         // Length of the region covered by seeds (https://github.com/lh3/bwa/blob/0747fcc09d96ff44ce555f0c258d0f9762c20611/bwamem.c#L800)
+    const double frac_rep          // Length of the region covered by seeds (https://github.com/lh3/bwa/blob/0747fcc09d96ff44ce555f0c258d0f9762c20611/bwamem.c#L291)
+    )
+    {
+    assert(score2 <= score);
+    int32_t mapq = 0; // Mapping quality 
+    int32_t l = std::max(rlen, qlen); // Length of the longest segment
+    int32_t sub = score2 ? min_seed_length * match_score: score2;
+    if( sub >= score) return mapq;
+
+    double identity = 1. - (double)(l * match_score - score) / (match_score + mismatch_score) / l;
+	if ( score == 0 ) {
+		mapq = 0;
+	} else if (mapq_coeff_len > 0) {
+		double tmp;
+		tmp = l < mapq_coeff_len? 1. : mapq_coeff_fac / log(l);
+		tmp *= identity * identity;
+		mapq = (int)(6.02 * (score - sub) / match_score * tmp * tmp + .499);
+	} else {
+		mapq = (int)(MEM_MAPQ_COEF * (1. - (double)sub / score) * log(seed_cov) + .499);
+		mapq = identity < 0.95? (int)(mapq * identity * identity + .499) : mapq;
+	}
+	if (sub_n > 0) mapq -= (int)(4.343 * log(sub_n+1) + .499);
+	if (mapq > 60) mapq = 60;
+	if (mapq < 0) mapq = 0;
+	mapq = (int)(mapq * (1. - frac_rep) + .499);
+	return mapq;
+}
+
+size_t compute_mapq_pe_bwa(
+    const int32_t score,            // Best alignment score
+    const int32_t score2,           // Second best alignemt score
+    const int32_t score_un,         // Score if unpaired
+    const int32_t match_score,      // Match score
+    const int32_t sub_n,            // Number of sub-optimal alignments
+    const double frac_rep_m1,       // Length of the region covered by seeds of mate 1(https://github.com/lh3/bwa/blob/0747fcc09d96ff44ce555f0c258d0f9762c20611/bwamem.c#L291)
+    const double frac_rep_m2,       // Length of the region covered by seeds of mate 2(https://github.com/lh3/bwa/blob/0747fcc09d96ff44ce555f0c258d0f9762c20611/bwamem.c#L291)
+    size_t& mapq_m1,               // MAPQ mate1
+    size_t& mapq_m2                // MAPQ mate2
+    )
+    {
+    assert(score2 <= score);
+    int32_t mapq = 0; // Mapping quality 
+
+    int32_t sub = std::max(score2, score_un);
+    mapq = raw_mapq(score - sub, match_score);
+    if (sub_n > 0) mapq -= (int)(4.343 * log(sub_n+1) + .499);
+    if (mapq < 0) mapq = 0;
+    if (mapq > 60) mapq = 60;
+    mapq = (int)(mapq * (1. - .5 * (frac_rep_m1 + frac_rep_m2)) + .499);
+    
+    if (score > score_un) { // paired alignment
+
+
+        mapq_m1 = mapq_m1 > mapq? mapq_m1 : mapq < mapq_m1 + 40? mapq : mapq_m1 + 40;
+        mapq_m2 = mapq_m2 > mapq? mapq_m2 : mapq < mapq_m2 + 40? mapq : mapq_m2 + 40;
+        // // cap at the tandem repeat score
+        // mapq_m1 = mapq_m1 < raw_mapq(c[0]->score - c[0]->csub, opt->a)? mapq_m1 : raw_mapq(c[0]->score - c[0]->csub, opt->a);
+        // mapq_m2 = mapq_m2 < raw_mapq(c[1]->score - c[1]->csub, opt->a)? mapq_m2 : raw_mapq(c[1]->score - c[1]->csub, opt->a);
+    }
+
+	return mapq;
+}
+
+
 #endif /* end of include guard: _MAPQ_HH */

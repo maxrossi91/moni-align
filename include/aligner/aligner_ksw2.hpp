@@ -235,6 +235,9 @@ public:
       score_t score;
       int32_t score2 = 0;
 
+      float frac_rep = 0.0;
+      int sub_n = 0; // approximate number of suboptimal hits
+
       std::vector<mem_t> mems;
       std::vector<std::pair<size_t, size_t>> anchors;
       std::vector<chain_t> chains;
@@ -292,6 +295,7 @@ public:
                 end_bonus(config.end_bonus),    // Bonus to add at the extension score to declare the alignment
                 w(config.w),                    // Band width
                 zdrop(config.zdrop),            // Zdrop enable
+                max_penalty(std::max(smatch + smismatch, gapo + gape)), // Maximum penalty score
                 forward_only(config.forward_only)
   {
     verbose("Loading the matching statistics index");
@@ -457,6 +461,9 @@ public:
     find_seeds(al.read,al.mems, 0, MATE_1 | MATE_F);
     find_seeds(&al.read_rev,al.mems, 0, MATE_1 | MATE_RC);
 
+    // Compute fraction of repetitive seeds
+    al.frac_rep = compute_frac_rep(al.mems, al.read->seq.l, MATE_1);
+
     MTIME_END(0); //Timing helper
     MTIME_START(1); //Timing helper
 
@@ -519,6 +526,8 @@ public:
         }
     }
     
+    al.sub_n = best_scores.size() -1; 
+
     if (best_scores.size() < 2)
       best_scores.push_back(std::make_tuple(0, 0, al.chains.size()));
 
@@ -615,7 +624,13 @@ public:
     size_t min_score_m2 = 0;
     size_t min_score = 0;
     paired_score_t score;
-    int32_t score2 = 0;
+    size_t score2 = 0;
+    size_t score2_m1 = 0;
+    size_t score2_m2 = 0;
+
+    float frac_rep_m1 = 0.0;
+    float frac_rep_m2 = 0.0;
+    int sub_n = 0; // approximate number of suboptimal hits
 
     std::vector<mem_t> mems;
     std::vector<std::pair<size_t, size_t>> anchors;
@@ -797,6 +812,10 @@ public:
     // find_mems(al.mate2, al.mems, 0, MATE_2 | MATE_F);
     // find_mems(&al.mate2_rev, al.mems, al.mate1->seq.l, MATE_2 | MATE_RC);
 
+    // Compute fraction of repetitive seeds
+    al.frac_rep_m1 = compute_frac_rep(al.mems, al.mate1->seq.l, MATE_1);
+    al.frac_rep_m2 = compute_frac_rep(al.mems, al.mate2->seq.l, MATE_2);
+
     MTIME_END(0); //Timing helper
     MTIME_START(1); //Timing helper
 
@@ -817,7 +836,8 @@ public:
     int32_t min_score = al.min_score;
 
     // // Compute the second best score
-    std::vector<std::tuple<int32_t, size_t, size_t, size_t>> best_scores;
+    // (0) score (1) lift m1 (2) lift m2 (3) index in chains list (4) score m1 (5) score m2
+    std::vector<std::tuple<int32_t, size_t, size_t, size_t, size_t, size_t>> best_scores;
     // get the occurrences of the top 4 best scores
     std::set<size_t> different_scores;
     size_t i = 0;
@@ -832,11 +852,11 @@ public:
           std::reverse(chain.anchors.begin(), chain.anchors.end());
           // Compute the score of a chain.
           paired_score_t score;
-          if( (chain.mate == 0) || ((chain.mate & MATE_RC) and (chain.mate & MATE_2)) )
-            score = paired_chain_score(chain, al.anchors, al.mems, min_score, al.min_score_m1, al.min_score_m2, al.mate1, &al.mate2_rev);
-          else
-            score = paired_chain_score(chain, al.anchors, al.mems, min_score, al.min_score_m1, al.min_score_m2, &al.mate1_rev, al.mate2);
-          
+          // if( (chain.mate == 0) || ((chain.mate & MATE_RC) and (chain.mate & MATE_2)) )
+          //   score = paired_chain_score(chain, al.anchors, al.mems, min_score, al.min_score_m1, al.min_score_m2, al.mate1, &al.mate2_rev);
+          // else
+          //   score = paired_chain_score(chain, al.anchors, al.mems, min_score, al.min_score_m1, al.min_score_m2, &al.mate1_rev, al.mate2);
+          score = paired_chain_score(chain, al);
 
           score.m1.lft = idx.lift(score.m1.pos);
           score.m2.lft = idx.lift(score.m2.pos);
@@ -851,21 +871,22 @@ public:
                 (dist(std::get<2>(best_scores[j]),score.m2.lft) < region_dist) )
               if ( score.tot > std::get<0>(best_scores[j]) )
                 if ( replaced )
-                  best_scores[j] = std::make_tuple(0,0,0,i-1);
+                  best_scores[j] = std::make_tuple(0,0,0,i-1,0,0);
                 else
-                  best_scores[j] = std::make_tuple(score.tot, score.m1.lft, score.m2.lft, i++), replaced = true;
+                  best_scores[j] = std::make_tuple(score.tot, score.m1.lft, score.m2.lft, i++, score.m1.score, score.m2.score), replaced = true;
               else if ( score.tot == std::get<0>(best_scores[j]) )
                 j = best_scores.size(), replaced = true, i++;
           }
           if( not replaced )
-            best_scores.push_back(std::make_tuple(score.tot, score.m1.lft, score.m2.lft, i++));
+            best_scores.push_back(std::make_tuple(score.tot, score.m1.lft, score.m2.lft, i++, score.m1.score, score.m2.score));
         }
     }
-    
     if (best_scores.size() < 2)
-      best_scores.push_back(std::make_tuple(0, 0, 0, al.chains.size()));
+      best_scores.push_back(std::make_tuple(0, 0, 0, al.chains.size(),0,0));
 
-    std::sort(best_scores.begin(), best_scores.end(), std::greater<std::tuple<int32_t, size_t, size_t, size_t>>());
+
+
+    std::sort(best_scores.begin(), best_scores.end(), std::greater<std::tuple<int32_t, size_t, size_t, size_t, size_t, size_t>>());
 
     assert(best_scores.size() > 1);
 
@@ -876,9 +897,19 @@ public:
       return false;
     }
 
+
+    // Compute sub-optimal hits (https://github.com/bwa-mem2/bwa-mem2/blob/edc703f883e8aaed83067100d8e54e0e9e810ef5/src/bwamem.cpp#L1312)
+    // From BWA's manual: BWA will not search for suboptimal hits with a score lower than (bestScore-misMsc).
+    size_t k = 1;
+    al.sub_n = 0;
+    while( k < best_scores.size() and std::get<0>(best_scores[k++]) >= (std::get<0>(best_scores[0]) - max_penalty))
+      ++al.sub_n;
+
     al.best_score = true;
 
     al.score2 = std::get<0>(best_scores[1]);
+    al.score2_m1 = std::get<4>(best_scores[1]);
+    al.score2_m2 = std::get<5>(best_scores[1]);
 
 
     { // Forward case
@@ -888,10 +919,11 @@ public:
       // Reverse the chain order
       std::reverse(chain.anchors.begin(), chain.anchors.end());
       // Compute the score of a chain.
-      if( (chain.mate == 0) || ((chain.mate & MATE_RC) and (chain.mate & MATE_2)) )
-        al.score = paired_chain_score(chain, al.anchors, al.mems, min_score, al.min_score_m1, al.min_score_m2, al.mate1, &al.mate2_rev, false, al.score2, 0, &al.sam_m1, &al.sam_m2);
-      else
-        al.score = paired_chain_score(chain, al.anchors, al.mems, min_score, al.min_score_m1, al.min_score_m2, &al.mate1_rev, al.mate2, false, al.score2, 1, &al.sam_m1, &al.sam_m2);
+      // if( (chain.mate == 0) || ((chain.mate & MATE_RC) and (chain.mate & MATE_2)) )
+      //   al.score = paired_chain_score(chain, al.anchors, al.mems, min_score, al.min_score_m1, al.min_score_m2, al.mate1, &al.mate2_rev, false, al.score2, 0, &al.sam_m1, &al.sam_m2);
+      // else
+      //   al.score = paired_chain_score(chain, al.anchors, al.mems, min_score, al.min_score_m1, al.min_score_m2, &al.mate1_rev, al.mate2, false, al.score2, 1, &al.sam_m1, &al.sam_m2);
+      al.score = paired_chain_score(chain, al, false);
     }
 
     al.aligned = (al.score.tot >= min_score);
@@ -906,7 +938,7 @@ public:
   }
 
   bool orphan_recovery(
-    paired_alignment_t& alignment, 
+    paired_alignment_t& al, 
     const double mean, 
     const double std_dev)
   {
@@ -918,67 +950,112 @@ public:
     // and 
 
     // Compute the second best score
-    std::vector<std::pair<std::pair<int32_t, std::pair<size_t,size_t> >, size_t>> best_scores;
+    // (0) score (1) pos (2) lift m1 (3) lift m2 (4) index in chains list (5) score m1 (6) score m2
+    std::vector<std::tuple<int32_t, std::pair<size_t,size_t>, size_t, size_t, size_t, size_t, size_t>> best_scores;
+    std::pair<size_t,size_t> pair_zero = {0,0};
+    // std::vector<std::pair<std::pair<int32_t, std::pair<size_t,size_t> >, size_t>> best_scores;
     size_t i = 0;
-    while (i < alignment.chains.size())
+    while (i < al.chains.size())
     {
       // Align the chain
-      auto chain = alignment.chains[i];
+      auto chain = al.chains[i];
       // Reverse the chain order
       std::reverse(chain.anchors.begin(), chain.anchors.end());
       // Compute the score of a chain.
       orphan_paired_score_t score;
-      if( (chain.mate == 0) || ((chain.mate & MATE_RC) and (chain.mate & MATE_2)) )
-        score = paired_chain_orphan_score(chain, alignment.anchors, alignment.mems, alignment.min_score, alignment.min_score_m1, alignment.min_score_m2, alignment.mate1, &alignment.mate2_rev, mean, std_dev);
-      else
-        score = paired_chain_orphan_score(chain, alignment.anchors, alignment.mems, alignment.min_score, alignment.min_score_m1, alignment.min_score_m2, &alignment.mate1_rev, alignment.mate2, mean, std_dev);
+      // if( (chain.mate == 0) || ((chain.mate & MATE_RC) and (chain.mate & MATE_2)) )
+      //   score = paired_chain_orphan_score(chain, al.anchors, al.mems, al.min_score, al.min_score_m1, al.min_score_m2, al.mate1, &al.mate2_rev, mean, std_dev);
+      // else
+      //   score = paired_chain_orphan_score(chain, al.anchors, al.mems, al.min_score, al.min_score_m1, al.min_score_m2, &al.mate1_rev, al.mate2, mean, std_dev);
+      score = paired_chain_orphan_score(chain, al, mean, std_dev);
       
-      best_scores.push_back(std::make_pair(std::make_pair(score.tot,score.pos), i++));
+      score.m1.lft = idx.lift(score.m1.pos);
+      score.m2.lft = idx.lift(score.m2.pos);
+
+      // Check if there is another read scored in the same region
+      bool replaced = false;
+      for(size_t j = 0; j < best_scores.size(); ++j)
+      {
+        auto d1 = dist(std::get<2>(best_scores[j]),score.m1.lft);
+        auto d2 = dist(std::get<3>(best_scores[j]),score.m2.lft);
+        if( (dist(std::get<2>(best_scores[j]),score.m1.lft) < region_dist) and 
+            (dist(std::get<3>(best_scores[j]),score.m2.lft) < region_dist) )
+          if ( score.tot > std::get<0>(best_scores[j]) )
+            if ( replaced )
+              best_scores[j] = std::make_tuple(0,pair_zero,0,0,i-1,0,0);
+            else
+              best_scores[j] = std::make_tuple(score.tot, score.pos, score.m1.lft, score.m2.lft, i++, score.m1.score, score.m2.score), replaced = true;
+          else if ( score.tot == std::get<0>(best_scores[j]) )
+            j = best_scores.size(), replaced = true, i++;
+      }
+      if( not replaced )
+        best_scores.push_back(std::make_tuple(score.tot, score.pos, score.m1.lft, score.m2.lft, i++, score.m1.score, score.m2.score));
+
+
+      // best_scores.push_back(std::make_pair(std::make_pair(score.tot,score.pos), i++));
     }
 
-    orphan_paired_score_t zero;
-    if (best_scores.size() < 2)
-      best_scores.push_back(std::make_pair(std::make_pair(0,std::make_pair(0,0)), alignment.chains.size()));
+    // orphan_paired_score_t zero;
+    // if (best_scores.size() < 2)
+    //   best_scores.push_back(std::make_pair(std::make_pair(0,std::make_pair(0,0)), al.chains.size()));
 
-    std::sort(best_scores.begin(), best_scores.end(), std::greater<std::pair<std::pair<int32_t, std::pair<size_t,size_t> >, size_t>>());
+    // std::sort(best_scores.begin(), best_scores.end(), std::greater<std::pair<std::pair<int32_t, std::pair<size_t,size_t> >, size_t>>());
+
+    al.sub_n = best_scores.size() -1;
+    if (best_scores.size() < 2)
+      best_scores.push_back(std::make_tuple(0, pair_zero, 0, 0, al.chains.size(),0,0));
+
+    std::sort(best_scores.begin(), best_scores.end(), std::greater<std::tuple<int32_t, std::pair<size_t,size_t>, size_t, size_t, size_t, size_t, size_t>>());
+
+
 
     assert(best_scores.size() > 1);
 
-    if (best_scores[0].first.first < alignment.min_score)
+    if (std::get<0>(best_scores[0]) < al.min_score)
     {
       MTIME_END(2); //Timing helper
       MTIME_TSAFE_MERGE;
       return false;
     }
-    alignment.best_score = true;
 
-    alignment.score2 = best_scores[1].first.first;
+
+    // Compute sub-optimal hits (https://github.com/bwa-mem2/bwa-mem2/blob/edc703f883e8aaed83067100d8e54e0e9e810ef5/src/bwamem.cpp#L1312)
+    // From BWA's manual: BWA will not search for suboptimal hits with a score lower than (bestScore-misMsc).
+    size_t k = 1;
+    al.sub_n = 0;
+    while( k < best_scores.size() and std::get<0>(best_scores[k++]) >= (std::get<0>(best_scores[0]) - max_penalty))
+      ++al.sub_n;
+
+
+    al.best_score = true;
+
+    al.score2 = std::get<0>(best_scores[1]);
+    al.score2_m1 = std::get<5>(best_scores[1]);
+    al.score2_m2 = std::get<6>(best_scores[1]);
 
 
     { // Forward case
-      i = best_scores[0].second;
-      ll start = best_scores[0].first.second.first;
-      ll end = best_scores[0].first.second.second;
+      i = std::get<4>(best_scores[0]);
+      ll start = std::get<1>(best_scores[0]).first;
+      ll end = std::get<1>(best_scores[0]).second;
       // Align the chain
-      auto chain = alignment.chains[i];
+      auto chain = al.chains[i];
       // Reverse the chain order
       std::reverse(chain.anchors.begin(), chain.anchors.end());
       // Compute the score of a chain.
-      if( (chain.mate == 0) || ((chain.mate & MATE_RC) and (chain.mate & MATE_2)) )
-        alignment.score = paired_chain_orphan_score(chain, alignment.anchors, alignment.mems, alignment.min_score, alignment.min_score_m1, alignment.min_score_m2, alignment.mate1, &alignment.mate2_rev, mean, std_dev, false, alignment.score2, 0, start, end,  &alignment.sam_m1, &alignment.sam_m2);
-      else
-        alignment.score = paired_chain_orphan_score(chain, alignment.anchors, alignment.mems, alignment.min_score, alignment.min_score_m1, alignment.min_score_m2, &alignment.mate1_rev, alignment.mate2, mean, std_dev, false, alignment.score2, 1, start, end, &alignment.sam_m1, &alignment.sam_m2);
+      // if( (chain.mate == 0) || ((chain.mate & MATE_RC) and (chain.mate & MATE_2)) )
+      //   al.score = paired_chain_orphan_score(chain, al.anchors, al.mems, al.min_score, al.min_score_m1, al.min_score_m2, al.mate1, &al.mate2_rev, mean, std_dev, false, al.score2, 0, start, end,  &al.sam_m1, &al.sam_m2);
+      // else
+      //   al.score = paired_chain_orphan_score(chain, al.anchors, al.mems, al.min_score, al.min_score_m1, al.min_score_m2, &al.mate1_rev, al.mate2, mean, std_dev, false, al.score2, 1, start, end, &al.sam_m1, &al.sam_m2);
+      al.score = paired_chain_orphan_score(chain, al, mean, std_dev, false, start, end);    
     }
 
-    alignment.aligned = (alignment.score.tot >= alignment.min_score);
+    al.aligned = (al.score.tot >= al.min_score);
 
     MTIME_END(2); //Timing helper
     MTIME_TSAFE_MERGE;
-    if (not alignment.aligned)
-      return false;
-    
 
-    return alignment.aligned;
+    return al.aligned;
   }
 
   void find_mems(
@@ -1069,6 +1146,47 @@ public:
 
   }
 
+
+  // Compute the fraction of repetitive seeds
+  // Inpired from https://github.com/lh3/bwa/blob/0747fcc09d96ff44ce555f0c258d0f9762c20611/bwamem.c#L291
+  inline float compute_frac_rep(
+    const std::vector<mem_t>& mems,
+    const int len,
+    const size_t mate = 0
+    ) 
+  {
+    size_t begin = 0;
+    size_t end = 0;
+    size_t l_rep = 0;
+    std::vector< std::pair<size_t, size_t> > segments;
+    segments.reserve(mems.size());
+    // Collect the segments
+    for ( size_t i = 0; i < mems.size(); ++i) 
+    {
+      const mem_t& mem = mems[i];
+      if( mem.mate != mate )
+        continue;
+      segments.push_back( std::make_pair(mem.idx, mem.idx + mem.len -1) );
+    }
+    // Sort the segments by starting position
+    std::sort( segments.begin(), segments.end() );
+    // Compute the fraction of repetitive seeds
+    for ( size_t i = 0; i < segments.size(); ++i )
+    {    
+      const size_t s_begin = segments[i].first;
+      const size_t s_end = segments[i].second;
+      if (s_begin > end)
+      {
+        l_rep += end - begin;
+        begin = s_begin;
+        end = s_end;
+      } 
+      else end = end > s_end? end : s_end;
+    }
+    l_rep += end - begin;
+    return  (float)l_rep / len;
+  }
+
   score_t chain_score(
       const std::pair<size_t, std::vector<size_t>> &chain,
       const std::vector<std::pair<size_t, size_t>> &anchors,
@@ -1079,7 +1197,10 @@ public:
       const int32_t score2 = 0,
       const uint8_t strand = 0,
       FILE *out = nullptr,
-      sam_t* sam = nullptr)     // The SAM information pointer)
+      sam_t* sam = nullptr,           // The SAM information pointer
+      const int32_t sub_n = 0,        // Number of sub-optimal alignments
+      const double frac_rep = 0       // Length of the region covered by seeds (https://github.com/lh3/bwa/blob/0747fcc09d96ff44ce555f0c258d0f9762c20611/bwamem.c#L291)
+      )     
   {
     bool aligned = false;
     // Extract the anchors
@@ -1127,7 +1248,10 @@ public:
         
         sam->flag = (strand?16:0);
         sam->zs = score2;
-        sam->mapq = compute_mapq(sam->as, sam->zs, min_score, sam->read->seq.l * smatch);
+        // sam->mapq = compute_mapq(sam->as, sam->zs, min_score, sam->read->seq.l * smatch);
+        // TODO: update the value of read->seq.l with the exact qlen
+        sam->mapq = compute_mapq_se_bwa(sam->as, sam->zs, sam->rlen, read->seq.l, min_len, smatch, smismatch,
+                                        mapq_coeff_len, mapq_coeff_fac, sub_n, 0, frac_rep);
         // sam->reverse = (strand != 0);
         // sam->rname = idx[sam->pos - 1];
         if(output)
@@ -1145,21 +1269,49 @@ public:
       return score;
   }
 
+  // paired_score_t paired_chain_score(
+  //     const chain_t &chain,
+  //     const std::vector<std::pair<size_t, size_t>> &anchors,
+  //     const std::vector<mem_t> &mems,
+  //     const int32_t min_score,
+  //     const int32_t min_score_m1,
+  //     const int32_t min_score_m2,
+  //     const kseq_t *mate1,
+  //     const kseq_t *mate2,
+  //     const bool score_only = true,
+  //     const int32_t score2 = 0,
+  //     const uint8_t strand = 0,
+  //     sam_t *sam_m1_ = nullptr,
+  //     sam_t *sam_m2_ = nullptr)
+  // {
   paired_score_t paired_chain_score(
       const chain_t &chain,
-      const std::vector<std::pair<size_t, size_t>> &anchors,
-      const std::vector<mem_t> &mems,
-      const int32_t min_score,
-      const int32_t min_score_m1,
-      const int32_t min_score_m2,
-      const kseq_t *mate1,
-      const kseq_t *mate2,
-      const bool score_only = true,
-      const int32_t score2 = 0,
-      const uint8_t strand = 0,
-      sam_t *sam_m1_ = nullptr,
-      sam_t *sam_m2_ = nullptr)
+      paired_alignment_t& al,
+      const bool score_only = true)
   {
+    const std::vector<std::pair<size_t, size_t>> &anchors = al.anchors;
+    const std::vector<mem_t> &mems = al.mems;
+    sam_t& sam_m1 = al.sam_m1;
+    sam_t& sam_m2 = al.sam_m2;
+
+    kseq_t *mate1;
+    kseq_t *mate2;
+
+    uint8_t strand = 0;
+
+    if( (chain.mate == 0) || ((chain.mate & MATE_RC) and (chain.mate & MATE_2)) )
+    {
+      mate1 = al.mate1;
+      mate2 = &al.mate2_rev;
+    }
+    else
+    {
+      mate1 = &al.mate1_rev;
+      mate2 = al.mate2;
+      strand = 1;
+    }
+
+
     paired_score_t score;
     if(chain.paired){
 
@@ -1179,18 +1331,17 @@ public:
 
       if(score_only)
       {
-          score.m1 = chain_score(mate1_chain, anchors, mems, min_score_m1, mate1);
-          score.m2 = chain_score(mate2_chain, anchors, mems, min_score_m2, mate2);
+          score.m1 = chain_score(mate1_chain, anchors, mems, al.min_score_m1, mate1);
+          score.m2 = chain_score(mate2_chain, anchors, mems, al.min_score_m2, mate2);
           score.tot = score.m1.score + score.m2.score;
       }
       else
       {
-        sam_t& sam_m1 = *sam_m1_;
-        sam_t& sam_m2 = *sam_m2_;
 
 
-        score.m1 = chain_score(mate1_chain, anchors, mems, min_score_m1, mate1, false, score2, strand, nullptr, &sam_m1);
-        score.m2 = chain_score(mate2_chain, anchors, mems, min_score_m2, mate2, false, score2, strand, nullptr, &sam_m2);
+
+        score.m1 = chain_score(mate1_chain, anchors, mems, al.min_score_m1, mate1, false, al.score2_m1, strand, nullptr, &sam_m1, al.sub_n, al.frac_rep_m1);
+        score.m2 = chain_score(mate2_chain, anchors, mems, al.min_score_m2, mate2, false, al.score2_m2, strand, nullptr, &sam_m2, al.sub_n, al.frac_rep_m2);
         score.tot = score.m1.score + score.m2.score;
 
         sam_m1.read = mate1;
@@ -1199,7 +1350,7 @@ public:
         // sam_m1.rnext = std::string(mate2->name.s);
         // sam_m2.rnext = std::string(mate1->name.s);
 
-        if(score.m1.score >= min_score_m1 and score.m2.score >= min_score_m2)
+        if(score.m1.score >= al.min_score_m1 and score.m2.score >= al.min_score_m2)
         {
 
           sam_m1.pnext = sam_m2.pos;
@@ -1213,12 +1364,18 @@ public:
           sam_m1.rname = idx[sam_m1.pos - 1]; // Check if necessary
           sam_m2.rname = idx[sam_m2.pos - 1];
 
-          size_t mapq = compute_mapq(score.tot, score2, min_score, (sam_m1.read->seq.l + sam_m2.read->seq.l) * smatch);
+          // size_t mapq = compute_mapq(score.tot, score2, al.min_score, (sam_m1.read->seq.l + sam_m2.read->seq.l) * smatch);
+          // sam_m1.mapq = mapq;
+          // sam_m2.mapq = mapq;
+
+          int32_t score_un = 0; // score.m1 + score.m2 - unpaired_penalty;
+          size_t mapq = compute_mapq_pe_bwa(score.tot, al.score2, score_un, smatch, al.sub_n, al.frac_rep_m1, al.frac_rep_m2, sam_m1.mapq, sam_m2.mapq);
           
-          sam_m1.mapq = mapq;
-          sam_m2.mapq = mapq;
           sam_m1.as = score.tot;
           sam_m2.as = score.tot;
+
+          sam_m1.zs = al.score2;
+          sam_m2.zs = al.score2;
 
           sam_m1.flag = sam_m2.flag = SAM_PAIRED | SAM_MAPPED_PAIRED;
           if(strand)
@@ -1231,15 +1388,17 @@ public:
             sam_m1.flag |= SAM_MATE_REVERSED | SAM_FIRST_IN_PAIR;
             sam_m2.flag |= SAM_REVERSED | SAM_SECOND_IN_PAIR;
           }
-        }else if(score.m1.score >= min_score_m1) {
+        }else if(score.m1.score >= al.min_score_m1) {
           sam_m1.rname = idx[sam_m1.pos - 1];
-
+          sam_m1.zs = al.score2_m1;
+          
           sam_m1.flag = SAM_PAIRED | SAM_MATE_UNMAPPED | SAM_FIRST_IN_PAIR;
           sam_m2.flag = SAM_PAIRED | SAM_UNMAPPED | SAM_SECOND_IN_PAIR;
           if(strand)
             sam_m1.flag |= SAM_REVERSED;
-        }else if(score.m2.score >= min_score_m2) {
+        }else if(score.m2.score >= al.min_score_m2) {
           sam_m2.rname = idx[sam_m2.pos - 1];
+          sam_m1.zs = al.score2_m2;
 
           sam_m1.flag = SAM_PAIRED | SAM_UNMAPPED | SAM_FIRST_IN_PAIR;
           sam_m2.flag = SAM_PAIRED | SAM_MATE_UNMAPPED | SAM_SECOND_IN_PAIR;
@@ -1272,25 +1431,56 @@ public:
 
 
 
+// orphan_paired_score_t paired_chain_orphan_score(
+//       const chain_t &chain,
+//       const std::vector<std::pair<size_t, size_t>> &anchors,
+//       const std::vector<mem_t> &mems,
+//       const int32_t min_score,
+//       const int32_t min_score_m1,
+//       const int32_t min_score_m2,
+//       const kseq_t *mate1,
+//       const kseq_t *mate2,
+//       const double mean,
+//       const double std_dev,
+//       const bool score_only = true,
+//       const int32_t score2 = 0,
+//       const uint8_t strand = 0,
+//       long long int start = 0,  // Start position of the reference
+//       long long int end = 0,    //End position of the reference
+//       sam_t *sam_m1_ = nullptr,
+//       sam_t *sam_m2_ = nullptr)
 orphan_paired_score_t paired_chain_orphan_score(
       const chain_t &chain,
-      const std::vector<std::pair<size_t, size_t>> &anchors,
-      const std::vector<mem_t> &mems,
-      const int32_t min_score,
-      const int32_t min_score_m1,
-      const int32_t min_score_m2,
-      const kseq_t *mate1,
-      const kseq_t *mate2,
+      paired_alignment_t& al,
       const double mean,
       const double std_dev,
       const bool score_only = true,
-      const int32_t score2 = 0,
-      const uint8_t strand = 0,
       long long int start = 0,  // Start position of the reference
-      long long int end = 0,    //End position of the reference
-      sam_t *sam_m1_ = nullptr,
-      sam_t *sam_m2_ = nullptr)
+      long long int end = 0    //End position of the reference
+    )
   {
+    const std::vector<std::pair<size_t, size_t>> &anchors = al.anchors;
+    const std::vector<mem_t> &mems = al.mems;
+    sam_t& sam_m1 = al.sam_m1;
+    sam_t& sam_m2 = al.sam_m2;
+
+    kseq_t *mate1;
+    kseq_t *mate2;
+
+    uint8_t strand = 0;
+
+    if( (chain.mate == 0) || ((chain.mate & MATE_RC) and (chain.mate & MATE_2)) )
+    {
+      mate1 = al.mate1;
+      mate2 = &al.mate2_rev;
+    }
+    else
+    {
+      mate1 = &al.mate1_rev;
+      mate2 = al.mate2;
+      strand = 1;
+    }
+
     orphan_paired_score_t score;
 
     // Extract the anchors
@@ -1316,7 +1506,7 @@ orphan_paired_score_t paired_chain_orphan_score(
       if(mate1_chain.second.size() > 0)
       {
         // Chain 
-        score.m1 = chain_score(mate1_chain, anchors, mems, min_score_m1, mate1);
+        score.m1 = chain_score(mate1_chain, anchors, mems, al.min_score_m1, mate1);
         // Perform local search
         // TODO: Check whether we do not cross one boundary
         start = rm_pos + (ll)std::floor(mean - 4*std_dev);
@@ -1329,7 +1519,7 @@ orphan_paired_score_t paired_chain_orphan_score(
 
       }else
       {
-        score.m2 = chain_score(mate2_chain, anchors, mems, min_score_m2, mate2);
+        score.m2 = chain_score(mate2_chain, anchors, mems, al.min_score_m2, mate2);
         // Perform local search
         // TODO: Check whether we do not cross one boundary
         start = lm_pos + (ll)std::floor(-mean - 4*std_dev);
@@ -1344,18 +1534,24 @@ orphan_paired_score_t paired_chain_orphan_score(
     }
     else
     {
-      sam_t& sam_m1 = *sam_m1_;
-      sam_t& sam_m2 = *sam_m2_;
+      // sam_t& sam_m1 = *sam_m1_;
+      // sam_t& sam_m2 = *sam_m2_;
 
       if(mate1_chain.second.size() > 0)
       {
-        score.m1 = chain_score(mate1_chain, anchors, mems, min_score_m1, mate1, false, score2, strand, nullptr, &sam_m1);
+        score.m1 = chain_score(mate1_chain, anchors, mems, al.min_score_m1, mate1, false, al.score2_m1, strand, nullptr, &sam_m1, al.sub_n, al.frac_rep_m1);
         score.m2 = fill_orphan(start,end,mate2,false,&sam_m2);
+
+        sam_m2.mapq = compute_mapq_se_bwa(sam_m2.as, al.score2_m2, sam_m2.rlen, mate2->seq.l, min_len, smatch, smismatch,
+                                mapq_coeff_len, mapq_coeff_fac, al.sub_n, 0, al.frac_rep_m2);
       }
       else
       {
         score.m1 = fill_orphan(start,end,mate1,false,&sam_m1);
-        score.m2 = chain_score(mate2_chain, anchors, mems, min_score_m2, mate2, false, score2, strand, nullptr, &sam_m2);
+        score.m2 = chain_score(mate2_chain, anchors, mems, al.min_score_m2, mate2, false, al.score2_m2, strand, nullptr, &sam_m2, al.sub_n, al.frac_rep_m2);
+
+        sam_m1.mapq = compute_mapq_se_bwa(sam_m1.as, al.score2_m1, sam_m1.rlen, mate1->seq.l, min_len, smatch, smismatch,
+                        mapq_coeff_len, mapq_coeff_fac, al.sub_n, 0, al.frac_rep_m1);
       }
       score.tot = score.m1.score + score.m2.score;
 
@@ -1365,7 +1561,7 @@ orphan_paired_score_t paired_chain_orphan_score(
       // sam_m1.rnext = std::string(mate2->name.s);
       // sam_m2.rnext = std::string(mate1->name.s);
 
-      if(score.m1.score >= min_score_m1 and score.m2.score >= min_score_m2)
+      if(score.m1.score >= al.min_score_m1 and score.m2.score >= al.min_score_m2)
       {
 
         sam_m1.pnext = sam_m2.pos;
@@ -1378,12 +1574,19 @@ orphan_paired_score_t paired_chain_orphan_score(
 
         // sam_m1.rname = idx[sam_m1.pos - 1];
         // sam_m2.rname = idx[sam_m2.pos - 1];
-        size_t mapq = compute_mapq(score.tot, score2, min_score, (sam_m1.read->seq.l + sam_m2.read->seq.l) * smatch);
+        // size_t mapq = compute_mapq(score.tot, score2, min_score, (sam_m1.read->seq.l + sam_m2.read->seq.l) * smatch);
         
-        sam_m1.mapq = mapq;
-        sam_m2.mapq = mapq;
+        // sam_m1.mapq = mapq;
+        // sam_m2.mapq = mapq;
+
+        int32_t score_un = 0; // score.m1 + score.m2 - unpaired_penalty;
+        size_t mapq = compute_mapq_pe_bwa(score.tot, al.score2, score_un, smatch, al.sub_n, al.frac_rep_m1, al.frac_rep_m2, sam_m1.mapq, sam_m2.mapq);
+          
         sam_m1.as = score.tot;
         sam_m2.as = score.tot;
+
+        sam_m1.zs = al.score2;
+        sam_m2.zs = al.score2;
 
         sam_m1.flag = sam_m2.flag = SAM_PAIRED | SAM_MAPPED_PAIRED;
         if(strand)
@@ -1396,15 +1599,17 @@ orphan_paired_score_t paired_chain_orphan_score(
           sam_m1.flag |= SAM_MATE_REVERSED | SAM_FIRST_IN_PAIR;
           sam_m2.flag |= SAM_REVERSED | SAM_SECOND_IN_PAIR;
         }
-      }else if(score.m1.score >= min_score_m1) {
+      }else if(score.m1.score >= al.min_score_m1) {
         // sam_m1.rname = idx[sam_m1.pos - 1];
+        sam_m1.zs = al.score2_m1;
 
         sam_m1.flag = SAM_PAIRED | SAM_MATE_UNMAPPED | SAM_FIRST_IN_PAIR;
         sam_m2.flag = SAM_PAIRED | SAM_UNMAPPED | SAM_SECOND_IN_PAIR;
         if(strand)
           sam_m1.flag |= SAM_REVERSED;
-      }else if(score.m2.score >= min_score_m2) {
+      }else if(score.m2.score >= al.min_score_m2) {
         // sam_m2.rname = idx[sam_m2.pos - 1];
+        sam_m1.zs = al.score2_m2;
 
         sam_m1.flag = SAM_PAIRED | SAM_UNMAPPED | SAM_FIRST_IN_PAIR;
         sam_m2.flag = SAM_PAIRED | SAM_MATE_UNMAPPED | SAM_SECOND_IN_PAIR;
@@ -2014,6 +2219,8 @@ protected:
     size_t top_k = 1; // report the top_k alignments
     size_t check_k = 5; // report the top_k alignments
     size_t region_dist = 10; // report the top_k alignments
+    float mapq_coeff_len = 50.0; // report the top_k alignments
+    int32_t mapq_coeff_fac = log(mapq_coeff_len); // report the top_k alignments
 
     unsigned char seq_nt4_table[256] = {
         0, 1, 2, 3, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,
@@ -2046,6 +2253,7 @@ protected:
 
     void *km = 0;           // Kalloc
 
+    const int8_t max_penalty = 17; // Largest combined penalty for sub_n computation
     // int8_t max_rseq = 0;
 
     const int m = 5;
