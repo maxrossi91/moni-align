@@ -620,13 +620,13 @@ public:
 
     // TODO: precompute the nt4 version of the mates
 
-    size_t min_score_m1 = 0;
-    size_t min_score_m2 = 0;
-    size_t min_score = 0;
+    int32_t min_score_m1 = 0;
+    int32_t min_score_m2 = 0;
+    int32_t min_score = 0;
     paired_score_t score;
-    size_t score2 = 0;
-    size_t score2_m1 = 0;
-    size_t score2_m2 = 0;
+    int32_t score2 = 0;
+    int32_t score2_m1 = 0;
+    int32_t score2_m2 = 0;
 
     float frac_rep_m1 = 0.0;
     float frac_rep_m2 = 0.0;
