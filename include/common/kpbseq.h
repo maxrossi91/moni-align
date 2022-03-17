@@ -216,6 +216,7 @@ inline static void kbseq_push_back(kbseq_t *b, kseq_t *seq)
     copy_kseq_t(&b->buf[b->l++], seq);
 }
 
+
 /**
  * \brief Reset the batch b
  * 
@@ -231,6 +232,19 @@ inline static void kbseq_reset(kbseq_t *b)
         free(b->buf[i].qual.s);
     }
     b->l = 0;
+}
+
+/**
+ * \brief copy b into a
+ *
+ * \param a the destination variable
+ * \param b the source variable.
+ */
+inline static void copy_kbseq_t(kbseq_t *a, kbseq_t *b)
+{
+    kbseq_reset(a);
+    for (size_t i = 0; i < b->l; ++i)
+        kbseq_push_back(a, &b->buf[i]);
 }
 
 /**
@@ -319,6 +333,25 @@ inline static void kpbseq_destroy(kpbseq_t *p)
     kbseq_destroy(p->mate1);
     kbseq_destroy(p->mate2);
     delete p;
+}
+
+inline static void kpbseq_reset(kpbseq_t *p)
+{
+    kbseq_reset(p->mate1);
+    kbseq_reset(p->mate2);
+}
+
+/**
+ * \brief copy b into a
+ *
+ * \param a the destination variable
+ * \param b the source variable.
+ */
+inline static void copy_kpbseq_t(kpbseq_t *a, kpbseq_t* b)
+{
+    kpbseq_reset(a);
+    copy_kbseq_t(a->mate1, b->mate1);
+    copy_kbseq_t(a->mate2, b->mate2);
 }
 
 ////////////////////////////////////////////////////////////////////////////////

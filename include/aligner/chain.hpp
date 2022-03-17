@@ -59,7 +59,18 @@ typedef struct{
     ll score = 0;
     size_t mate = 2;
     bool paired = false;
+    bool reversed = false;
     std::vector<size_t> anchors;
+
+    // Lazy reverse of the chain
+    void reverse()
+    {
+        if(not reversed)
+        {
+            std::reverse(anchors.begin(), anchors.end());
+            reversed = true;
+        }
+    }
 } chain_t;
 
 typedef struct{

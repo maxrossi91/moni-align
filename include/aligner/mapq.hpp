@@ -184,17 +184,21 @@ size_t compute_mapq_se_bwa(
 }
 
 size_t compute_mapq_pe_bwa(
-    const int32_t score,            // Best alignment score
-    const int32_t score2,           // Second best alignemt score
-    const int32_t score_un,         // Score if unpaired
-    const int32_t match_score,      // Match score
-    const int32_t sub_n,            // Number of sub-optimal alignments
-    const double frac_rep_m1,       // Length of the region covered by seeds of mate 1(https://github.com/lh3/bwa/blob/0747fcc09d96ff44ce555f0c258d0f9762c20611/bwamem.c#L291)
-    const double frac_rep_m2,       // Length of the region covered by seeds of mate 2(https://github.com/lh3/bwa/blob/0747fcc09d96ff44ce555f0c258d0f9762c20611/bwamem.c#L291)
-    size_t& mapq_m1,               // MAPQ mate1
-    size_t& mapq_m2                // MAPQ mate2
-    )
-    {
+    const int32_t score,       // Best alignment score
+    const int32_t score2,      // Second best alignemt score
+    const int32_t score_un,    // Score if unpaired
+    const int32_t match_score, // Match score
+    const int32_t sub_n,       // Number of sub-optimal alignments
+    const double frac_rep_m1,  // Length of the region covered by seeds of mate 1(https://github.com/lh3/bwa/blob/0747fcc09d96ff44ce555f0c258d0f9762c20611/bwamem.c#L291)
+    const double frac_rep_m2,  // Length of the region covered by seeds of mate 2(https://github.com/lh3/bwa/blob/0747fcc09d96ff44ce555f0c258d0f9762c20611/bwamem.c#L291)
+    const int32_t score_m1,    // Best score m1
+    const int32_t score_m2,    // Best score m2
+    const int32_t score2_m1,   // Second best score m1
+    const int32_t score2_m2,   // Second best score m2
+    size_t &mapq_m1,           // MAPQ mate1
+    size_t &mapq_m2            // MAPQ mate2
+)
+{
     assert(score2 <= score);
     int32_t mapq = 0; // Mapping quality 
 
@@ -211,8 +215,8 @@ size_t compute_mapq_pe_bwa(
         mapq_m1 = mapq_m1 > mapq? mapq_m1 : mapq < mapq_m1 + 40? mapq : mapq_m1 + 40;
         mapq_m2 = mapq_m2 > mapq? mapq_m2 : mapq < mapq_m2 + 40? mapq : mapq_m2 + 40;
         // // cap at the tandem repeat score
-        // mapq_m1 = mapq_m1 < raw_mapq(c[0]->score - c[0]->csub, opt->a)? mapq_m1 : raw_mapq(c[0]->score - c[0]->csub, opt->a);
-        // mapq_m2 = mapq_m2 < raw_mapq(c[1]->score - c[1]->csub, opt->a)? mapq_m2 : raw_mapq(c[1]->score - c[1]->csub, opt->a);
+        mapq_m1 = mapq_m1 < raw_mapq(score_m1 - score2_m1, match_score) ? mapq_m1 : raw_mapq(score_m1 - score2_m1, match_score);
+        mapq_m2 = mapq_m2 < raw_mapq(score_m2 - score2_m2, match_score)? mapq_m2 : raw_mapq(score_m2 - score2_m2, match_score);
     }
 
 	return mapq;
