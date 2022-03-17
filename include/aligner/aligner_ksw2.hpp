@@ -49,7 +49,7 @@
 #include <kpbseq.h>
 #include <liftidx.hpp>
 
-MTIME_TSAFE_INIT(4);
+MTIME_TSAFE_INIT(7);
 #include <slp_definitions.hpp>
 #include <chain.hpp>
 

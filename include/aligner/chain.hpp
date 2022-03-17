@@ -79,7 +79,7 @@ typedef struct{
     ll max_dist_y = 100;//LLONG_MAX;
     ll max_iter = 50;
     ll max_pred = 50;
-    ll min_chain_score = 1;
+    ll min_chain_score = 40;
     ll min_chain_length = 1;
 } chain_config_t;
 
@@ -91,7 +91,7 @@ bool find_chains(
             const chain_config_t config = chain_config_t()        
     )
 {
-    MTIME_INIT(4);   
+    MTIME_INIT(7);   
     MTIME_START(3); // Timing helper
     /************* minimap2 dynamic programming for mem chaining ***************/
     /* https://github.com/lh3/minimap2/blob/master/chain.c */
@@ -117,7 +117,8 @@ bool find_chains(
 
     std::sort(anchors.begin(),anchors.end(),cmp);
     MTIME_END(3); //Timing helper
-    MTIME_TSAFE_MERGE;
+    MTIME_START(4); //Timing helper
+    // MTIME_TSAFE_MERGE;
 
     // Dynamic programming
     const ll G = config.G;
@@ -195,7 +196,7 @@ bool find_chains(
         const int32_t l = (y_d > x_d ? (y_d - x_d) : (x_d - y_d));
         const uint32_t ilog_l = (l > 0? ilog2_32(l): 0);
 
-        if((mate_i == mate_j and y_j >= y_i) or max(y_d, x_d) > G)
+        if((mate_i == mate_j and (y_j >= y_i or y_d > max_dist_y)) or max(y_d, x_d) > G)
         continue;
 
         const ll alpha = min(min(y_d,x_d),w_i);
@@ -237,6 +238,9 @@ bool find_chains(
         msc[i] = max_f;
     }
 
+    MTIME_END(4);   // Timing helper
+    MTIME_START(5); // Timing helper
+
     // Find the end positions of chains
     memset(t.data(),0,sizeof(size_t) * t.size());
     for(size_t i = 0; i < anchors.size(); ++i)
@@ -269,7 +273,8 @@ bool find_chains(
     std::sort(chain_starts.begin(), chain_starts.end(), std::greater<std::pair<ll,size_t>>());
     
     // std::vector<std::pair<size_t, std::vector<size_t>>> chains;
-
+    MTIME_END(5);   // Timing helper
+    MTIME_START(6); // Timing helper
     // Backtrack
     memset(t.data(),0,sizeof(size_t) * t.size());
     for(size_t i = 0; i < n_chains; ++i)
@@ -335,6 +340,9 @@ bool find_chains(
     t.resize(0), t.shrink_to_fit();
     f.resize(0), f.shrink_to_fit();
     msc.resize(0), msc.shrink_to_fit();
+
+    MTIME_END(6); // Timing helper
+    MTIME_TSAFE_MERGE;
 
     return true;
 }
