@@ -269,6 +269,11 @@ void write_file(const char *filename, std::vector<T> &ptr)
   fclose(fd);
 }
 
+inline bool file_exists(const std::string &name)
+{
+  struct stat buffer;
+  return (stat(name.c_str(), &buffer) == 0);
+}
 //*********************** Time resources ***************************************
 
 /*!

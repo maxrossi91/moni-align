@@ -313,6 +313,9 @@ public:
 
     std::string filename_ms = filename + ms.get_file_extension();
 
+    if (not file_exists(filename_ms))
+      error("File not found: ", filename_ms);
+
     ifstream fs_ms(filename_ms);
     ms.load(fs_ms);
     fs_ms.close();
@@ -323,10 +326,13 @@ public:
     verbose("Memory peak: ", malloc_count_peak());
     verbose("Elapsed time (s): ", std::chrono::duration<double, std::ratio<1>>(t_insert_end - t_insert_start).count());
 
-    std::string filename_slp = filename + get_slp_file_extension<slp_t>();
-    verbose("Loading random access file: " + filename_slp);
     t_insert_start = std::chrono::high_resolution_clock::now();
 
+    std::string filename_slp = filename + get_slp_file_extension<slp_t>();
+    verbose("Loading random access file: " + filename_slp);
+
+    if (not file_exists(filename_slp))
+      error("File not found: ", filename_slp);
 
     ifstream fs(filename_slp);
     ra.load(fs);
@@ -340,10 +346,13 @@ public:
     verbose("Memory peak: ", malloc_count_peak());
     verbose("Elapsed time (s): ", std::chrono::duration<double, std::ratio<1>>(t_insert_end - t_insert_start).count());
 
-    std::string filename_idx = filename + idx.get_file_extension();
-    verbose("Loading fasta index file: " + filename_idx);
     t_insert_start = std::chrono::high_resolution_clock::now();
 
+    std::string filename_idx = filename + idx.get_file_extension();
+    verbose("Loading fasta index file: " + filename_idx);
+
+    if (not file_exists(filename_idx))
+      error("File not found: ", filename_idx);
 
     ifstream fs_idx(filename_idx);
     idx.load(fs_idx);
