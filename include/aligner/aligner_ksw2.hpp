@@ -520,7 +520,7 @@ public:
                   best_scores[j] = std::make_tuple(0,0,i-1);
                 else
                   best_scores[j] = std::make_tuple(score.score, score.lft, i++), replaced = true;
-              else if (score.score == std::get<0>(best_scores[j]) )
+              else if (score.score <= std::get<0>(best_scores[j]) )
                 j = best_scores.size(), replaced = true, i++;
 
           if( not replaced )
