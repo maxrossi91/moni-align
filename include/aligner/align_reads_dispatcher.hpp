@@ -243,17 +243,35 @@ void *mt_align_worker(void *param)
     kseq_t *mate2 = p->mate2;
     kpbseq_t *b = kpbseq_init();
     int l = 0;
+
+    bool learning = true;
+    std::vector<std::vector<typename aligner_t::paired_alignment_t>> alignments;
+    std::vector<kpbseq_t *> memo;
     while ((l = mt_kpbseq_read(b, mate1, mate2, b_size)) > 0)
     {
-      // for (size_t i = 0; i < l; ++i)
-      // {
-      //   if (p->aligner->align(&b->mate1->buf[i], &b->mate2->buf[i],sam_fd))
-      //     n_aligned_reads++;
-      //   n_reads++;
-      // }
-      // std::cout << "Block p " << p->wk_id << " end!" << std::endl;
-      n_aligned_reads+=p->aligner->align(b,sam_fd);
-      n_reads += l;
+      if (learning)
+      {
+        memo.push_back(kpbseq_init());
+        copy_kpbseq_t(memo.back(), b);
+        alignments.push_back(std::vector<typename aligner_t::paired_alignment_t>(l));
+        if (p->aligner->learn_fragment_model(memo.back(), alignments.back()))
+        {
+          for (size_t i = 0; i < alignments.size(); ++i)
+          {
+            p->aligner->finalize_learning(alignments[i], sam_fd);
+            kpbseq_destroy(memo[i]);
+            alignments[i].clear();alignments[i].shrink_to_fit();
+          }
+          memo.clear(); memo.shrink_to_fit();
+          alignments.clear(); alignments.shrink_to_fit();
+          learning = false;
+        }
+      }
+      else
+      {
+        n_aligned_reads += p->aligner->align(b, sam_fd);
+        n_reads += l;
+      }
     }
     kpbseq_destroy(b);
   }
@@ -404,17 +422,33 @@ size_t st_align(aligner_t *aligner, std::string pattern_filename, std::string sa
   {
     kpbseq_t *b = kpbseq_init();
     int l = 0;
+    bool learning = true;
+    std::vector< std::vector<typename aligner_t::paired_alignment_t>> alignments;
+    std::vector<kpbseq_t *> memo;
     while ((l = kpbseq_read(b, mate1, mate2, b_size)) > 0)
     {
-      // for (size_t i = 0; i < l; ++i)
-      // {
-      //   if (aligner->align(&b->mate1->buf[i], &b->mate2->buf[i], sam_fd))
-      //     n_aligned_reads++;
-      //   n_reads++;
-      // }
-      // std::cout << "Block p " << p->wk_id << " end!" << std::endl;
-      n_aligned_reads += aligner->align(b,sam_fd);
-      n_reads += l;
+      if(learning)
+      {
+        memo.push_back(kpbseq_init());
+        copy_kpbseq_t(memo.back(), b);
+        alignments.push_back(std::vector<typename aligner_t::paired_alignment_t>(l));
+        if (aligner->learn_fragment_model(memo.back(), alignments.back()))
+        {
+          for( size_t i = 0; i < alignments.size(); ++i ){
+            aligner->finalize_learning(alignments[i], sam_fd);
+            kpbseq_destroy(memo[i]);
+            alignments[i].clear(); alignments[i].shrink_to_fit();
+          } 
+          memo.clear(); memo.shrink_to_fit();
+          alignments.clear(); alignments.shrink_to_fit();
+          learning = false;
+        }
+      }
+      else
+      {
+        n_aligned_reads += aligner->align(b,sam_fd);
+        n_reads += l;
+      }
     }
     kpbseq_destroy(b);
   }
