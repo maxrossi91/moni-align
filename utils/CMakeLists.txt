@@ -26,3 +26,14 @@ target_include_directories(ra PUBLIC    "../include/common"
                                                 "${SUX_SOURCE_DIR}/support"
                                                 )
 target_compile_options(ra PUBLIC "-std=c++17")
+
+add_executable(extract extract.cpp)
+target_link_libraries(extract common sdsl lvsam klib z)
+target_include_directories(extract PUBLIC    "../include/common"
+                                                "../include/aligner"
+                                                "${shaped_slp_SOURCE_DIR}" 
+                                                "${FOLCA_SOURCE_DIR}" 
+                                                "${SUX_SOURCE_DIR}/function" 
+                                                "${SUX_SOURCE_DIR}/support"
+                                                )
+target_compile_options(extract PUBLIC "-std=c++17")
