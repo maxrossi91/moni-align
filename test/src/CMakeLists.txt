@@ -121,7 +121,20 @@ target_include_directories(r-index_test PUBLIC
 target_compile_options(r-index_test PUBLIC "-std=c++17")
 
 
+add_executable(ldx_slp_test ldx_slp_test.cpp)
+target_link_libraries(ldx_slp_test common common sdsl lvsam klib z Catch2::Catch2)
+target_include_directories(ldx_slp_test PUBLIC
+                                        "../../include/common" 
+                                        "../../include/aligner"
+                                        "${shaped_slp_SOURCE_DIR}" 
+                                        "${FOLCA_SOURCE_DIR}" 
+                                        "${SUX_SOURCE_DIR}/function" 
+                                        "${SUX_SOURCE_DIR}/support"
+                                        )
+target_compile_options(ldx_slp_test PUBLIC "-std=c++17")
+
 # list(APPEND CMAKE_MODULE_PATH ${Catch2_SOURCE_DIR}/extras)
 # include(CTest)
 # include(Catch)
 # catch_discover_tests(lifting_test)
+
