@@ -161,6 +161,8 @@ class PFP(threading.Thread):
     elif args.fasta is not None: # TODO: Change this when pfp will suport different formats
       command += "-f {} ".format(args.fasta)
 
+    if not args.no_acgt_only :
+      command += "--acgt-only "
 
 
     print("==== Computing PFP. Command:", command)
@@ -606,6 +608,7 @@ def main():
   build_parser.add_argument('--log-file',               help="Log filename prefix.", type = str)
   build_parser.add_argument('--tmp-dir',                help="Tmp file directory.", default = ".", type = str)
   build_parser.add_argument('-k',                       help='keep temporary files',action='store_true')
+  build_parser.add_argument('--no-acgt-only',           help='do not convert non ACGT characters.',action='store_true')
   build_parser.add_argument('--verbose',                help='verbose',action='store_true')
   build_parser.add_argument('--moni',                   help='build moni index',action='store_true')
   build_parser.add_argument('--phoni',                  help='build phoni index',action='store_true')
