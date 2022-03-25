@@ -103,7 +103,7 @@ TEST_CASE("ldx and slp data structure test", "[ldx_slp]")
   for( size_t i = 0; i < names.size(); ++i)
   {
     verbose("Processing ", names[i]);
-    size_t last = w + (i == names.size() -1) ? w : 0;
+    size_t last = w + ((i == (names.size() -1)) ? w-1 : 0);
     size_t chr_len = ldx.length(i) - last;
     bool check = true;
     size_t k = 0;
