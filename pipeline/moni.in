@@ -128,8 +128,8 @@ class PFP(threading.Thread):
 
   def run(self):
     args = self.args
-    logfile = args.logfile
-    logfile_name = args.logfile_name
+    # logfile = args.logfile
+    # logfile_name = args.logfile_name
     print("{} PFP started!".format(self.getName()))        # "Thread-x started!"
 
     start = time.time()
@@ -180,8 +180,8 @@ class PFPthresholds(threading.Thread):
 
   def run(self):
     args = self.args
-    logfile = args.logfile
-    logfile_name = args.logfile_name
+    # logfile = args.logfile
+    # logfile_name = args.logfile_name
     print("{} PFP Thresholds started!".format(self.getName()))        # "Thread-x started!"
 
     start = time.time()
@@ -216,8 +216,8 @@ class bigrepair(threading.Thread):
 
   def run(self):
       args = self.args
-      logfile = args.logfile
-      logfile_name = args.logfile_name
+      # logfile = args.logfile
+      # logfile_name = args.logfile_name
       print("{} bigrepair started!".format(self.getName()), flush=True)        # "Thread-x started!"
 
       mem = get_max_memory()
@@ -312,8 +312,8 @@ class SLP(threading.Thread):
 
   def run(self):
       args = self.args
-      logfile = args.logfile
-      logfile_name = args.logfile_name
+      # logfile = args.logfile
+      # logfile_name = args.logfile_name
       print("{} shaped_slp started!".format(self.getName()), flush=True)        # "Thread-x started!"
 
       grammars = {
@@ -703,25 +703,25 @@ def main():
   return
 
 # delete intermediate files
-def delete_temp_files(args,logfile,logfile_name):
+def delete_temp_files(args,log):
     if args.k==False:
       print("==== Deleting temporary files.", flush=True) # no need to show the command
       # command = "rm -f {file}.parse_old {file}.last {file}.bwlast {file}.ilist".format(file=args.reference)
       command = "rm -f {file}.parse {file}.parse_old {file}.last {file}.bwlast {file}.dict {file}.dicz {file}.ilist {file}.occ {file}.esa {file}.ssa {file}.dicz.len {file}.C {file}.R {file}.bwt.len {file}.bwt.heads {file}.thr {file}.thr_pos".format(
           file=args.reference)
-      if(execute_command(command,logfile,logfile_name)!=True):
+      if(execute_command(command,log)!=True):
         return
       for i in range(args.threads):
         command = "rm -f {file}.{i}.parse_old {file}.{i}.last".format(file=args.reference, i=i)
-        if(execute_command(command,logfile,logfile_name)!=True):
+        if(execute_command(command,log)!=True):
           return
       
       command = "rm -f {file}.sai {file}.bwsai".format(file=args.reference);
-      if(execute_command(command,logfile,logfile_name)!=True):
+      if(execute_command(command,log)!=True):
         return
       for i in range(args.threads):
         command = "rm -f {file}.{i}.sai".format(file=args.reference, i=i)
-        if(execute_command(command,logfile,logfile_name)!=True):
+        if(execute_command(command,log)!=True):
           return
 
 # compute hash digest for a file
