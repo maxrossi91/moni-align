@@ -119,11 +119,11 @@ TEST_CASE("ldx and slp data structure test", "[ldx_slp]")
         verbose("First character <=5 in ", names[i], " at position: ", k + j - 1);
       k += len;
     }
-    // REQUIRE(check);
+    REQUIRE(check);
 
     check = true;
     
-    ra.expandSubstr(i + k, last, ref);
+    ra.expandSubstr(acc + k, last, ref);
     ref[last] = 0;
     size_t j = 0;
     for (; j < last and check; ++j)
@@ -132,7 +132,7 @@ TEST_CASE("ldx and slp data structure test", "[ldx_slp]")
       verbose("First character >5 in ", names[i], " at position: ", k + j - 1, j -1);
     k += last;
 
-    // REQUIRE(check);
+    REQUIRE(check);
     acc += k;
     
   }
