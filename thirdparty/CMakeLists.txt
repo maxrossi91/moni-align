@@ -162,6 +162,13 @@ set_property(TARGET htslib PROPERTY IMPORTED_LOCATION ${HTS_LIB})
 target_include_directories(htslib INTERFACE ${HTS_SRC})
 
 # PFP++
+find_program(PFP_CHECK check)
+if(NOT PFP_CHECK)
+    message(STATUS "pfp check not found. Building as an external content")
+else()
+    message(STATUS "pfp check found at ${PFP_CHECK}.")
+endif()
+
 find_program(PFP pfp++)
 if(NOT PFP)
     message(STATUS "pfp not found. Building as an external content.")
@@ -181,6 +188,7 @@ if(NOT PFP)
 
     endif()
     set(PFP ${CMAKE_CURRENT_BINARY_DIR}/bin/pfp++)
+    set(PFP_CHECK ${CMAKE_CURRENT_BINARY_DIR}/bin/check)
 
 else()
     message(STATUS "pfp found at ${PFP}.")

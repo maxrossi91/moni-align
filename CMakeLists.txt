@@ -57,6 +57,7 @@ add_subdirectory(utils)
 # add_subdirectory(benchmarks/src)
 
 set(PFP_EXE ${PFP})
+set(PFP_CHECK_EXE ${PFP_CHECK})
 set(PFP_THRESHOLDS_EXE ${pfp_thresholds})
 set(LARGEREPAIR_EXE ${largerepair})
 set(PREPROCESS_EXE ${preprocess})
