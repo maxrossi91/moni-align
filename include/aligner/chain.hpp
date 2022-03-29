@@ -73,6 +73,24 @@ typedef struct{
     }
 } chain_t;
 
+// typedef struct{
+//     size_t pos;
+//     size_t len;
+//     size_t mem_i;
+//     size_t occ_i;
+
+//     bool operator<=(const anchor_t &other)
+//     {
+//       return ((this.pos + this.len -1) < (other.pos + other.len -1));
+//     }
+
+//     friend bool operator>(const anchor_t& lhs, const anchor_t& rhs)
+//     {
+//       return ((this.pos + this.len -1) >= (other.pos + other.len -1));
+//     }
+
+// } anchor_t;
+
 typedef struct{
     ll G = LLONG_MAX;
     ll max_dist_x = 500;//LLONG_MAX;
