@@ -16,6 +16,14 @@ target_include_directories(visualizer PUBLIC    "../include/common"
                                                 "${ksw2_SOURCE_DIR}")
 target_compile_options(visualizer PUBLIC "-std=c++17")
 
+add_executable(ksw_ksw2_global ksw_ksw2_global.cpp ${klib_SOURCE_DIR}/ksw.c)
+target_link_libraries(ksw_ksw2_global common ksw2 sdsl klib z)
+target_include_directories(ksw_ksw2_global PUBLIC    "../include/common"
+                                                "${ksw2_SOURCE_DIR}"
+                                                "${klib_SOURCE_DIR}"
+                                                )
+target_compile_options(ksw_ksw2_global PUBLIC "-std=c++17")
+
 add_executable(ra random_access.cpp)
 target_link_libraries(ra common sdsl lvsam klib z)
 target_include_directories(ra PUBLIC    "../include/common"
