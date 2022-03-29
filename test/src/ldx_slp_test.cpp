@@ -150,7 +150,8 @@ int main( int argc, char* argv[] )
   // Build a new parser on top of Catch2's
   using namespace Catch::Clara;
   auto cli = session.cli() |
-  Opt( base_name, "index" ) ["--base_name"] ("index base name");
+             Opt(base_name, "index")["--base_name"]("index base name") |
+             Opt(w, "int")["-W"]("specify w");
 
   // Now pass the new composite back to Catch2 so it uses that
   session.cli( cli );
