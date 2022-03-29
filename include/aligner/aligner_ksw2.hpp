@@ -396,7 +396,7 @@ public:
   }
 
   // Fill the vector of occs with the matches above curr with LCP <= len
-  void find_MEM_above(size_t curr, size_t len, std::vector<size_t>& occs)
+  bool find_MEM_above(size_t curr, size_t len, std::vector<size_t>& occs)
   {
     const auto sa_first = ms.get_first_run_sample();
     // Phi direction
@@ -409,6 +409,9 @@ public:
         while (lcp >= len)
         {
           occs.push_back(next);
+
+          if (filter_seeds_threshold and (occs.size() > n_seeds_thresholds) )
+            return false;
 
           curr = next;
           if (curr != sa_first)
@@ -424,10 +427,11 @@ public:
         }
       }
     }
+    return true;
   }
 
   // Fill the vector of occs with the matches below curr with LCP <= len
-  void find_MEM_below(size_t curr, size_t len, std::vector<size_t>& occs)
+  bool find_MEM_below(size_t curr, size_t len, std::vector<size_t>& occs)
   {
     const auto sa_last = ms.get_last_run_sample();
     // Phi_inv direction
@@ -440,6 +444,9 @@ public:
         while (lcp >= len)
         {
           occs.push_back(next);
+
+          if (filter_seeds_threshold and (occs.size() > n_seeds_thresholds) )
+            return false;
 
           curr = next;
           if (curr != sa_last)
@@ -455,12 +462,13 @@ public:
         }
       }
     }
+    return true;
   }
 
 
   // Fill the vector of occurrences of the mem_t data structure
   // TODO: remove the checks for the lengths once Dominik fix the lce queries
-  void find_MEM_occs(mem_t &mem)
+  bool find_MEM_occs(mem_t &mem)
   {
     mem.occs.push_back(mem.pos);
 
@@ -479,6 +487,8 @@ public:
         {
           mem.occs.push_back(next);
           
+          if (filter_seeds_threshold and (mem.occs.size() > n_seeds_thresholds) )
+            return false;
           curr = next;
           if(curr != sa_first)
           {
@@ -504,6 +514,9 @@ public:
         {
           mem.occs.push_back(next);
           
+          if (filter_seeds_threshold and (mem.occs.size() > n_seeds_thresholds) )
+            return false;
+
           curr = next;
           if(curr != sa_last)
           {
@@ -516,7 +529,7 @@ public:
         }
       }
     }
-
+    return true;
   }
 
 
@@ -677,6 +690,21 @@ public:
     score_t m2; 
     size_t chain_i = 0; 
     std::pair<size_t,size_t> pos = std::make_pair(0,0); // Position of the mate
+
+    bool operator<=(const orphan_paired_score_t &other)
+    {
+      return (this.tot < other.tot) or
+             (this.tot == other.tot and this.m1.lft < this.m1.lft) or
+             (this.tot == other.tot and this.m1.lft == this.m1.lft and this.m2.lft <= this.m2.lft);
+    }
+
+    friend bool operator>(const orphan_paired_score_t &lhs, const orphan_paired_score_t &rhs)
+    {
+      return (lhs.tot > rhs.tot) or
+             (lhs.tot == rhs.tot and lhs.m1.lft > rhs.m1.lft) or
+             (lhs.tot == rhs.tot and lhs.m1.lft == rhs.m1.lft and lhs.m2.lft > rhs.m2.lft);
+    }
+
   } orphan_paired_score_t;
 
   typedef struct paired_score_t{
@@ -744,6 +772,18 @@ public:
 
     float mean = 0.0;
     float std_dev = 0.0;
+
+    // Stats
+    size_t n_seeds_dir1 = 0; // Number of seeds MATE1 MATE2_RC
+    size_t n_seeds_dir2 = 0; // Number of seeds MATE2 MATE1_RC
+    size_t n_mems_dir1 = 0; // Number of MEMs MATE1 MATE2_RC
+    size_t n_mems_dir2 = 0; // Number of MEMs MATE2 MATE1_RC
+    double avg_seed_length_dir1 = 0.0; // Average seed length MATE1 MATE2_RC
+    double avg_seed_length_dir2 = 0.0;   // Average seed length  MATE2 MATE1_RC
+    double avg_w_seed_length_dir1 = 0.0; // Average weighted seed length MATE1 MATE2_RC
+    double avg_w_seed_length_dir2 = 0.0;   // Average weighted seed length  MATE2 MATE1_RC
+    double armonic_avg_seed_length_dir1 = 0.0; // Average weighted seed length MATE1 MATE2_RC
+    double armonic_avg_seed_length_dir2 = 0.0; // Average weighted seed length  MATE2 MATE1_RC
 
     std::vector<mem_t> mems;
     std::vector<std::pair<size_t, size_t>> anchors;
@@ -897,6 +937,7 @@ public:
         ins_m2 = m2;
         ins_count = count;
       }
+      verbose("Number of high quality samples processed so far: ", ins_count);
       ins_learning_complete = ins_learning_complete or (ins_count >= ins_learning_n);
       if (ins_learning_complete)
       {
@@ -927,6 +968,12 @@ public:
       paired_alignment_t &alignment = alignments[i];
       alignment.mean = ins_mean;
       alignment.std_dev = ins_std_dev;
+
+      if (alignment.best_scores.size() == 0)
+      {
+        alignment.write(out);
+        continue;
+      }
 
       update_best_scores(alignment);
 
@@ -1048,10 +1095,87 @@ public:
     MTIME_START(0); // Timing helper
 
     // Find MEMs
-    find_seeds(al.mate1, al.mems, 0, MATE_1 | MATE_F);
-    find_seeds(&al.mate1_rev, al.mems, al.mate2->seq.l, MATE_1 | MATE_RC );
-    find_seeds(al.mate2, al.mems, 0, MATE_2 | MATE_F);
-    find_seeds(&al.mate2_rev, al.mems, al.mate1->seq.l, MATE_2 | MATE_RC);
+    if ( filter_seeds )
+    {
+      // Direction 1
+      // find_seeds(al.mate1, al.mems, 0, MATE_1 | MATE_F);
+      // find_seeds(&al.mate2_rev, al.mems, al.mate1->seq.l, MATE_2 | MATE_RC);
+      find_mems(al.mate1, al.mems, 0, MATE_1 | MATE_F);
+      find_mems(&al.mate2_rev, al.mems, al.mate1->seq.l, MATE_2 | MATE_RC);
+      
+      al.n_mems_dir1 = al.mems.size();
+      al.n_seeds_dir1 = 0;
+      for ( size_t i = 0; i < al.mems.size(); ++i )
+      {
+        al.n_seeds_dir1 += al.mems[i].occs.size();
+        al.avg_seed_length_dir1 += al.mems[i].len;
+        al.avg_w_seed_length_dir1 += al.mems[i].len * al.mems[i].occs.size();
+        al.armonic_avg_seed_length_dir1 += (double)al.mate1->seq.l/(double)al.mems[i].len;
+      }
+      if (al.n_mems_dir1 > 0) 
+      {
+        al.avg_seed_length_dir1 /= al.n_mems_dir1;
+        al.avg_w_seed_length_dir1 /= al.n_seeds_dir1;
+        al.armonic_avg_seed_length_dir1 = (double)al.n_mems_dir1 / al.armonic_avg_seed_length_dir1;
+      }
+      // Direction 2
+      // find_seeds(al.mate2, al.mems, 0, MATE_2 | MATE_F);
+      // find_seeds(&al.mate1_rev, al.mems, al.mate2->seq.l, MATE_1 | MATE_RC );
+      find_mems(al.mate2, al.mems, 0, MATE_2 | MATE_F);
+      find_mems(&al.mate1_rev, al.mems, al.mate2->seq.l, MATE_1 | MATE_RC );
+
+      al.n_mems_dir2 = al.mems.size() - al.n_mems_dir1;
+      al.n_seeds_dir2 = 0;
+      for ( size_t i = al.n_mems_dir1; i < al.mems.size(); ++i )
+      {
+        al.n_seeds_dir2 += al.mems[i].occs.size();
+        al.avg_seed_length_dir2 += al.mems[i].len;
+        al.avg_w_seed_length_dir2 += al.mems[i].len * al.mems[i].occs.size();
+        al.armonic_avg_seed_length_dir2 += (double)al.mate1->seq.l / (double)al.mems[i].len;
+      }
+      if (al.n_mems_dir2 > 0) 
+      {
+        al.avg_seed_length_dir2 /= al.n_mems_dir2;
+        al.avg_w_seed_length_dir2 /= al.n_seeds_dir2;
+        al.armonic_avg_seed_length_dir2 = (double)al.n_mems_dir2 / al.armonic_avg_seed_length_dir2;
+      }
+
+      // Make a decision based on the MEMs
+      if ((al.avg_seed_length_dir1 > al.avg_seed_length_dir2) and ((al.avg_seed_length_dir1 - al.avg_seed_length_dir2) > avg_seed_length_diff_threshold))
+        al.mems.erase(al.mems.begin() + al.n_mems_dir1, al.mems.end());
+      if ((al.avg_seed_length_dir2 > al.avg_seed_length_dir1) and ((al.avg_seed_length_dir2 - al.avg_seed_length_dir1) > avg_seed_length_diff_threshold))
+        al.mems.erase(al.mems.begin(), al.mems.begin()  + al.n_mems_dir1);
+
+      populate_seeds(al.mems);
+      al.n_seeds_dir1 = 0;
+      al.n_seeds_dir2 = 0;
+      for (size_t i = 0; i < al.mems.size(); ++i)
+      {
+        al.n_seeds_dir1 += al.mems[i].occs.size();
+        al.avg_w_seed_length_dir1 += al.mems[i].len * al.mems[i].occs.size();
+      }
+      for (size_t i = al.n_mems_dir1; i < al.n_mems_dir1 + al.n_mems_dir2; ++i)
+      {
+        al.n_seeds_dir2 += al.mems[i].occs.size();
+        al.avg_w_seed_length_dir2 += al.mems[i].len * al.mems[i].occs.size();
+      }
+      if (al.n_mems_dir1 > 0) 
+      {
+        al.avg_w_seed_length_dir1 /= al.n_seeds_dir1;
+      }
+      if (al.n_mems_dir2 > 0) 
+      {
+        al.avg_w_seed_length_dir2 /= al.n_seeds_dir2;
+      }
+
+    }
+    else
+    {
+      find_seeds(al.mate1, al.mems, 0, MATE_1 | MATE_F);
+      find_seeds(&al.mate1_rev, al.mems, al.mate2->seq.l, MATE_1 | MATE_RC );
+      find_seeds(al.mate2, al.mems, 0, MATE_2 | MATE_F);
+      find_seeds(&al.mate2_rev, al.mems, al.mate1->seq.l, MATE_2 | MATE_RC);
+    }
     // find_mems(al.mate1, al.mems, 0, MATE_1 | MATE_F);
     // find_mems(&al.mate1_rev, al.mems, al.mate2->seq.l, MATE_1 | MATE_RC );
     // find_mems(al.mate2, al.mems, 0, MATE_2 | MATE_F);
@@ -1137,7 +1261,7 @@ public:
 
     auto& best_scores = al.best_scores;
 
-    assert(best_scores.size() > 1);
+    assert(best_scores.size() >= 1);
 
     if (best_scores[0].tot < al.min_score)
     {
@@ -1146,6 +1270,12 @@ public:
       return false;
     }
 
+    uint8_t direction = 0;
+    const size_t mate = al.chains[best_scores[0].chain_i].mate;
+    if ( ((mate & MATE_1) and (mate & MATE_F)) or ((mate & MATE_2) and (mate & MATE_RC)))
+      direction = 1;
+    else
+      direction = 2;
 
     // // Compute sub-optimal hits (https://github.com/bwa-mem2/bwa-mem2/blob/edc703f883e8aaed83067100d8e54e0e9e810ef5/src/bwamem.cpp#L1312)
     // // From BWA's manual: BWA will not search for suboptimal hits with a score lower than (bestScore-misMsc).
@@ -1305,7 +1435,8 @@ public:
 
     // Compute the second best score
     // (0) score (1) pos (2) lift m1 (3) lift m2 (4) index in chains list (5) score m1 (6) score m2
-    std::vector<std::tuple<int32_t, std::pair<size_t,size_t>, size_t, size_t, size_t, size_t, size_t>> best_scores;
+    // std::vector<std::tuple<int32_t, std::pair<size_t,size_t>, size_t, size_t, size_t, size_t, size_t>> best_scores;
+    std::vector<orphan_paired_score_t> best_scores;
     std::pair<size_t,size_t> pair_zero = {0,0};
     // std::vector<std::pair<std::pair<int32_t, std::pair<size_t,size_t> >, size_t>> best_scores;
     size_t i = 0;
@@ -1329,71 +1460,70 @@ public:
       orphan_paired_score_t score = paired_chain_orphan_score(al, i, mean, std_dev);
 
       // Check if there is another read scored in the same region
-      bool replaced = false;
-      for(size_t j = 0; j < best_scores.size(); ++j)
+      if (score.tot >= al.min_score)
       {
-        auto d1 = dist(std::get<2>(best_scores[j]),score.m1.lft);
-        auto d2 = dist(std::get<3>(best_scores[j]),score.m2.lft);
-        if( (dist(std::get<2>(best_scores[j]),score.m1.lft) < region_dist) and 
-            (dist(std::get<3>(best_scores[j]),score.m2.lft) < region_dist) )
-          if ( score.tot > std::get<0>(best_scores[j]) )
-            if ( replaced )
-              best_scores[j] = std::make_tuple(0,pair_zero,0,0,i-1,0,0);
-            else
-              best_scores[j] = std::make_tuple(score.tot, score.pos, score.m1.lft, score.m2.lft, i++, score.m1.score, score.m2.score), replaced = true;
-          else if ( score.tot <= std::get<0>(best_scores[j]) )
-            j = best_scores.size(), replaced = true, i++;
+        bool replaced = false;
+        for(size_t j = 0; j < best_scores.size(); ++j)
+        {
+          orphan_paired_score_t zero;
+          zero.chain_i = i;
+          auto d1 = dist(best_scores[j].m1.lft,score.m1.lft);
+          auto d2 = dist(best_scores[j].m2.lft,score.m2.lft);
+          if ((dist(best_scores[j].m1.lft, score.m1.lft) < region_dist) and
+              (dist(best_scores[j].m2.lft, score.m2.lft) < region_dist))
+            if (score.tot > best_scores[j].tot)
+              if (replaced)
+                best_scores[j] = zero;
+              else
+                best_scores[j] = score, replaced = true;
+            else if (score.tot <= best_scores[j].tot)
+              j = best_scores.size(), replaced = true;
+        }
+        if (not replaced)
+          best_scores.push_back(score);
+
       }
-      if( not replaced )
-        best_scores.push_back(std::make_tuple(score.tot, score.pos, score.m1.lft, score.m2.lft, i++, score.m1.score, score.m2.score));
 
-
+      ++i;
       // best_scores.push_back(std::make_pair(std::make_pair(score.tot,score.pos), i++));
     }
 
-    // orphan_paired_score_t zero;
-    // if (best_scores.size() < 2)
-    //   best_scores.push_back(std::make_pair(std::make_pair(0,std::make_pair(0,0)), al.chains.size()));
+    orphan_paired_score_t zero;
+    zero.chain_i = al.chains.size();
 
-    // std::sort(best_scores.begin(), best_scores.end(), std::greater<std::pair<std::pair<int32_t, std::pair<size_t,size_t> >, size_t>>());
-
-    al.sub_n = best_scores.size() -1;
     if (best_scores.size() < 2)
-      best_scores.push_back(std::make_tuple(0, pair_zero, 0, 0, al.chains.size(),0,0));
+      best_scores.push_back(zero);
 
-    std::sort(best_scores.begin(), best_scores.end(), std::greater<std::tuple<int32_t, std::pair<size_t,size_t>, size_t, size_t, size_t, size_t, size_t>>());
+    // Sort the chains by score
+    std::sort(best_scores.begin(), best_scores.end(), std::greater<orphan_paired_score_t>());
 
-
-
-    assert(best_scores.size() > 1);
-
-    if (std::get<0>(best_scores[0]) < al.min_score)
+    if (best_scores[0].tot < al.min_score)
     {
       MTIME_END(2); //Timing helper
       MTIME_TSAFE_MERGE;
       return false;
     }
 
-
     // Compute sub-optimal hits (https://github.com/bwa-mem2/bwa-mem2/blob/edc703f883e8aaed83067100d8e54e0e9e810ef5/src/bwamem.cpp#L1312)
     // From BWA's manual: BWA will not search for suboptimal hits with a score lower than (bestScore-misMsc).
-    size_t k = 1;
+    size_t j = 1;
     al.sub_n = 0;
-    while( k < best_scores.size() and std::get<0>(best_scores[k++]) >= (std::get<0>(best_scores[0]) - max_penalty))
+    while (j < best_scores.size() and best_scores[j++].tot >= (best_scores[0].tot - max_penalty))
       ++al.sub_n;
-
 
     al.best_score = true;
 
-    al.score2 = std::get<0>(best_scores[1]);
-    al.score2_m1 = std::get<5>(best_scores[1]);
-    al.score2_m2 = std::get<6>(best_scores[1]);
+    al.score2 = best_scores[1].tot;
+    al.score2_m1 = best_scores[1].m1.score;
+    al.score2_m2 = best_scores[1].m2.score;
+
+    al.second_best_score = (al.score2 >= al.min_score);
 
 
     { // Forward case
-      i = std::get<4>(best_scores[0]);
-      ll start = std::get<1>(best_scores[0]).first;
-      ll end = std::get<1>(best_scores[0]).second;
+      size_t i = best_scores[0].chain_i;
+      ll start = best_scores[0].pos.first;
+      ll end = best_scores[0].pos.second;
       // // Align the chain
       // auto chain = al.chains[i];
       // // Reverse the chain order
@@ -1444,7 +1574,7 @@ public:
         // size_t r = i + l - 1;
         // r = (reverse)? (read->seq.l - (r + 1 - l) - 1) : (r); // compatible with minimap2 chaining algorithm
         mems.push_back(mem_t(pointers[i],l,i,mate,r));
-        find_MEM_occs(mems.back());
+        // find_MEM_occs(mems.back());
       }
 
       // Compute next match length
@@ -1453,6 +1583,63 @@ public:
     }
 
   }
+
+  double read_shredding_factor(
+    std::vector<mem_t>& mems
+    )
+  {
+    // for (size_t j = 0; j < n_MEMs; ++i)
+
+  }
+
+  // Populate the seeds given a list of MEMs
+  void populate_seeds(
+    std::vector<mem_t>& mems
+    ) 
+  {
+    size_t n_MEMs = mems.size();
+    for (size_t j = 0; j < n_MEMs; ++j)
+    {
+      auto & mem = mems[j];
+      size_t l = mem.len;
+      size_t i = mem.idx;
+      size_t mate = mem.mate;
+      size_t pos = mem.pos;
+      size_t r = mem.rpos;
+
+      // size_t r = r_offset + (i + l - 1); // compatible with minimap2 chaining algorithm
+
+      mem.occs.push_back(mem.pos);
+
+      find_MEM_above(mem.pos, mem.len, mem.occs);
+      size_t upper_suffix = mem.occs.back();
+      find_MEM_below(mem.pos, mem.len, mem.occs);
+      size_t lower_suffix = mem.occs.back();
+
+      // Take two halves of the MEM
+      if(l >= (min_len << 1))
+      {
+        size_t ll = l >> 1; 
+        size_t rl = r - l + ll; // compatible with minimap2 chaining algorithm
+        mems.push_back(mem_t(upper_suffix,ll,i,mate,rl));
+
+        mem_t &mem = mems.back();
+        if ((not find_MEM_above(upper_suffix, mem.len, mem.occs)) or
+            (not find_MEM_below(lower_suffix, mem.len, mem.occs))){
+            mems.pop_back(); continue;
+            }
+
+        size_t lr = l - ll;
+        size_t rr = r; // compatible with minimap2 chaining algorithm
+        mems.push_back(mem_t(pos + ll,lr,i + ll,mate,rr));
+        find_MEM_occs(mems.back()); // TODO: Optimize this
+        if ((not find_MEM_occs(mems.back()))){
+            mems.pop_back(); continue;
+            }
+      }
+    }
+  }
+
 
   void find_seeds(
     const kseq_t *read,
@@ -1936,6 +2123,7 @@ orphan_paired_score_t paired_chain_orphan_score(
     }
 
     orphan_paired_score_t score;
+    score.chain_i = chain_i;
 
     // Extract the anchors
     std::pair<ll, std::vector<size_t>> mate1_chain;
@@ -2128,7 +2316,7 @@ orphan_paired_score_t paired_chain_orphan_score(
         seq[i] = seq_nt4_table[(int)paired_mate->seq.s[i]];
 
     if(score_only or realign)
-    {
+    { // TODO: Fix the double alignment
       kswq_t *q = 0;
       kswr_t r;
       const int xtra = KSW_XSTART;
@@ -2138,7 +2326,18 @@ orphan_paired_score_t paired_chain_orphan_score(
       // Update start and end
       end = start + r.te;
       start += r.tb;
-      score.score= r.score;
+
+      int flag = KSW_EZ_SCORE_ONLY;
+      size_t ref_len_ = r.te - r.tb + 1;
+      char *ref_ = ref + r.tb;
+      ksw_extz_t ez;
+      memset(&ez, 0, sizeof(ksw_extz_t));
+
+      ksw_reset_extz(&ez);
+      // ksw_extd2_sse(km, seq_len, (uint8_t *)seq, ref_len, (uint8_t*)ref, m, mat, gapo, gape, gapo2, gape2, w, zdrop, end_bonus, flag, &ez);
+      ksw_extz2_sse(km, seq_len, (uint8_t *)seq, ref_len_, (uint8_t*)ref_, m, mat, gapo, gape,  w, zdrop, end_bonus, flag, &ez);
+
+      score.score= ez.score;
       score.pos = start;
     }
 
@@ -2153,8 +2352,10 @@ orphan_paired_score_t paired_chain_orphan_score(
         char* tmp = (char*)calloc(max(ref_len,seq_len),1);
 
         ksw_reset_extz(&ez);
-        ksw_extd2_sse(km, seq_len, (uint8_t *)seq, ref_len, (uint8_t*)ref, m, mat, gapo, gape, gapo2, gape2, w, zdrop, end_bonus, flag, &ez);
+        // ksw_extd2_sse(km, seq_len, (uint8_t *)seq, ref_len, (uint8_t*)ref, m, mat, gapo, gape, gapo2, gape2, w, zdrop, end_bonus, flag, &ez);
+        ksw_extz2_sse(km, seq_len, (uint8_t *)seq, ref_len, (uint8_t*)ref, m, mat, gapo, gape,  w, zdrop, end_bonus, flag, &ez);
 
+        // ez.score = ksw_global(seq_len, (uint8_t *)seq, ref_len, (uint8_t *)ref, 5, mat, gapo, gape, seq_len, &ez.n_cigar, &ez.cigar);
         // Concatenate the CIGAR strings
 
         // std::string cigar_s;
@@ -2204,6 +2405,7 @@ orphan_paired_score_t paired_chain_orphan_score(
 
         score.score = ez.score;
         score.pos = ref_occ;
+        score.pos = start;
         delete tmp;
         delete l_ref;
         bam_destroy1(bam);
@@ -2746,6 +2948,12 @@ protected:
     // uint8_t *rseq = 0;
 
     bool forward_only;
+    bool filter_seeds = true;
+
+    bool filter_seeds_threshold = true;
+    size_t n_seeds_thresholds = 5000;
+
+    double avg_seed_length_diff_threshold = 50.0;
 
     chain_config_t chain_config;
 };

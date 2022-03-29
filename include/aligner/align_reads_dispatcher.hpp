@@ -374,6 +374,7 @@ template <typename aligner_t>
 size_t st_align(aligner_t *aligner, std::string pattern_filename, std::string sam_filename, size_t b_size, std::string mate2_filename = "")
 {
   size_t n_reads = 0;
+  size_t pn_reads = 0;
   size_t n_aligned_reads = 0;
 
   kseq_t *seq = nullptr;
@@ -449,6 +450,10 @@ size_t st_align(aligner_t *aligner, std::string pattern_filename, std::string sa
         n_aligned_reads += aligner->align(b,sam_fd);
         n_reads += l;
       }
+    }
+    if ((n_reads - pn_reads) > 1000000) {
+      verbose("Number of processed reads: ", n_reads);
+      pn_reads = n_reads;
     }
     kpbseq_destroy(b);
   }
