@@ -508,6 +508,13 @@ def query_helper(args, exe, exe_name):
 
   if exe_name == "MONI" or exe_name == "MONI-EXTEND":
     command += " -b {} -A {} -B {} -O {} -E {} -L {} ".format(args.batch,args.smatch, args.smismatch, args.gapo, args.gape, args.extl)
+  
+  if exe_name == "MONI":
+    if args.dir_dis:
+      command += " -d"
+    if args.seed_dis:
+      command += " -s"
+    command += " -D {} -S {} ".format(args.dir_thr,args.seed_thr)
 
   if exe_name != "SPUMONI" and args.grammar == "shaped":
     command += " -q"
@@ -730,6 +737,10 @@ def main():
   align_parser.add_argument('-B', '--smismatch',  help='mismatch penalty value', type=int, default=4)
   align_parser.add_argument('-O', '--gapo',       help='coma separated gap open penalty values', type=str, default='4,13')
   align_parser.add_argument('-E', '--gape',       help='coma separated gap extension penalty values', type=str, default='2,1')
+  align_parser.add_argument('-d', '--dir-dis',    help='disable direction filtering.', action='store_true')
+  align_parser.add_argument('-D', '--dir-thr',    help='direction filtering threshold.', type=float, default='50.0')
+  align_parser.add_argument('-s', '--seed-dis',   help='disable seed filtering.', action='store_true')
+  align_parser.add_argument('-S', '--seed-thr',   help='seed filtering threshold.', type=int, default=5000)
   align_parser.add_argument('--moni',             help='run moni index',action='store_true')
   align_parser.add_argument('--phoni',            help='run phoni index', action='store_true')
   align_parser.add_argument('--log-file',         help="Log filename prefix.", type = str)

@@ -57,122 +57,6 @@ MTIME_TSAFE_INIT(7);
 
 #define _REALIGN
 
-
-// KSEQ_INIT(gzFile, gzread);
-
-// //*************** Borrowed from minimap2 ***************************************
-// static const char LogTable256[256] = {
-// #define LT(n) n, n, n, n, n, n, n, n, n, n, n, n, n, n, n, n
-// 	-1, 0, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3, 3, 3, 3, 3,
-// 	LT(4), LT(5), LT(5), LT(6), LT(6), LT(6), LT(6),
-// 	LT(7), LT(7), LT(7), LT(7), LT(7), LT(7), LT(7), LT(7)
-// };
-
-// static inline int ilog2_32(uint32_t v)
-// {
-// 	uint32_t t, tt;
-// 	if ((tt = v>>16)) return (t = tt>>8) ? 24 + LogTable256[t] : 16 + LogTable256[tt];
-// 	return (t = v>>8) ? 8 + LogTable256[t] : LogTable256[v];
-// }
-// //******************************************************************************
-// ////////////////////////////////////////////////////////////////////////////////
-// /// kseq extra
-// ////////////////////////////////////////////////////////////////////////////////
-
-// static inline size_t ks_tell(kseq_t *seq)
-// {
-//   return gztell(seq->f->f) - seq->f->end + seq->f->begin;
-// }
-
-// void copy_kstring_t(kstring_t &l, kstring_t &r)
-// {
-//   l.l = r.l;
-//   l.m = r.m;
-//   l.s = (char *)malloc(l.m);
-//   for (size_t i = 0; i < r.m; ++i)
-//     l.s[i] = r.s[i];
-// }
-// void copy_kseq_t(kseq_t *l, kseq_t *r)
-// {
-//   copy_kstring_t(l->name, r->name);
-//   copy_kstring_t(l->comment, r->comment);
-//   copy_kstring_t(l->seq, r->seq);
-//   copy_kstring_t(l->qual, r->qual);
-//   l->last_char = r->last_char;
-// }
-// ////////////////////////////////////////////////////////////////////////////////
-
-// ////////////////////////////////////////////////////////////////////////////////
-// /// helper functions
-// ////////////////////////////////////////////////////////////////////////////////
-
-// char complement(char n)
-// {
-//   switch (n)
-//   {
-//   case 'A':
-//     return 'T';
-//   case 'T':
-//     return 'A';
-//   case 'G':
-//     return 'C';
-//   case 'C':
-//     return 'G';
-//   default:
-//     return n;
-//   }
-// }
-// ////////////////////////////////////////////////////////////////////////////////
-
-// ////////////////////////////////////////////////////////////////////////////////
-// /// SLP definitions
-// ////////////////////////////////////////////////////////////////////////////////
-
-// using SelSd = SelectSdvec<>;
-// using DagcSd = DirectAccessibleGammaCode<SelSd>;
-// using Fblc = FixedBitLenCode<>;
-
-// using shaped_slp_t = SelfShapedSlp<uint32_t, DagcSd, DagcSd, SelSd>;
-// using plain_slp_t = PlainSlp<uint32_t, Fblc, Fblc>;
-
-// template< typename slp_t>
-// std::string get_slp_file_extension()
-// {
-//   return std::string(".slp");
-// }
-
-// template <>
-// std::string get_slp_file_extension<shaped_slp_t>()
-// {
-//   return std::string(".slp");
-// }
-
-// template <>
-// std::string get_slp_file_extension<plain_slp_t>()
-// {
-//   return std::string(".plain.slp");
-// }
-// ////////////////////////////////////////////////////////////////////////////////
-
-// ////////////////////////////////////////////////////////////////////////////////
-// /// SAM flags
-// ////////////////////////////////////////////////////////////////////////////////
-
-// #define SAM_PAIRED 1                      // template having multiple segments in sequencing
-// #define SAM_MAPPED_PAIRED 2               // each segment properly aligned according to the aligner
-// #define SAM_UNMAPPED 4                    // segment unmapped
-// #define SAM_MATE_UNMAPPED 8               // next segment in the template unmapped
-// #define SAM_REVERSED 16                   // SEQ being reverse complemented
-// #define SAM_MATE_REVERSED 32              // SEQ of the next segment in the template being reverse complemented
-// #define SAM_FIRST_IN_PAIR 64              // the first segment in the template
-// #define SAM_SECOND_IN_PAIR 128            // the last segment in the template
-// #define SAM_SECONDARY_ALIGNMENT 256       // secondary alignment
-// #define SAM_FAILS_CHECKS 512              // not passing filters, such as platform/vendor quality controls
-// #define SAM_DUPLICATE 1024                // PCR or optical duplicate
-// #define SAM_SUPPLEMENTARY_ALIGNMENT 2048  // supplementary alignment
-
-// ////////////////////////////////////////////////////////////////////////////////
-
 template <typename slp_t,
           typename ms_t>
 class aligner
@@ -194,6 +78,12 @@ public:
         // double mean = 5;         // The mean of the insert size distribution.
         // double std_dev = 10;     // The standard deviation of the insert size distribution.
 
+        bool filter_dir = true; // Use MEMs average length to filter the orientation of the reads
+        double dir_thr = 50.0; // Use MEMs average length distance to filter the orientation of the reads
+
+        bool filter_seeds = true; // Filter seed if occurs more than threshold
+        size_t n_seeds_thr = 5000;   // Filter seed if occurs more than threshold
+        
         // ksw2 parameters
         int8_t smatch = 2;      // Match score default
         int8_t smismatch = 4;   // Mismatch score default
@@ -296,6 +186,10 @@ public:
                 top_k(config.top_k),            // Report the top_k alignments
                 check_k(config.check_k),        // Check the scores of the check_k chains
                 region_dist(config.region_dist),// Maximum distance for two regions to be called from the same region
+                filter_dir(config.filter_dir),  // Use MEMs average length to filter the orientation of the reads
+                dir_thr(config.dir_thr),        // Use MEMs average length distance to filter the orientation of the reads
+                filter_seeds(config.filter_seeds),// Filter seed if occurs more than threshold
+                n_seeds_thr(config.n_seeds_thr),// Filter seed if occurs more than threshold
                 smatch(config.smatch),          // Match score default
                 smismatch(config.smismatch),    // Mismatch score default
                 gapo(config.gapo),              // Gap open penalty
@@ -410,7 +304,7 @@ public:
         {
           occs.push_back(next);
 
-          if (filter_seeds_threshold and (occs.size() > n_seeds_thresholds) )
+          if (filter_seeds and (occs.size() > n_seeds_thr) )
             return false;
 
           curr = next;
@@ -445,7 +339,7 @@ public:
         {
           occs.push_back(next);
 
-          if (filter_seeds_threshold and (occs.size() > n_seeds_thresholds) )
+          if (filter_seeds and (occs.size() > n_seeds_thr) )
             return false;
 
           curr = next;
@@ -487,7 +381,7 @@ public:
         {
           mem.occs.push_back(next);
           
-          if (filter_seeds_threshold and (mem.occs.size() > n_seeds_thresholds) )
+          if (filter_seeds and (mem.occs.size() > n_seeds_thr) )
             return false;
           curr = next;
           if(curr != sa_first)
@@ -514,7 +408,7 @@ public:
         {
           mem.occs.push_back(next);
           
-          if (filter_seeds_threshold and (mem.occs.size() > n_seeds_thresholds) )
+          if (filter_seeds and (mem.occs.size() > n_seeds_thr) )
             return false;
 
           curr = next;
@@ -1095,7 +989,7 @@ public:
     MTIME_START(0); // Timing helper
 
     // Find MEMs
-    if ( filter_seeds )
+    if ( filter_dir )
     {
       // Direction 1
       // find_seeds(al.mate1, al.mems, 0, MATE_1 | MATE_F);
@@ -1141,9 +1035,9 @@ public:
       }
 
       // Make a decision based on the MEMs
-      if ((al.avg_seed_length_dir1 > al.avg_seed_length_dir2) and ((al.avg_seed_length_dir1 - al.avg_seed_length_dir2) > avg_seed_length_diff_threshold))
+      if ((al.avg_seed_length_dir1 > al.avg_seed_length_dir2) and ((al.avg_seed_length_dir1 - al.avg_seed_length_dir2) > dir_thr))
         al.mems.erase(al.mems.begin() + al.n_mems_dir1, al.mems.end());
-      if ((al.avg_seed_length_dir2 > al.avg_seed_length_dir1) and ((al.avg_seed_length_dir2 - al.avg_seed_length_dir1) > avg_seed_length_diff_threshold))
+      if ((al.avg_seed_length_dir2 > al.avg_seed_length_dir1) and ((al.avg_seed_length_dir2 - al.avg_seed_length_dir1) > dir_thr))
         al.mems.erase(al.mems.begin(), al.mems.begin()  + al.n_mems_dir1);
 
       populate_seeds(al.mems);
@@ -2948,12 +2842,13 @@ protected:
     // uint8_t *rseq = 0;
 
     bool forward_only;
+
+    bool filter_dir = true;
+    double dir_thr = 50.0;
+
     bool filter_seeds = true;
+    size_t n_seeds_thr = 5000;
 
-    bool filter_seeds_threshold = true;
-    size_t n_seeds_thresholds = 5000;
-
-    double avg_seed_length_diff_threshold = 50.0;
 
     chain_config_t chain_config;
 };
