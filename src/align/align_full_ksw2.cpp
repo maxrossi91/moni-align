@@ -56,13 +56,13 @@ struct Args
   size_t l = 25; // minumum MEM length
   size_t th = 1; // number of threads
   bool is_fasta = false; // read a fasta file
-  bool shaped_slp = true; // use shaped slp
+  bool shaped_slp = false; // use shaped slp
   size_t ext_len = 100;      // Extension length
   // size_t top_k = 1;       // Report the top_k alignments
   bool filter_dir = true; // Use MEMs average length to filter the orientation of the reads
   double dir_thr = 50.0; // Use MEMs average length distance to filter the orientation of the reads
 
-  bool filter_seeds = false; // Filter seed if occurs more than threshold
+  bool filter_seeds = true; // Filter seed if occurs more than threshold
   size_t n_seeds_thr = 5000;   // Filter seed if occurs more than threshold
   
 
@@ -148,18 +148,18 @@ void parseArgs(int argc, char *const argv[], Args &arg)
       arg.smismatch = stoi(sarg);
       break;
     case 'd':
-      arg.filter_dir = true;
+      arg.filter_dir = false;
       break;
     case 's':
-      arg.filter_seeds = true;
+      arg.filter_seeds = false;
       break;
     case 'D':
       sarg.assign(optarg);
-      arg.n_seeds_thr = stoi(sarg);
+      arg.dir_thr = stoi(sarg);
       break;
     case 'S':
       sarg.assign(optarg);
-      arg.smismatch = stoi(sarg);
+      arg.n_seeds_thr = stoi(sarg);
       break;
     case 'O':
       arg.gapo = arg.gapo2 = strtol(optarg, &s, 10);
