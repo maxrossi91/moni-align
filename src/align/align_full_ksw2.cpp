@@ -35,6 +35,7 @@ extern "C" {
 #include <align_reads_dispatcher.hpp>
 
 #include <common.hpp>
+#include <stacktrace.hpp>
 #include <malloc_count.h>
 
 
@@ -283,6 +284,8 @@ int main(int argc, char *const argv[])
 
   Args args;
   parseArgs(argc, argv, args);
+
+  enable_stacktrace();
 
   if(args.shaped_slp){
     dispatcher<aligner<shaped_slp_t, ms_pointers<>>>(args);

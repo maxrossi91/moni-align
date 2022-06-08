@@ -70,15 +70,55 @@ else()
     message(STATUS "sdsl sources found at ${SDSL_SRC}.")
 endif()
 
-add_library(sdsl STATIC IMPORTED GLOBAL)
-set_property(TARGET sdsl PROPERTY IMPORTED_LOCATION ${SDSL_LIB})
-target_include_directories(sdsl INTERFACE ${SDSL_SRC})
+if(${CMAKE_BUILD_TYPE} STREQUAL "Debug")
 
-add_library(divsufsort STATIC IMPORTED GLOBAL)
-set_property(TARGET divsufsort PROPERTY IMPORTED_LOCATION ${DIVSUFSORT_LIB})
+  # In debug mode we compile SDSL with MONI
+  FetchContent_Declare(
+    sdsl
+    GIT_REPOSITORY https://github.com/simongog/sdsl-lite
+  )
+
+  FetchContent_GetProperties(sdsl)
+  if(NOT sdsl_POPULATED)
+    FetchContent_Populate(sdsl)
+
+    set(GENERATE_DOC OFF CACHE BOOL "Do not generate doxygen for sdsl-lite")
     
-add_library(divsufsort64 STATIC IMPORTED GLOBAL)
-set_property(TARGET divsufsort64 PROPERTY IMPORTED_LOCATION ${DIVSUFSORT64_LIB})
+    add_subdirectory(${sdsl_SOURCE_DIR} ${sdsl_BINARY_DIR} EXCLUDE_FROM_ALL)
+  endif()
+
+  ## Add divsuffsort
+  FetchContent_Declare(
+    divsufsort
+    GIT_REPOSITORY https://github.com/simongog/libdivsufsort.git
+    GIT_TAG        2.0.1
+  )
+
+  FetchContent_GetProperties(divsufsort)
+  if(NOT divsufsort_POPULATED)
+    FetchContent_Populate(divsufsort)
+
+    set(BUILD_SHARED_LIBS OFF CACHE BOOL "Do not build a shared library for libdivsufsort")
+    set(BUILD_EXAMPLES OFF CACHE BOOL "Do not build libdivsufsort example")
+    set(BUILD_DIVSUFSORT64 ON CACHE BOOL "Build libdivsufsort in 64-bits mode")
+
+    add_subdirectory(${divsufsort_SOURCE_DIR} ${divsufsort_BINARY_DIR} EXCLUDE_FROM_ALL)
+
+    target_include_directories(divsufsort PUBLIC "${divsufsort_BINARY_DIR}/include")
+    target_include_directories(divsufsort64 PUBLIC "${divsufsort_BINARY_DIR}/include")
+  endif()
+
+else()
+  add_library(sdsl STATIC IMPORTED GLOBAL)
+  set_property(TARGET sdsl PROPERTY IMPORTED_LOCATION ${SDSL_LIB})
+  target_include_directories(sdsl INTERFACE ${SDSL_SRC})
+
+  add_library(divsufsort STATIC IMPORTED GLOBAL)
+  set_property(TARGET divsufsort PROPERTY IMPORTED_LOCATION ${DIVSUFSORT_LIB})
+      
+  add_library(divsufsort64 STATIC IMPORTED GLOBAL)
+  set_property(TARGET divsufsort64 PROPERTY IMPORTED_LOCATION ${DIVSUFSORT64_LIB})
+endif()
 
 # HTSLIB
 find_library(HTS_LIB hts)
@@ -397,12 +437,28 @@ FetchContent_Declare(
     target_link_libraries(lvsam htslib)
   endif()
   
+  ## Add backward
+  FetchContent_Declare(
+    backward_cpp
+    GIT_REPOSITORY https://github.com/bombela/backward-cpp.git
+    GIT_TAG v1.6
+    )
+    
+  FetchContent_GetProperties(backward_cpp)
+  if(NOT backward_cpp_POPULATED)
+    FetchContent_Populate(backward_cpp)
+    set(BACKWARD_TESTS OFF CACHE BOOL "Avoid building backard-cpp tests")
+
+    add_subdirectory(${backward_cpp_SOURCE_DIR} ${backward_cpp_BINARY_DIR})
+    # target_link_libraries(backward dw)
+  endif()
+  
 
   ## Add Catch2
   FetchContent_Declare(
     Catch2
     GIT_REPOSITORY https://github.com/catchorg/Catch2.git
-    GIT_TAG        v3.0.0-preview3
+    GIT_TAG        v3.0.0-preview5
   )
 
   FetchContent_MakeAvailable(Catch2)

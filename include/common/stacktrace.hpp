@@ -24,12 +24,17 @@
 #ifndef _STACKTRACE_HH
 #define _STACKTRACE_HH
 
+// #define BACKWARD_HAS_DW 1
+// #define BACKWARD_HAS_BFD 1
+
 #include <iostream>
 #include <execinfo.h>
 #include <cxxabi.h>
 #include <signal.h>
 #include <string>
 #include <regex>
+#include <ucontext.h>
+#include <backward.hpp>
 
 // //*********************** Stack trace options *******************************
 // Inspired from https://panthema.net/2008/0901-stacktrace-demangled/
@@ -131,12 +136,36 @@ void stacktrace_sighandler(int sig)
   exit(sig);
 }
 
+// Other option using backward-cpp library
+void stacktrace_sigaction(int signalNumber, siginfo_t *signalInfo, void *signalContext) {
+    // This holds the context that the signal came from, including registers and stuff
+    ucontext_t* context = (ucontext_t*) signalContext;
+
+    // Fetch out the registers
+    void* ip = (void*)context->uc_mcontext.gregs[REG_RIP];
+    void** bp = (void**)context->uc_mcontext.gregs[REG_RBP];
+    
+    static backward::StackTrace stack_trace;
+
+    stack_trace.load_from(ip, 32);
+
+    static backward::Printer p;
+    p.object = true;
+    p.color_mode = backward::ColorMode::automatic;
+    p.address = true;
+    p.print(stack_trace, std::cerr);
+
+    exit(signalNumber);
+}
+
+
 static inline void enable_stacktrace(){
     struct sigaction sa;
 
     memset(&sa, 0, sizeof(struct sigaction));
     sigemptyset(&sa.sa_mask);
-    sa.sa_handler = stacktrace_sighandler;
+    // sa.sa_handler = stacktrace_sighandler;
+    sa.sa_sigaction = stacktrace_sigaction;
     sa.sa_flags = SA_SIGINFO;
 
     sigaction(SIGABRT, &sa, nullptr);
