@@ -524,7 +524,7 @@ public:
     
     al.sub_n = best_scores.size() -1; 
 
-    if (best_scores.size() < 2)
+    while (best_scores.size() < 2)
       best_scores.push_back(std::make_tuple(0, 0, al.chains.size()));
 
     std::sort(best_scores.begin(), best_scores.end(), std::greater<std::tuple<int32_t,size_t, size_t>>());
@@ -1255,7 +1255,7 @@ public:
     paired_score_t zero;
     zero.chain_i = al.chains.size();
 
-    if (al.best_scores.size() < 2)
+    while (al.best_scores.size() < 2)
       al.best_scores.push_back(zero);
 
     // Sort the chains by score
@@ -1385,7 +1385,7 @@ public:
     orphan_paired_score_t zero;
     zero.chain_i = al.chains.size();
 
-    if (best_scores.size() < 2)
+    while (best_scores.size() < 2)
       best_scores.push_back(zero);
 
     // Sort the chains by score
@@ -2044,25 +2044,25 @@ orphan_paired_score_t paired_chain_orphan_score(
         // Chain 
         score.m1 = chain_score(mate1_chain, anchors, mems, al.min_score_m1, mate1);
         // Perform local search
-        // TODO: Check whether we do not cross one boundary
         start = rm_pos + (ll)std::floor(mean - 4*std_dev);
         end = rm_pos + (ll)std::ceil(mean + 4*std_dev);
         maxl(start,(ll)0);
         minl(end,(ll)n);
-
-        score.m2 = fill_orphan(start,end,mate2);  
+        
+        if (start < end)
+          score.m2 = fill_orphan(start,end,mate2);  
         score.pos = std::pair(start,end);
       }else
       {
         score.m2 = chain_score(mate2_chain, anchors, mems, al.min_score_m2, mate2);
         // Perform local search
-        // TODO: Check whether we do not cross one boundary
         start = lm_pos + (ll)std::floor(-mean - 4*std_dev);
         end = lm_pos + (ll)std::ceil(-mean + 4*std_dev);
         maxl(start,(ll)0);
         minl(end,(ll)n);
 
-        score.m1 = fill_orphan(start,end,mate1);  
+        if (start < end)
+          score.m1 = fill_orphan(start,end,mate1);  
         score.pos = std::pair(start,end);
       }
       // score.dist = (score.m2.pos - (score.m1.pos + mate1->seq.l)) < 0 ? (score.m1.pos - (score.m2.pos + mate2->seq.l)) : (score.m2.pos - (score.m1.pos + mate1->seq.l));
@@ -2085,14 +2085,16 @@ orphan_paired_score_t paired_chain_orphan_score(
       if(mate1_chain.second.size() > 0)
       {
         score.m1 = chain_score(mate1_chain, anchors, mems, al.min_score_m1, mate1, false, al.score2_m1, strand, nullptr, &sam_m1, al.sub_n, al.frac_rep_m1);
-        score.m2 = fill_orphan(start,end,mate2,false,&sam_m2);
+        if (start < end)
+          score.m2 = fill_orphan(start,end,mate2,false,&sam_m2);
 
         sam_m2.mapq = compute_mapq_se_bwa(sam_m2.as, al.score2_m2, sam_m2.rlen, mate2->seq.l, min_len, smatch, smismatch,
                                 mapq_coeff_len, mapq_coeff_fac, al.sub_n, 0, al.frac_rep_m2);
       }
       else
       {
-        score.m1 = fill_orphan(start,end,mate1,false,&sam_m1);
+        if (start < end)
+          score.m1 = fill_orphan(start,end,mate1,false,&sam_m1);
         score.m2 = chain_score(mate2_chain, anchors, mems, al.min_score_m2, mate2, false, al.score2_m2, strand, nullptr, &sam_m2, al.sub_n, al.frac_rep_m2);
 
         sam_m1.mapq = compute_mapq_se_bwa(sam_m1.as, al.score2_m1, sam_m1.rlen, mate1->seq.l, min_len, smatch, smismatch,
@@ -2197,6 +2199,8 @@ orphan_paired_score_t paired_chain_orphan_score(
     size_t ref_occ = start;
     size_t ref_len = end - start + 1;
     char *ref = (char *)malloc(ref_len);
+    if(ref_len <= 0)
+      assert(ref_len > 0);
     ra.expandSubstr(ref_occ, ref_len, ref);
     // Convert A,C,G,T,N into 0,1,2,3,4
     for (size_t i = 0; i < ref_len; ++i)
@@ -2233,7 +2237,12 @@ orphan_paired_score_t paired_chain_orphan_score(
 
       score.score= ez.score;
       score.pos = start;
+
+      bool is_valid = idx.valid(start, end-start+1);
+      if (not is_valid)
+        score.score = std::numeric_limits<int32_t>::min();
     }
+
 
     if(not score_only)
     {
@@ -2288,6 +2297,7 @@ orphan_paired_score_t paired_chain_orphan_score(
         ref_occ = lift; // This is correct since it is the position in the concatenation.
         ref_len = bam_cigar2rlen(bam->core.n_cigar, cigar);
         char * l_ref = (char *)malloc( ref_len );
+        assert(ref_len > 0);
         ra.expandSubstr(ref_occ, ref_len, l_ref);
 
         // Convert A,C,G,T,N into 0,1,2,3,4
@@ -2365,6 +2375,7 @@ orphan_paired_score_t paired_chain_orphan_score(
       size_t lc_occ = (mem_pos > ext_len ? mem_pos - ext_len : 0);
       size_t lc_len = (mem_pos > ext_len ? ext_len : ext_len - mem_pos);
       char *tmp_lc = (char *)malloc(ext_len);
+      assert(lc_len > 0);
       ra.expandSubstr(lc_occ, lc_len, tmp_lc);
       // verbose("lc: " + std::string(lc));
       // Convert A,C,G,T,N into 0,1,2,3,4
@@ -2400,6 +2411,7 @@ orphan_paired_score_t paired_chain_orphan_score(
       size_t rc_occ = mem_pos + mem_len;
       size_t rc_len = (rc_occ < n-ext_len ? ext_len : n - rc_occ);
       char *rc = (char *)malloc(ext_len);
+      assert(rc_len > 0);
       ra.expandSubstr(rc_occ, rc_len, rc);
       // verbose("rc: " + std::string(rc));
       // Convert A,C,G,T,N into 0,1,2,3,4
@@ -2432,6 +2444,7 @@ orphan_paired_score_t paired_chain_orphan_score(
     size_t ref_pos = mem_pos - (lcs_len > 0 ? ez_lc.mqe_t + 1 : 0);
     size_t ref_len = (lcs_len > 0 ? ez_lc.mqe_t + 1 : 0) + mem_len + (rcs_len > 0 ? ez_rc.mqe_t + 1: 0);
     char *ref = (char *)malloc(ref_len);
+    assert(ref_len > 0);
     ra.expandSubstr(ref_pos, ref_len, ref);
 
     // Convert A,C,G,T,N into 0,1,2,3,4
@@ -2460,6 +2473,7 @@ orphan_paired_score_t paired_chain_orphan_score(
       last_ref = ref_occ + mem_len;
       last_seq = seq_occ + mem_len;
     }
+
     // TODO: fix the gap fill when MEMs overlap. The quick fix is a full alignment between the first and last MEM
     // Fill the gaps between each mem
     std::vector<ksw_extz_t> ez_cc(anchors.size()-1);
@@ -2556,8 +2570,10 @@ orphan_paired_score_t paired_chain_orphan_score(
   // END RAPID PROTOTYPING HACK
   //******************************************************************************
     }
+    bool is_valid = idx.valid(ref_pos, ref_len);
+    if (not is_valid) score.score = std::numeric_limits<int32_t>::min();
 
-    if(not score_only)
+    if(is_valid and not score_only)
     {
       // Compute starting position in reference
 
@@ -2707,6 +2723,7 @@ orphan_paired_score_t paired_chain_orphan_score(
       ref_pos = lift; // This is correct since it is the position in the concatenation.
       ref_len = bam_cigar2rlen(bam->core.n_cigar, lft_cigar);
       char* l_ref = (char *)malloc(ref_len);
+      assert(ref_len > 0);
       ra.expandSubstr(ref_pos, ref_len, l_ref);
 
       // Convert A,C,G,T,N into 0,1,2,3,4
