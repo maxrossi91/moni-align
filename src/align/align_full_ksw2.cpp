@@ -238,11 +238,11 @@ void dispatcher(Args &args){
 
     verbose("Output file: ", sam_filename);
 
-    if (is_gzipped(args.patterns))
-    {
-      verbose("The input is gzipped - forcing single thread alignment.");
-      args.th = 1;
-    }
+    // if (is_gzipped(args.patterns))
+    // {
+    //   verbose("The input is gzipped - forcing single thread alignment.");
+    //   args.th = 1;
+    // }
     if (args.th == 1)
       st_align<aligner_t>(&aligner, args.patterns, sam_filename, args.b);
     else
@@ -256,11 +256,11 @@ void dispatcher(Args &args){
 
     verbose("Output file: ", sam_filename);
 
-    if (is_gzipped(args.mate1) or is_gzipped(args.mate2))
-    {
-      verbose("The input is gzipped - forcing single thread alignment.");
-      args.th = 1;
-    }
+    // if (is_gzipped(args.mate1) or is_gzipped(args.mate2))
+    // {
+    //   verbose("The input is gzipped - forcing single thread alignment.");
+    //   args.th = 1;
+    // }
     if (args.th == 1)
       st_align<aligner_t>(&aligner, args.mate1, sam_filename, args.b, args.mate2 );
     else
