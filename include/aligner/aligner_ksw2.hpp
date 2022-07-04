@@ -2241,6 +2241,7 @@ orphan_paired_score_t paired_chain_orphan_score(
       bool is_valid = idx.valid(start, end-start+1);
       if (not is_valid)
         score.score = std::numeric_limits<int32_t>::min();
+      delete q;
     }
 
 
