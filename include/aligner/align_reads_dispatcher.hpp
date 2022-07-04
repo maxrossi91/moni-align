@@ -273,6 +273,17 @@ void *mt_align_worker(void *param)
         n_reads += l;
       }
     }
+
+    // Finalize the learned reads if there are no reads left.
+    for (size_t i = 0; i < alignments.size(); ++i)
+    {
+      p->aligner->finalize_learning(alignments[i], sam_fd);
+      kpbseq_destroy(memo[i]);
+      alignments[i].clear();alignments[i].shrink_to_fit();
+    }
+    memo.clear(); memo.shrink_to_fit();
+    alignments.clear(); alignments.shrink_to_fit();
+
     kpbseq_destroy(b);
   }
 
