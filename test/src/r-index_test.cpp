@@ -27,6 +27,7 @@
 #include <common.hpp>
 
 #include <moni.hpp>
+#include <moni_lcp.hpp>
 #include <sam.hpp>
 #include <mapq.hpp>
 
@@ -59,6 +60,7 @@
 std::string test_dir = "../data";
 typedef plain_slp_t slp_t;
 typedef ms_pointers<> ms_t;
+typedef moni_lcp<> ms_lcp_t;
 //*********************** End global variables *********************************
 
 //*********************** Tests r-index ****************************************
@@ -114,6 +116,140 @@ TEST_CASE("r-index Phi", "[Phi]")
           next = ms.Phi(curr);
           if((n-curr) >= len and (n-next) >= len)
             lcp  = lceToRBounded(ra,curr,next,len);
+          else
+            lcp = 0;
+        }else lcp = 0;
+      }
+    }
+  }
+  
+}
+
+TEST_CASE("r-index Phi with LCP", "[Phi with LCP]")
+{
+  ms_t ms;
+  ms_lcp_t ms_lcp;
+  slp_t ra;
+  // Load contigs lengths and structures  
+  verbose("Loading r-index...");
+  std::ifstream in_ms(test_dir + "/Chr21.100.thrbv.full.ms");
+  ms.load(in_ms);
+  in_ms.close();
+
+  // Load contigs lengths and structures  
+  verbose("Loading r-index...");
+  std::ifstream in_ms_lcp(test_dir + "/Chr21.100.thrbv.full.lcp.ms");
+  ms_lcp.load(in_ms_lcp);
+  in_ms_lcp.close();
+
+  // Check r-index data   
+  verbose("Loading slp data structure...");
+  std::ifstream in_slp(test_dir +  "/Chr21.100.plain.slp");
+  ra.load(in_slp);
+  in_slp.close();
+
+  size_t n = ra.getLen();
+
+  size_t pos = 799258409;
+  size_t len = 100;
+
+  const auto sa_first = ms.get_first_run_sample();
+
+  size_t count = 1;
+  // Phi direction
+  size_t curr = pos;
+  if(curr != sa_first)
+  {
+    size_t prev = ms.Phi(curr);
+
+    auto [prev_lcp, lcp_lcp] = ms_lcp.Phi_lcp(curr);
+    REQUIRE(prev == prev_lcp);
+    if((n-curr) >= len and (n-prev) >= len)
+    {
+      size_t lcp =  lceToR(ra,curr,prev);
+      REQUIRE(lcp == lcp_lcp);
+      while(lcp >= len)
+      {
+        if( ++count > 300)
+          break;
+        
+        curr = prev;
+        if(curr != sa_first)
+        {
+          prev = ms.Phi(curr);
+          auto [prev_lcp, lcp_lcp] = ms_lcp.Phi_lcp(curr);
+          REQUIRE(prev == prev_lcp);
+          if((n-curr) >= len and (n-prev) >= len){
+            lcp = lceToR(ra, curr, prev);
+            REQUIRE(lcp ==lcp_lcp);
+          }
+          else
+            lcp = 0;
+        }else lcp = 0;
+      }
+    }
+  }
+  
+}
+
+TEST_CASE("r-index Phi_inv with LCP", "[Phi_inv with LCP]")
+{
+  ms_t ms;
+  ms_lcp_t ms_lcp;
+  slp_t ra;
+  // Load contigs lengths and structures  
+  verbose("Loading r-index...");
+  std::ifstream in_ms(test_dir + "/Chr21.100.thrbv.full.ms");
+  ms.load(in_ms);
+  in_ms.close();
+
+  // Load contigs lengths and structures  
+  verbose("Loading r-index...");
+  std::ifstream in_ms_lcp(test_dir + "/Chr21.100.thrbv.full.lcp.ms");
+  ms_lcp.load(in_ms_lcp);
+  in_ms_lcp.close();
+
+  // Check r-index data   
+  verbose("Loading slp data structure...");
+  std::ifstream in_slp(test_dir +  "/Chr21.100.plain.slp");
+  ra.load(in_slp);
+  in_slp.close();
+
+  size_t n = ra.getLen();
+
+  size_t pos = 4349071670;
+  size_t len = 100;
+
+  const auto sa_first = ms.get_first_run_sample();
+
+  size_t count = 1;
+  // Phi direction
+  size_t curr = pos;
+  if(curr != sa_first)
+  {
+    size_t next = ms.Phi_inv(curr);
+
+    auto [next_lcp, lcp_lcp] = ms_lcp.Phi_inv_lcp(curr);
+    REQUIRE(next == next_lcp);
+    if((n-curr) >= len and (n-next) >= len)
+    {
+      size_t lcp =  lceToR(ra,curr,next);
+      REQUIRE(lcp == lcp_lcp);
+      while(lcp >= len)
+      {
+        if( ++count > 300)
+          break;
+        
+        curr = next;
+        if(curr != sa_first)
+        {
+          next = ms.Phi_inv(curr);
+          auto [next_lcp, lcp_lcp] = ms_lcp.Phi_inv_lcp(curr);
+          REQUIRE(next == next_lcp);
+          if((n-curr) >= len and (n-next) >= len){
+            lcp = lceToR(ra, curr, next);
+            REQUIRE(lcp ==lcp_lcp);
+          }
           else
             lcp = 0;
         }else lcp = 0;

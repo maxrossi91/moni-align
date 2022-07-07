@@ -21,39 +21,7 @@
 #ifndef _CHAIN_HH
 #define _CHAIN_HH
 
-typedef long long int ll;
-
-#define MATE_1 0 // The MEM cames from mate_1
-#define MATE_2 1 // The MEM cames from mate_2
-#define MATE_F 0 // The MEM cames from the forward strand
-#define MATE_RC 2 // The MEM cames from the reverse-complement strand
-
-typedef struct mem_t{
-    size_t pos = 0;  // Position in the reference
-    size_t len = 0;  // Length
-    size_t idx = 0;  // Position in the pattern
-    size_t mate = 0; // Left mate (0) or Right mate (1)
-    size_t rpos = 0; // Position in the read for chaining
-                        // With a Forward-Reverse library
-                        // If the mem is in the FWD strand it is the position of the last character in the read
-                        // If the mem is in the REV strand it is the position of the first character in the read
-    std::vector<size_t> occs; // List of occurrences of the MEM
-
-    mem_t(size_t p, size_t l, size_t i)
-    {
-        pos = p;  // Position in the reference
-        len = l;  // Length of the MEM
-        idx = i;  // Position in the read
-    }
-    mem_t(size_t p, size_t l, size_t i, size_t m, size_t r)
-    {
-        pos = p;  // Position in the reference
-        len = l;  // Length of the MEM
-        idx = i;  // Position in the read
-        mate = m; // Left mate (0) or Right mate (1)
-        rpos = r; // Position in the read for chaining
-    }
-} mem_t;
+#include <mems.hpp>
 
 typedef struct{
     ll score = 0;

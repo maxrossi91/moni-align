@@ -13,6 +13,7 @@ add_executable(rlebwt_ms_full_build rlebwt_ms_full_build.cpp)
 target_link_libraries(rlebwt_ms_full_build common sdsl divsufsort divsufsort64 malloc_count ri lvsam)
 target_include_directories(rlebwt_ms_full_build PUBLIC    "../../include/ms" 
                                         "../../include/common" 
+                                        "../../include/aligner" 
                                         "${shaped_slp_SOURCE_DIR}" 
                                         "${FOLCA_SOURCE_DIR}" 
                                         "${SUX_SOURCE_DIR}/function" 

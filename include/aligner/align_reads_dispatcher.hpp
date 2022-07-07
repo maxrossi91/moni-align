@@ -258,7 +258,7 @@ void *mt_align_worker(void *param)
         {
           for (size_t i = 0; i < alignments.size(); ++i)
           {
-            p->aligner->finalize_learning(alignments[i], sam_fd);
+            n_aligned_reads += p->aligner->finalize_learning(alignments[i], sam_fd);
             kpbseq_destroy(memo[i]);
             alignments[i].clear();alignments[i].shrink_to_fit();
           }
@@ -270,14 +270,14 @@ void *mt_align_worker(void *param)
       else
       {
         n_aligned_reads += p->aligner->align(b, sam_fd);
-        n_reads += l;
       }
+      n_reads += l;
     }
 
     // Finalize the learned reads if there are no reads left.
     for (size_t i = 0; i < alignments.size(); ++i)
     {
-      p->aligner->finalize_learning(alignments[i], sam_fd);
+      n_aligned_reads += p->aligner->finalize_learning(alignments[i], sam_fd);
       kpbseq_destroy(memo[i]);
       alignments[i].clear();alignments[i].shrink_to_fit();
     }
@@ -459,8 +459,8 @@ size_t st_align(aligner_t *aligner, std::string pattern_filename, std::string sa
       else
       {
         n_aligned_reads += aligner->align(b,sam_fd);
-        n_reads += l;
       }
+      n_reads += l;
     }
     if ((n_reads - pn_reads) > 1000000) {
       verbose("Number of processed reads: ", n_reads);
