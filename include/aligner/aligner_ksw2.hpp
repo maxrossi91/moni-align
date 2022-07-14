@@ -49,7 +49,7 @@
 #include <kpbseq.h>
 #include <liftidx.hpp>
 
-MTIME_TSAFE_INIT(7);
+MTIME_TSAFE_INIT(8);
 #include <slp_definitions.hpp>
 #include <chain.hpp>
 
@@ -1288,8 +1288,8 @@ public:
     const double mean, 
     const double std_dev)
   {
-    MTIME_INIT(3);   
-    MTIME_START(2); //Timing helper
+    MTIME_INIT(8);   
+    MTIME_START(7); //Timing helper
     // We need to use the local alignment of ksw to perform local search
     
     // For all good chaining of both mates of length at least min_length, find the possible distance of the mate
@@ -1361,7 +1361,7 @@ public:
 
     if (best_scores[0].tot < al.min_score)
     {
-      MTIME_END(2); //Timing helper
+      MTIME_END(7); //Timing helper
       MTIME_TSAFE_MERGE;
       return false;
     }
@@ -1401,7 +1401,7 @@ public:
 
     al.aligned = (al.score.tot >= al.min_score);
 
-    MTIME_END(2); //Timing helper
+    MTIME_END(7); //Timing helper
     MTIME_TSAFE_MERGE;
 
     return al.aligned;
