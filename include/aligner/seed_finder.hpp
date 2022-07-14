@@ -534,7 +534,7 @@ inline std::pair<size_t, size_t> seed_finder<plain_slp_t, moni_lcp<>>::get_next_
 {
     if (curr == ms.get_last_run_sample()) return {ms.get_first_run_sample(), 0};
 
-    return ms.Phi_inv(curr);
+    return ms.Phi_inv_lcp(curr);
 }
 
 template<>
@@ -543,7 +543,7 @@ inline std::pair<size_t, size_t> seed_finder<plain_slp_t, moni_lcp<>>::get_prev_
 {
     if (curr == ms.get_first_run_sample()) return {ms.get_last_run_sample(), 0};
 
-    return ms.Phi(curr);
+    return ms.Phi_lcp(curr);
 }
 
 
