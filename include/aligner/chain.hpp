@@ -21,39 +21,7 @@
 #ifndef _CHAIN_HH
 #define _CHAIN_HH
 
-typedef long long int ll;
-
-#define MATE_1 0 // The MEM cames from mate_1
-#define MATE_2 1 // The MEM cames from mate_2
-#define MATE_F 0 // The MEM cames from the forward strand
-#define MATE_RC 2 // The MEM cames from the reverse-complement strand
-
-typedef struct mem_t{
-    size_t pos = 0;  // Position in the reference
-    size_t len = 0;  // Length
-    size_t idx = 0;  // Position in the pattern
-    size_t mate = 0; // Left mate (0) or Right mate (1)
-    size_t rpos = 0; // Position in the read for chaining
-                        // With a Forward-Reverse library
-                        // If the mem is in the FWD strand it is the position of the last character in the read
-                        // If the mem is in the REV strand it is the position of the first character in the read
-    std::vector<size_t> occs; // List of occurrences of the MEM
-
-    mem_t(size_t p, size_t l, size_t i)
-    {
-        pos = p;  // Position in the reference
-        len = l;  // Length of the MEM
-        idx = i;  // Position in the read
-    }
-    mem_t(size_t p, size_t l, size_t i, size_t m, size_t r)
-    {
-        pos = p;  // Position in the reference
-        len = l;  // Length of the MEM
-        idx = i;  // Position in the read
-        mate = m; // Left mate (0) or Right mate (1)
-        rpos = r; // Position in the read for chaining
-    }
-} mem_t;
+#include <mems.hpp>
 
 typedef struct{
     ll score = 0;
@@ -116,7 +84,7 @@ bool find_chains(
 
     // Sort anchors
     // Lamda helper to sort the anchors
-    auto cmp = [&] (std::pair<size_t, size_t> i, std::pair<size_t, size_t> j) -> bool {
+    auto cmp = [&] (const std::pair<size_t, size_t>& i, const std::pair<size_t, size_t>& j) -> bool {
     return (mems[i.first].occs[i.second] + mems[i.first].len - 1) < (mems[j.first].occs[j.second] + mems[j.first].len - 1);
     };
 
@@ -169,7 +137,7 @@ bool find_chains(
     {
     // Get anchor i
     const auto a_i = anchors[i];
-    const mem_t mem_i = mems[a_i.first];
+    const mem_t& mem_i = mems[a_i.first];
     // const ll k_i = mem_i.occs[a_i.second];
     const ll x_i = mem_i.occs[a_i.second] + mem_i.len - 1;
     // const ll z_i = mem_i.idx;
@@ -187,7 +155,7 @@ bool find_chains(
     for(ll j = i-1; j >= lb; --j)
     {
         const auto a_j = anchors[j];
-        const mem_t mem_j = mems[a_j.first];
+        const mem_t& mem_j = mems[a_j.first];
         const ll x_j = mem_j.occs[a_j.second] + mem_j.len - 1;
         const ll y_j = mem_j.rpos;
         // const ll y_j = mem_j.idx + mem_j.len - 1;
@@ -302,23 +270,22 @@ bool find_chains(
         chain.mate = mems[anchors[j].first].mate;
         chain.score = chain_starts[i].first;
         do {
-            size_t tmp_mate = mems[anchors[j].first].mate;
-            chain.paired = chain.paired or (chain.mate != tmp_mate);
+            chain.paired = chain.paired or (chain.mate != mems[anchors[j].first].mate);
             chain.anchors.push_back(j); // stores th reverse of the chain
             t[j] = 1;
             j = p[j];
         } while (j >= 0 && t[j] == 0);
         if (j < 0) { // l - prev_l is the length of the chain
             if (chain.anchors.size() >= min_chain_length)
-            chains.push_back(chain);     
+            chains.push_back(std::move(chain));     
         } else if (chain_starts[i].first - f[j] >= min_chain_score) { // Two chains share a common prefix
             if (chain.anchors.size() >= min_chain_length)
-            chains.push_back(chain);
+            chains.push_back(std::move(chain));
         }
     }
 
     // Lamda helper to sort the anchors
-    auto chain_t_cmp = [](chain_t i, chain_t j) -> bool
+    auto chain_t_cmp = [](const chain_t& i, const chain_t& j) -> bool
     {
     return i.score > j.score;
     };

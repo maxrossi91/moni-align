@@ -134,11 +134,15 @@ target_include_directories(ldx_slp_test PUBLIC
 target_compile_options(ldx_slp_test PUBLIC "-std=c++17")
 
 add_executable(sigsegv_bt_handler_test sigsegv_bt_handler_test.cpp)
-target_link_libraries(sigsegv_bt_handler_test common sdsl klib)
+target_link_libraries(sigsegv_bt_handler_test common sdsl klib backward)
 target_include_directories(sigsegv_bt_handler_test PUBLIC
                                         "../../include/common" 
                                         )
 target_compile_options(sigsegv_bt_handler_test PUBLIC "-std=c++17")
+
+add_executable(backward_test backward_test.cpp)
+target_link_libraries(backward_test backward)
+target_compile_options(backward_test PUBLIC "-std=c++17")
 
 # list(APPEND CMAKE_MODULE_PATH ${Catch2_SOURCE_DIR}/extras)
 # include(CTest)

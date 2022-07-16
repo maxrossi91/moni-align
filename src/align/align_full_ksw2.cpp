@@ -33,6 +33,7 @@ extern "C" {
 #define _REALIGN
 #include <aligner_ksw2.hpp>
 #include <align_reads_dispatcher.hpp>
+#include <seed_finder.hpp>
 
 #include <common.hpp>
 #include <stacktrace.hpp>
@@ -49,6 +50,7 @@ struct Args
   bool memo  = false; // print the memory usage
   bool csv   = false; // print stats on stderr in csv format
   bool rle   = false; // outpt RLBWT
+  bool no_lcp = false;       // use index without LCP entries
   std::string patterns = ""; // path to patterns file
   std::string mate1 = "";    // path to file with #1 mates paired with mate2.
   std::string mate2 = "";    // path to file with #2 mates paired with mate1.
@@ -86,7 +88,7 @@ void parseArgs(int argc, char *const argv[], Args &arg)
   extern char *optarg;
   extern int optind;
 
-  std::string usage("usage: " + std::string(argv[0]) + " infile [-p patterns] [-1 mate1] [-2 mate2] [-o output] [-t threads] [-b batch] [-l len] [-q shaped_slp]  [-L ext_l] [-A smatch] [-B smismatc] [-O gapo] [-E gape] [-d dir_en] [-s seeds_en] [-D dir_thr] [-S seeds_thr]\n\n" +
+  std::string usage("usage: " + std::string(argv[0]) + " infile [-p patterns] [-1 mate1] [-2 mate2] [-o output] [-t threads] [-b batch] [-l len] [-q shaped_slp]  [-L ext_l] [-A smatch] [-B smismatc] [-O gapo] [-E gape] [-d dir_en] [-s seeds_en] [-D dir_thr] [-S seeds_thr] [-n no_lcp]\n\n" +
                     "Align the reads in the pattern against the reference index in infile.\n" +
                     "   pattens: [string]  - path to patterns file.\n" +
                     "     mate1: [string]  - path to file with #1 mates paired with mate2.\n" +
@@ -96,6 +98,7 @@ void parseArgs(int argc, char *const argv[], Args &arg)
                     "     batch: [integer] - number of batches per therad pool (def. " + std::to_string(arg.b) + ")\n" + 
                     "       len: [integer] - minimum MEM lengt (def. " + std::to_string(arg.l) + ")\n" +
                     "shaped_slp: [boolean] - use shaped slp. (def. " + std::to_string(arg.shaped_slp) + ")\n" +
+                    "    no-lcp: [boolean] - use the index without the LCP entries. (def. false)\n" +
                     "     ext_l: [integer] - length of reference substring for extension (def. " + std::to_string(arg.ext_len) + ")\n" +
                     "   dir_dis: [boolean] - enable direction filtering (def. " + std::to_string(arg.filter_dir) + ")\n" +
                     "   dir_thr: [float]   - direction filtering threshold (def. " + std::to_string(arg.dir_thr) + ")\n" +
@@ -108,7 +111,7 @@ void parseArgs(int argc, char *const argv[], Args &arg)
 
   std::string sarg;
   char* s;
-  while ((c = getopt(argc, argv, "ql:hp:o:t:1:2:b:A:B:O:E:L:dsD:S:")) != -1)
+  while ((c = getopt(argc, argv, "ql:hp:o:t:1:2:b:A:B:O:E:L:dsnD:S:")) != -1)
   {
     switch (c)
     {
@@ -153,6 +156,9 @@ void parseArgs(int argc, char *const argv[], Args &arg)
       break;
     case 's':
       arg.filter_seeds = false;
+      break;
+    case 'n':
+      arg.no_lcp = true;
       break;
     case 'D':
       sarg.assign(optarg);
@@ -287,10 +293,18 @@ int main(int argc, char *const argv[])
 
   enable_stacktrace();
 
-  if(args.shaped_slp){
-    dispatcher<aligner<shaped_slp_t, ms_pointers<>>>(args);
+  if(args.no_lcp){
+    if(args.shaped_slp){
+      dispatcher<aligner<seed_finder<shaped_slp_t, ms_pointers<>>>>(args);
+    }else{
+      dispatcher<aligner<seed_finder<plain_slp_t, ms_pointers<>>>>(args);
+    }
   }else{
-    dispatcher<aligner<plain_slp_t, ms_pointers<>>>(args);
+    if(args.shaped_slp){
+      dispatcher<aligner<seed_finder<shaped_slp_t, moni_lcp<>>>>(args);
+    }else{
+      dispatcher<aligner<seed_finder<plain_slp_t, moni_lcp<>>>>(args);
+    }
   }
 
   MTIME_TSAFE_REPORT_ALL;

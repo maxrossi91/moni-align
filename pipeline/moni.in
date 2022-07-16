@@ -383,6 +383,8 @@ def build_helper(args, exe, exe_name):
   start = time.time()
   command = "{exe} {file}".format(exe=os.path.join(
       args.exe_dir, exe), file=args.output)
+  if args.no_lcp:
+      command += " -n"
 
   print("==== Running {name}. \nCommand:".format(
       name=exe_name), command, flush=True)
@@ -674,6 +676,7 @@ def main():
   build_parser.add_argument('--tmp-dir',                help="Tmp file directory.", default = ".", type = str)
   build_parser.add_argument('-k',                       help='keep temporary files',action='store_true')
   build_parser.add_argument('--no-acgt-only',           help='do not convert non ACGT characters.',action='store_true')
+  build_parser.add_argument('--no-lcp',                 help='build the moni index without the lcp samples.',action='store_true')
   build_parser.add_argument('--verbose',                help='verbose',action='store_true')
   build_parser.add_argument('--moni',                   help='build moni index',action='store_true')
   build_parser.add_argument('--phoni',                  help='build phoni index',action='store_true')
@@ -741,6 +744,7 @@ def main():
   align_parser.add_argument('-D', '--dir-thr',    help='direction filtering threshold.', type=float, default='50.0')
   align_parser.add_argument('-s', '--seed-dis',   help='disable seed filtering.', action='store_true')
   align_parser.add_argument('-S', '--seed-thr',   help='seed filtering threshold.', type=int, default=5000)
+  align_parser.add_argument('--no-lcp',           help='build the moni index without the lcp samples.',action='store_true')
   align_parser.add_argument('--moni',             help='run moni index',action='store_true')
   align_parser.add_argument('--phoni',            help='run phoni index', action='store_true')
   align_parser.add_argument('--log-file',         help="Log filename prefix.", type = str)
