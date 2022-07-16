@@ -50,8 +50,19 @@
 #include <liftidx.hpp>
 
 MTIME_TSAFE_INIT(8);
+MTIME_TSAFE_NAMES_INIT(
+  "Seed extraction", 
+  "Chaining", 
+  "Chain alignment", 
+  "Chaining - Anchor extraction", 
+  "Chaining - Dynamic Programming", 
+  "Chaining - Chain position", 
+  "Chaining - Backtracking", 
+  "Orphan recovery"
+);
 #include <slp_definitions.hpp>
 #include <chain.hpp>
+#include <statistics.hpp>
 
 #include <htslib/sam.h>
 
@@ -256,144 +267,6 @@ public:
   {
       // NtD
   }
-
-  // // Fill the vector of occs with the matches above curr with LCP <= len
-  // bool find_MEM_above(size_t curr, size_t len, std::vector<size_t>& occs)
-  // {
-  //   const auto sa_first = ms.get_first_run_sample();
-  //   // Phi direction
-  //   if (curr != sa_first)
-  //   {
-  //     size_t next = ms.Phi(curr);
-  //     if ((n - curr) >= len and (n - next) >= len)
-  //     {
-  //       size_t lcp = lceToRBounded(ra, curr, next, len);
-  //       while (lcp >= len)
-  //       {
-  //         occs.push_back(next);
-
-  //         if (filter_seeds and (occs.size() > n_seeds_thr) )
-  //           return false;
-
-  //         curr = next;
-  //         if (curr != sa_first)
-  //         {
-  //           next = ms.Phi(curr);
-  //           if ((n - curr) >= len and (n - next) >= len)
-  //             lcp = lceToRBounded(ra, curr, next, len);
-  //           else
-  //             lcp = 0;
-  //         }
-  //         else
-  //           lcp = 0;
-  //       }
-  //     }
-  //   }
-  //   return true;
-  // }
-
-  // // Fill the vector of occs with the matches below curr with LCP <= len
-  // bool find_MEM_below(size_t curr, size_t len, std::vector<size_t>& occs)
-  // {
-  //   const auto sa_last = ms.get_last_run_sample();
-  //   // Phi_inv direction
-  //   if (curr != sa_last)
-  //   {
-  //     size_t next = ms.Phi_inv(curr);
-  //     if ((n - curr) >= len and (n - next) >= len)
-  //     {
-  //       size_t lcp = lceToRBounded(ra, curr, next, len);
-  //       while (lcp >= len)
-  //       {
-  //         occs.push_back(next);
-
-  //         if (filter_seeds and (occs.size() > n_seeds_thr) )
-  //           return false;
-
-  //         curr = next;
-  //         if (curr != sa_last)
-  //         {
-  //           next = ms.Phi_inv(curr);
-  //           if ((n - curr) >= len and (n - next) >= len)
-  //             lcp = lceToRBounded(ra, curr, next, len);
-  //           else
-  //             lcp = 0;
-  //         }
-  //         else
-  //           lcp = 0;
-  //       }
-  //     }
-  //   }
-  //   return true;
-  // }
-
-
-  // // Fill the vector of occurrences of the mem_t data structure
-  // // TODO: remove the checks for the lengths once Dominik fix the lce queries
-  // bool find_MEM_occs(mem_t &mem)
-  // {
-  //   mem.occs.push_back(mem.pos);
-
-  //   const auto sa_first = ms.get_first_run_sample();
-  //   const auto sa_last = ms.get_last_run_sample();
-
-  //   // Phi direction
-  //   size_t curr = mem.pos;
-  //   if(curr != sa_first)
-  //   {
-  //     size_t next = ms.Phi(curr);
-  //     if((n-curr) >= mem.len and (n-next) >= mem.len)
-  //     {
-  //       size_t lcp =  lceToRBounded(ra,curr,next,mem.len);
-  //       while(lcp >= mem.len)
-  //       {
-  //         mem.occs.push_back(next);
-          
-  //         if (filter_seeds and (mem.occs.size() > n_seeds_thr) )
-  //           return false;
-  //         curr = next;
-  //         if(curr != sa_first)
-  //         {
-  //           next = ms.Phi(curr);
-  //           if((n-curr) >= mem.len and (n-next) >= mem.len)
-  //             lcp  = lceToRBounded(ra,curr,next,mem.len);
-  //           else
-  //             lcp = 0;
-  //         }else lcp = 0;
-  //       }
-  //     }
-  //   }
-
-  //   // Phi_inv direction
-  //   curr = mem.pos;
-  //   if(curr != sa_last)
-  //   {
-  //     size_t next = ms.Phi_inv(curr);
-  //     if((n-curr) >= mem.len and (n-next) >= mem.len)
-  //     {
-  //       size_t lcp =  lceToRBounded(ra,curr,next,mem.len);
-  //       while(lcp >= mem.len)
-  //       {
-  //         mem.occs.push_back(next);
-          
-  //         if (filter_seeds and (mem.occs.size() > n_seeds_thr) )
-  //           return false;
-
-  //         curr = next;
-  //         if(curr != sa_last)
-  //         {
-  //           next = ms.Phi_inv(curr);
-  //           if((n-curr) >= mem.len and (n-next) >= mem.len)
-  //             lcp  = lceToRBounded(ra,curr,next,mem.len);
-  //           else
-  //             lcp = 0;
-  //         }else lcp = 0;
-  //       }
-  //     }
-  //   }
-  //   return true;
-  // }
-
 
 
   bool align(kseq_t *read, samFile* out, const sam_hdr_t *hdr)
@@ -820,12 +693,13 @@ public:
     return ins_learning_complete;
   }
 
-  size_t finalize_learning(std::vector<paired_alignment_t> &alignments, FILE *out)
+  statistics_t finalize_learning(std::vector<paired_alignment_t> &alignments, FILE *out)
   {
-    size_t n_aligned = 0;
+    statistics_t stats;
 
     for (size_t i = 0; i < alignments.size(); ++i)
     {
+      ++stats.processed_reads;
       // paired_alignment_t alignment(&batch->mate1->buf[i], &batch->mate2->buf[i]);
       paired_alignment_t &alignment = alignments[i];
       alignment.mean = ins_mean;
@@ -846,36 +720,44 @@ public:
         alignment.aligned = (alignment.score.tot >= alignment.min_score);
       }
       else if (alignment.chained)
+      {
+        ++ stats.orphan_reads;
         orphan_recovery(alignment, ins_mean, ins_std_dev);
+        if (alignment.aligned) ++stats.orphan_recovered_reads;
+      }
       
       alignment.write(out);
 
-      if (alignment.aligned)
-        ++n_aligned;
+      if (alignment.aligned) ++stats.aligned_reads;
     }
-    return n_aligned;
+    return stats;
   }
 
   // Aligning pair-ended batched sequences
-  size_t align(kpbseq_t *batch, FILE *out)
+  statistics_t align(kpbseq_t *batch, FILE *out)
   {
-    size_t n_aligned = 0;
+    statistics_t stats;
 
     int l = batch->mate1->l;
     for (size_t i = 0; i < l; ++i)
     {
+      ++stats.processed_reads;
       // paired_alignment_t alignment(&batch->mate1->buf[i], &batch->mate2->buf[i]);
       paired_alignment_t alignment(&batch->mate1->buf[i], &batch->mate2->buf[i]);
       alignment.mean = ins_mean;
       alignment.std_dev = ins_std_dev;
       if(not align(alignment) and alignment.chained)
+      {
+        ++ stats.orphan_reads;
         orphan_recovery(alignment, ins_mean, ins_std_dev);
+        if (alignment.aligned) ++stats.orphan_recovered_reads;
+      }
       // Write alignment to file
       alignment.write(out);
-      if(alignment.aligned) ++n_aligned;
+      if(alignment.aligned) ++stats.aligned_reads;
     }
     
-    return n_aligned;
+    return stats;
   }
 
   // // Aligning pair-ended batched sequences

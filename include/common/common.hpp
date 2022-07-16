@@ -472,7 +472,10 @@ void my_load(std::vector<X> &x, std::istream &in, typename std::enable_if<std::i
 
 #define MTIME_TSAFE_INIT(_n)                                                    \
   std::mutex __mtime_mtx;                                                       \
-  std::vector<double> __tsafe_durations(_n, 0.0);
+  std::vector<double> __tsafe_durations(_n, 0.0);                               
+
+#define MTIME_TSAFE_NAMES_INIT( args... )                                       \
+  std::vector<std::string> __tsafe_names = {args};
 
 #define MTIME_INIT(_n)                                                                                                                \
   std::vector<std::chrono::high_resolution_clock::time_point> __watches(_n);                                                          \
@@ -492,7 +495,7 @@ void my_load(std::vector<X> &x, std::istream &in, typename std::enable_if<std::i
   MTIME_REPORT(i)
 
 #define MTIME_TSAFE_REPORT(_i) \
-  verbose("Timing variable: ", _i, " ", __tsafe_durations[_i]);
+  verbose("Timing variable", _i, ":", __tsafe_durations[_i], "\t(", __tsafe_names[i], ")");
 
 #define MTIME_TSAFE_REPORT_ALL                          \
   for (size_t i = 0; i < __tsafe_durations.size(); ++i) \
@@ -510,6 +513,7 @@ void my_load(std::vector<X> &x, std::istream &in, typename std::enable_if<std::i
 
 #else
   #define MTIME_TSAFE_INIT(_n)
+  #define MTIME_TSAFE_NAMES_INIT( args... )
   #define MTIME_INIT(_n)
   #define MTIME_START(_i)
   #define MTIME_END(_i)

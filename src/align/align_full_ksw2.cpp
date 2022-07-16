@@ -235,6 +235,7 @@ void dispatcher(Args &args){
 
   std::string base_name = basename(args.filename.data());
 
+  statistics_t stats;
 
   if(args.patterns != "")
   {
@@ -244,15 +245,10 @@ void dispatcher(Args &args){
 
     verbose("Output file: ", sam_filename);
 
-    // if (is_gzipped(args.patterns))
-    // {
-    //   verbose("The input is gzipped - forcing single thread alignment.");
-    //   args.th = 1;
-    // }
     if (args.th == 1)
-      st_align<aligner_t>(&aligner, args.patterns, sam_filename, args.b);
+      stats = st_align<aligner_t>(&aligner, args.patterns, sam_filename, args.b);
     else
-      mt_align<aligner_t>(&aligner, args.patterns, sam_filename, args.th, args.b);
+      stats = mt_align<aligner_t>(&aligner, args.patterns, sam_filename, args.th, args.b);
   }
   else
   {
@@ -262,18 +258,13 @@ void dispatcher(Args &args){
 
     verbose("Output file: ", sam_filename);
 
-    // if (is_gzipped(args.mate1) or is_gzipped(args.mate2))
-    // {
-    //   verbose("The input is gzipped - forcing single thread alignment.");
-    //   args.th = 1;
-    // }
     if (args.th == 1)
-      st_align<aligner_t>(&aligner, args.mate1, sam_filename, args.b, args.mate2 );
+      stats = st_align<aligner_t>(&aligner, args.mate1, sam_filename, args.b, args.mate2 );
     else
-      mt_align<aligner_t>(&aligner, args.mate1, sam_filename, args.th, args.b, args.mate2);
+      stats = mt_align<aligner_t>(&aligner, args.mate1, sam_filename, args.th, args.b, args.mate2);
   }
 
-  // TODO: Merge the SAM files.
+  stats.print();
 
   t_insert_end = std::chrono::high_resolution_clock::now();
 
