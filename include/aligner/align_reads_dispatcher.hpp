@@ -27,6 +27,7 @@ extern "C"{
 }
 
 #include <common.hpp>
+#include <statistics.hpp>
 #include <kseq.h>
 #include <zlib.h>
 
@@ -109,109 +110,14 @@ struct mt_param_t
   kseq_t *mate1;
   kseq_t *mate2;
   // Return values
-  size_t n_reads;
-  size_t n_aligned_reads;
+  statistics_t stats;
 };
-
-// template <typename aligner_t>
-// void *mt_align_worker(void *param)
-// {
-//   mt_param_t<aligner_t> *p = (mt_param_t<aligner_t>*) param;
-//   size_t n_reads = 0;
-//   size_t n_aligned_reads = 0;
-
-//   FILE *sam_fd;
-//   gzFile fp;
-
-//   if ((sam_fd = fopen(p->sam_filename.c_str(), "w")) == nullptr)
-//     error("open() file " + p->sam_filename + " failed");
-
-//   if ((fp = gzopen(p->pattern_filename.c_str(), "r")) == Z_NULL)
-//     error("open() file " + p->pattern_filename + " failed");
-
-//   gzseek(fp, p->start, SEEK_SET);
-
-//   kseq_t rev;
-//   int l;
-
-//   kseq_t *seq = kseq_init(fp);
-//   while ((ks_tell(seq) < p->end) && ((l = kseq_read(seq)) >= 0))
-//   {
-
-//     bool fwd_align = p->aligner->align(seq, sam_fd, 0);
-
-//     //copy seq
-//     copy_kseq_t(&rev, seq);
-
-//     for (size_t i = 0; i < seq->seq.l; ++i)
-//       rev.seq.s[i] = complement(seq->seq.s[seq->seq.l - i - 1]);
-
-//     if (rev.seq.m > rev.seq.l)
-//       rev.seq.s[rev.seq.l] = 0;
-
-//     bool rev_align = p->aligner->align(&rev, sam_fd, 1);
-
-//     if (fwd_align or rev_align)
-//       n_aligned_reads++;
-//     n_reads++;
-
-//     free(rev.name.s);
-//     free(rev.comment.s);
-//     free(rev.seq.s);
-//     free(rev.qual.s);
-//   }
-
-//   verbose("Number of aligned reads block ", p->wk_id, " : ", n_aligned_reads, "/", n_reads);
-//   p->n_reads = n_reads;
-//   p->n_aligned_reads = n_aligned_reads;
-//   kseq_destroy(seq);
-//   gzclose(fp);
-//   fclose(sam_fd);
-
-//   return NULL;
-// }
-// template <typename aligner_t>
-// size_t mt_align(aligner_t *aligner, std::string pattern_filename, std::string sam_filename, size_t n_threads)
-// {
-//   pthread_t t[n_threads] = {0};
-//   mt_param_t<aligner_t> params[n_threads];
-//   std::vector<size_t> starts = split_fastq(pattern_filename, n_threads);
-//   for(size_t i = 0; i < n_threads; ++i)
-//   {
-//     params[i].aligner = aligner;
-//     params[i].pattern_filename = pattern_filename;
-//     params[i].sam_filename = sam_filename + "_" + std::to_string(i) + ".sam";
-//     params[i].start = starts[i];
-//     params[i].end = starts[i+1];
-//     params[i].wk_id = i;
-//     xpthread_create(&t[i], NULL, &mt_align_worker<aligner_t>, &params[i], __LINE__, __FILE__);
-//   }
-
-//   size_t tot_reads = 0;
-//   size_t tot_aligned_reads = 0;
-
-//   for(size_t i = 0; i < n_threads; ++i)
-//   {
-//     xpthread_join(t[i],NULL,__LINE__,__FILE__);
-//   }
-
-//   sleep(5);
-//   for(size_t i = 0; i < n_threads; ++i)
-//   {
-//     tot_reads += params[i].n_reads;
-//     tot_aligned_reads += params[i].n_aligned_reads;
-//   }
-
-//   verbose("Number of aligned reads: ", tot_aligned_reads, "/", tot_reads);
-//   return tot_aligned_reads;
-// }
 
 template <typename aligner_t>
 void *mt_align_worker(void *param)
 {
   mt_param_t<aligner_t> *p = (mt_param_t<aligner_t> *)param;
-  size_t n_reads = 0;
-  size_t n_aligned_reads = 0;
+  statistics_t stats;
 
   FILE *sam_fd;
   gzFile fp;
@@ -230,8 +136,8 @@ void *mt_align_worker(void *param)
       for (size_t i = 0; i < l; ++i)
       {
         if (p->aligner->align(&b->buf[i], sam_fd))
-          n_aligned_reads++;        
-        n_reads++;
+          stats.aligned_reads++;        
+        stats.processed_reads++;
       }
       // std::cout << "Block p " << p->wk_id << " end!" << std::endl;
     }
@@ -258,7 +164,7 @@ void *mt_align_worker(void *param)
         {
           for (size_t i = 0; i < alignments.size(); ++i)
           {
-            n_aligned_reads += p->aligner->finalize_learning(alignments[i], sam_fd);
+            stats += p->aligner->finalize_learning(alignments[i], sam_fd);
             kpbseq_destroy(memo[i]);
             alignments[i].clear();alignments[i].shrink_to_fit();
           }
@@ -269,15 +175,14 @@ void *mt_align_worker(void *param)
       }
       else
       {
-        n_aligned_reads += p->aligner->align(b, sam_fd);
+        stats += p->aligner->align(b, sam_fd);
       }
-      n_reads += l;
     }
 
     // Finalize the learned reads if there are no reads left.
     for (size_t i = 0; i < alignments.size(); ++i)
     {
-      n_aligned_reads += p->aligner->finalize_learning(alignments[i], sam_fd);
+      stats += p->aligner->finalize_learning(alignments[i], sam_fd);
       kpbseq_destroy(memo[i]);
       alignments[i].clear();alignments[i].shrink_to_fit();
     }
@@ -287,16 +192,15 @@ void *mt_align_worker(void *param)
     kpbseq_destroy(b);
   }
 
-  verbose("Number of aligned reads block ", p->wk_id, " : ", n_aligned_reads, "/", n_reads);
-  p->n_reads = n_reads;
-  p->n_aligned_reads = n_aligned_reads;
+  verbose("Number of aligned reads block ", p->wk_id, " : ", stats.aligned_reads, "/", stats.processed_reads);
+  p->stats = stats;
   fclose(sam_fd);
 
   return NULL;
 }
 
 template <typename aligner_t>
-size_t mt_align(aligner_t *aligner, std::string pattern_filename, std::string sam_filename, size_t n_threads, size_t b_size, std::string mate2_filename = "")
+statistics_t mt_align(aligner_t *aligner, std::string pattern_filename, std::string sam_filename, size_t n_threads, size_t b_size, std::string mate2_filename = "")
 {
   xpthread_mutex_init(&mutex_reads_dispatcher, NULL, __LINE__, __FILE__);
   kseq_t *seq = nullptr;
@@ -332,8 +236,7 @@ size_t mt_align(aligner_t *aligner, std::string pattern_filename, std::string sa
     xpthread_create(&t[i], NULL, &mt_align_worker<aligner_t>, &params[i], __LINE__, __FILE__);
   }
 
-  size_t tot_reads = 0;
-  size_t tot_aligned_reads = 0;
+  statistics_t stats;
 
   for (size_t i = 0; i < n_threads; ++i)
   {
@@ -364,8 +267,7 @@ size_t mt_align(aligner_t *aligner, std::string pattern_filename, std::string sa
 
   for (size_t i = 0; i < n_threads; ++i)
   {
-    tot_reads += params[i].n_reads;
-    tot_aligned_reads += params[i].n_aligned_reads;
+    stats += params[i].stats;
 
     append_file(params[i].sam_filename, fd);
     if (std::remove(params[i].sam_filename.c_str()) != 0)
@@ -374,19 +276,18 @@ size_t mt_align(aligner_t *aligner, std::string pattern_filename, std::string sa
 
   xpthread_mutex_destroy(&mutex_reads_dispatcher, __LINE__, __FILE__);
 
-  verbose("Number of aligned reads: ", tot_aligned_reads, "/", tot_reads);
-  return tot_aligned_reads;
+  verbose("Number of aligned reads: ", stats.aligned_reads, "/", stats.processed_reads);
+  return stats;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
 /// Single Thread
 ////////////////////////////////////////////////////////////////////////////////
 template <typename aligner_t>
-size_t st_align(aligner_t *aligner, std::string pattern_filename, std::string sam_filename, size_t b_size, std::string mate2_filename = "")
+statistics_t st_align(aligner_t *aligner, std::string pattern_filename, std::string sam_filename, size_t b_size, std::string mate2_filename = "")
 {
-  size_t n_reads = 0;
   size_t pn_reads = 0;
-  size_t n_aligned_reads = 0;
+  statistics_t stats;
 
   kseq_t *seq = nullptr;
   kseq_t *mate1 = nullptr;
@@ -424,8 +325,8 @@ size_t st_align(aligner_t *aligner, std::string pattern_filename, std::string sa
       for (size_t i = 0; i < l; ++i)
       {
         if (aligner->align(&b->buf[i], sam_fd))
-          n_aligned_reads++;
-        n_reads++;
+          stats.aligned_reads++;
+        stats.processed_reads++;
       }
     }
     kbseq_destroy(b);
@@ -447,7 +348,7 @@ size_t st_align(aligner_t *aligner, std::string pattern_filename, std::string sa
         if (aligner->learn_fragment_model(memo.back(), alignments.back()))
         {
           for( size_t i = 0; i < alignments.size(); ++i ){
-            aligner->finalize_learning(alignments[i], sam_fd);
+            stats += aligner->finalize_learning(alignments[i], sam_fd);
             kpbseq_destroy(memo[i]);
             alignments[i].clear(); alignments[i].shrink_to_fit();
           } 
@@ -458,17 +359,16 @@ size_t st_align(aligner_t *aligner, std::string pattern_filename, std::string sa
       }
       else
       {
-        n_aligned_reads += aligner->align(b,sam_fd);
+        stats += aligner->align(b,sam_fd);
       }
-      n_reads += l;
     }
-    if ((n_reads - pn_reads) > 1000000) {
-      verbose("Number of processed reads: ", n_reads);
-      pn_reads = n_reads;
+    if ((stats.processed_reads - pn_reads) > 1000000) {
+      verbose("Number of processed reads: ", stats.processed_reads);
+      pn_reads = stats.processed_reads;
     }
     kpbseq_destroy(b);
   }
-  verbose("Number of aligned reads: ", n_aligned_reads, "/", n_reads);
+  verbose("Number of aligned reads: ", stats.aligned_reads, "/", stats.processed_reads);
   if (fp_mate2 != nullptr)
   {
     kseq_destroy(mate1);
@@ -482,7 +382,7 @@ size_t st_align(aligner_t *aligner, std::string pattern_filename, std::string sa
   gzclose(fp);
   fclose(sam_fd);
 
-  return n_aligned_reads;
+  return stats;
 }
 
 

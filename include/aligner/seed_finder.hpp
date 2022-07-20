@@ -114,10 +114,11 @@ public:
         size_t l = 0;   // Current match length
         size_t pl = 0;  // Previous match length
         size_t n_Ns = 0;
+        size_t prev_pos_plus_one = n + 1;
         for (size_t i = 0; i < pointers.size(); ++i)
         {
             size_t pos = pointers[i];
-            while ((i + l) < read->seq.l && (pos + l) < n && read->seq.s[i + l] == ra.charAt(pos + l))
+            while (pos != prev_pos_plus_one && (i + l) < read->seq.l && (pos + l) < n && read->seq.s[i + l] == ra.charAt(pos + l))
             {
                 if(read->seq.s[i + l] == 'N') n_Ns++;
                 else n_Ns = 0;
@@ -138,6 +139,8 @@ public:
             // Compute next match length
             pl = l;
             l = (l == 0 ? 0 : (l - 1));
+
+            prev_pos_plus_one = pos + 1;
         }
 
     }
@@ -160,40 +163,6 @@ public:
         return true;
     }
 
-    // // Fill the vector of occs with the matches above curr with LCP <= len
-    // bool find_MEM_above(size_t curr, size_t len, std::vector<size_t>& occs)
-    // {
-    //     const auto sa_first = ms.get_first_run_sample();
-    //     // Phi direction
-    //     if (curr != sa_first)
-    //     {
-    //     size_t next = ms.Phi(curr);
-    //     if ((n - curr) >= len and (n - next) >= len)
-    //     {
-    //         size_t lcp = lceToRBounded(ra, curr, next, len);
-    //         while (lcp >= len)
-    //         {
-    //         occs.push_back(next);
-
-    //         if (filter_seeds and (occs.size() > n_seeds_thr) )
-    //             return false;
-
-    //         curr = next;
-    //         if (curr != sa_first)
-    //         {
-    //             next = ms.Phi(curr);
-    //             if ((n - curr) >= len and (n - next) >= len)
-    //             lcp = lceToRBounded(ra, curr, next, len);
-    //             else
-    //             lcp = 0;
-    //         }
-    //         else
-    //             lcp = 0;
-    //         }
-    //     }
-    //     }
-    //     return true;
-    // }
 
     // Fill the vector of occs with the matches below curr with LCP <= len
     bool find_MEM_below(size_t curr, size_t len, std::vector<size_t>& occs)
@@ -213,44 +182,9 @@ public:
         return true;
     }
 
-    // // Fill the vector of occs with the matches below curr with LCP <= len
-    // bool find_MEM_below(size_t curr, size_t len, std::vector<size_t>& occs)
-    // {
-    //     const auto sa_last = ms.get_last_run_sample();
-    //     // Phi_inv direction
-    //     if (curr != sa_last)
-    //     {
-    //     size_t next = ms.Phi_inv(curr);
-    //     if ((n - curr) >= len and (n - next) >= len)
-    //     {
-    //         size_t lcp = lceToRBounded(ra, curr, next, len);
-    //         while (lcp >= len)
-    //         {
-    //         occs.push_back(next);
-
-    //         if (filter_seeds and (occs.size() > n_seeds_thr) )
-    //             return false;
-
-    //         curr = next;
-    //         if (curr != sa_last)
-    //         {
-    //             next = ms.Phi_inv(curr);
-    //             if ((n - curr) >= len and (n - next) >= len)
-    //             lcp = lceToRBounded(ra, curr, next, len);
-    //             else
-    //             lcp = 0;
-    //         }
-    //         else
-    //             lcp = 0;
-    //         }
-    //     }
-    //     }
-    //     return true;
-    // }
 
 
     // Fill the vector of occurrences of the mem_t data structure
-    // TODO: remove the checks for the lengths once Dominik fix the lce queries
     bool find_MEM_occs(mem_t &mem)
     {
         mem.occs.push_back(mem.pos);
@@ -260,71 +194,7 @@ public:
 
         return true;
     }
-    // Fill the vector of occurrences of the mem_t data structure
-    // TODO: remove the checks for the lengths once Dominik fix the lce queries
-    // bool find_MEM_occs(mem_t &mem)
-    // {
-    //     mem.occs.push_back(mem.pos);
 
-    //     const auto sa_first = ms.get_first_run_sample();
-    //     const auto sa_last = ms.get_last_run_sample();
-
-    //     // Phi direction
-    //     size_t curr = mem.pos;
-    //     if(curr != sa_first)
-    //     {
-    //     size_t next = ms.Phi(curr);
-    //     if((n-curr) >= mem.len and (n-next) >= mem.len)
-    //     {
-    //         size_t lcp =  lceToRBounded(ra,curr,next,mem.len);
-    //         while(lcp >= mem.len)
-    //         {
-    //         mem.occs.push_back(next);
-            
-    //         if (filter_seeds and (mem.occs.size() > n_seeds_thr) )
-    //             return false;
-    //         curr = next;
-    //         if(curr != sa_first)
-    //         {
-    //             next = ms.Phi(curr);
-    //             if((n-curr) >= mem.len and (n-next) >= mem.len)
-    //             lcp  = lceToRBounded(ra,curr,next,mem.len);
-    //             else
-    //             lcp = 0;
-    //         }else lcp = 0;
-    //         }
-    //     }
-    //     }
-
-    //     // Phi_inv direction
-    //     curr = mem.pos;
-    //     if(curr != sa_last)
-    //     {
-    //     size_t next = ms.Phi_inv(curr);
-    //     if((n-curr) >= mem.len and (n-next) >= mem.len)
-    //     {
-    //         size_t lcp =  lceToRBounded(ra,curr,next,mem.len);
-    //         while(lcp >= mem.len)
-    //         {
-    //         mem.occs.push_back(next);
-            
-    //         if (filter_seeds and (mem.occs.size() > n_seeds_thr) )
-    //             return false;
-
-    //         curr = next;
-    //         if(curr != sa_last)
-    //         {
-    //             next = ms.Phi_inv(curr);
-    //             if((n-curr) >= mem.len and (n-next) >= mem.len)
-    //             lcp  = lceToRBounded(ra,curr,next,mem.len);
-    //             else
-    //             lcp = 0;
-    //         }else lcp = 0;
-    //         }
-    //     }
-    //     }
-    //     return true;
-    // }
 
     // Populate the seeds given a list of MEMs
     bool populate_seed(
@@ -382,56 +252,7 @@ public:
         for (size_t j = 0; j < n_MEMs; ++j)
             populate_seed(mems[j], mems);
     }
-    // // Populate the seeds given a list of MEMs
-    // void populate_seeds(
-    //     std::vector<mem_t> &mems)
-    // {
-    //     size_t n_MEMs = mems.size();
-    //     for (size_t j = 0; j < n_MEMs; ++j)
-    //     {
-    //         auto &mem = mems[j];
-    //         size_t l = mem.len;
-    //         size_t i = mem.idx;
-    //         size_t mate = mem.mate;
-    //         size_t pos = mem.pos;
-    //         size_t r = mem.rpos;
 
-    //         // size_t r = r_offset + (i + l - 1); // compatible with minimap2 chaining algorithm
-
-    //         mem.occs.push_back(mem.pos);
-
-    //         find_MEM_above(mem.pos, mem.len, mem.occs);
-    //         size_t upper_suffix = mem.occs.back();
-    //         find_MEM_below(mem.pos, mem.len, mem.occs);
-    //         size_t lower_suffix = mem.occs.back();
-
-    //         // Take two halves of the MEM
-    //         if (l >= (min_len << 1))
-    //         {
-    //             size_t ll = l >> 1;
-    //             size_t rl = r - l + ll; // compatible with minimap2 chaining algorithm
-    //             mems.push_back(mem_t(upper_suffix, ll, i, mate, rl));
-
-    //             mem_t &mem = mems.back();
-    //             if ((not find_MEM_above(upper_suffix, mem.len, mem.occs)) or
-    //                 (not find_MEM_below(lower_suffix, mem.len, mem.occs)))
-    //             {
-    //                 mems.pop_back();
-    //                 continue;
-    //             }
-
-    //             size_t lr = l - ll;
-    //             size_t rr = r; // compatible with minimap2 chaining algorithm
-    //             mems.push_back(mem_t(pos + ll, lr, i + ll, mate, rr));
-    //             find_MEM_occs(mems.back()); // TODO: Optimize this
-    //             if ((not find_MEM_occs(mems.back())))
-    //             {
-    //                 mems.pop_back();
-    //                 continue;
-    //             }
-    //         }
-    //     }
-    // }
 
     void find_seeds(
         const kseq_t *read,
@@ -441,59 +262,6 @@ public:
     {
         find_mems(read, mems, r_offset, mate);
         populate_seeds(mems);
-        // auto pointers = ms.query(read->seq.s, read->seq.l);
-        // size_t l = 0;  // Current match length
-        // size_t pl = 0; // Previous match length
-        // size_t n_Ns = 0;
-        // for (size_t i = 0; i < pointers.size(); ++i)
-        // {
-        //     size_t pos = pointers[i];
-        //     while ((i + l) < read->seq.l && (pos + l) < n && read->seq.s[i + l] == ra.charAt(pos + l))
-        //     {
-        //         if (read->seq.s[i + l] == 'N')
-        //             n_Ns++;
-        //         else
-        //             n_Ns = 0;
-        //         ++l;
-        //     }
-
-        //     // Update MEMs
-        //     if (l >= pl and n_Ns < l and l >= min_len)
-        //     {
-        //         size_t r = r_offset + (i + l - 1); // compatible with minimap2 chaining algorithm
-        //         mems.push_back(mem_t(pointers[i], l, i, mate, r));
-
-        //         populate_seed(mems.back(), mems);
-        //         // mem_t &mem = mems.back();
-        //         // mem.occs.push_back(mem.pos);
-
-        //         // find_MEM_above(mem.pos, mem.len, mem.occs);
-        //         // size_t upper_suffix = mem.occs.back();
-        //         // find_MEM_below(mem.pos, mem.len, mem.occs);
-        //         // size_t lower_suffix = mem.occs.back();
-
-        //         // // Take two halves of the MEM
-        //         // if (l >= (min_len << 1))
-        //         // {
-        //         //     size_t ll = l >> 1;
-        //         //     size_t rl = r_offset + (i + ll - 1); // compatible with minimap2 chaining algorithm
-        //         //     mems.push_back(mem_t(upper_suffix, ll, i, mate, rl));
-
-        //         //     mem_t &mem = mems.back();
-        //         //     find_MEM_above(upper_suffix, mem.len, mem.occs);
-        //         //     find_MEM_below(lower_suffix, mem.len, mem.occs);
-
-        //         //     size_t lr = l - ll;
-        //         //     size_t rr = r_offset + (i + l - 1); // compatible with minimap2 chaining algorithm
-        //         //     mems.push_back(mem_t(pointers[i + ll], lr, i + ll, mate, rr));
-        //         //     find_MEM_occs(mems.back()); // TODO: Optimize this
-        //         // }
-        //     }
-
-        //     // Compute next match length
-        //     pl = l;
-        //     l = (l == 0 ? 0 : (l - 1));
-        // }
     }
 
 protected:

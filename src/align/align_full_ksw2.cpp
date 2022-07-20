@@ -207,6 +207,13 @@ typename aligner_t::config_t configurer(Args &args){
   config.min_len    = args.l;           // Minimum MEM length
   config.ext_len    = args.ext_len;     // Extension length
 
+  // Filtering aprameters
+  config.filter_dir = args.filter_dir;  // Use MEMs average length to filter the orientation of the reads
+  config.dir_thr    = args.dir_thr;     // Use MEMs average length distance to filter the orientation of the reads
+  
+  config.filter_seeds = args.filter_seeds;  // Filter seed if occurs more than threshold
+  config.n_seeds_thr = args.n_seeds_thr;    // Filter seed if occurs more than threshold
+  
   // ksw2 parameters
   config.smatch     = args.smatch;      // Match score default
   config.smismatch  = args.smismatch;   // Mismatch score default
@@ -235,6 +242,7 @@ void dispatcher(Args &args){
 
   std::string base_name = basename(args.filename.data());
 
+  statistics_t stats;
 
   if(args.patterns != "")
   {
@@ -244,15 +252,10 @@ void dispatcher(Args &args){
 
     verbose("Output file: ", sam_filename);
 
-    // if (is_gzipped(args.patterns))
-    // {
-    //   verbose("The input is gzipped - forcing single thread alignment.");
-    //   args.th = 1;
-    // }
     if (args.th == 1)
-      st_align<aligner_t>(&aligner, args.patterns, sam_filename, args.b);
+      stats = st_align<aligner_t>(&aligner, args.patterns, sam_filename, args.b);
     else
-      mt_align<aligner_t>(&aligner, args.patterns, sam_filename, args.th, args.b);
+      stats = mt_align<aligner_t>(&aligner, args.patterns, sam_filename, args.th, args.b);
   }
   else
   {
@@ -262,18 +265,13 @@ void dispatcher(Args &args){
 
     verbose("Output file: ", sam_filename);
 
-    // if (is_gzipped(args.mate1) or is_gzipped(args.mate2))
-    // {
-    //   verbose("The input is gzipped - forcing single thread alignment.");
-    //   args.th = 1;
-    // }
     if (args.th == 1)
-      st_align<aligner_t>(&aligner, args.mate1, sam_filename, args.b, args.mate2 );
+      stats = st_align<aligner_t>(&aligner, args.mate1, sam_filename, args.b, args.mate2 );
     else
-      mt_align<aligner_t>(&aligner, args.mate1, sam_filename, args.th, args.b, args.mate2);
+      stats = mt_align<aligner_t>(&aligner, args.mate1, sam_filename, args.th, args.b, args.mate2);
   }
 
-  // TODO: Merge the SAM files.
+  stats.print();
 
   t_insert_end = std::chrono::high_resolution_clock::now();
 
