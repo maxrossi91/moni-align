@@ -207,6 +207,13 @@ typename aligner_t::config_t configurer(Args &args){
   config.min_len    = args.l;           // Minimum MEM length
   config.ext_len    = args.ext_len;     // Extension length
 
+  // Filtering aprameters
+  config.filter_dir = args.filter_dir;  // Use MEMs average length to filter the orientation of the reads
+  config.dir_thr    = args.dir_thr;     // Use MEMs average length distance to filter the orientation of the reads
+  
+  config.filter_seeds = args.filter_seeds;  // Filter seed if occurs more than threshold
+  config.n_seeds_thr = args.n_seeds_thr;    // Filter seed if occurs more than threshold
+  
   // ksw2 parameters
   config.smatch     = args.smatch;      // Match score default
   config.smismatch  = args.smismatch;   // Mismatch score default

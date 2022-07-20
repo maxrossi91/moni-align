@@ -49,7 +49,7 @@
 #include <kpbseq.h>
 #include <liftidx.hpp>
 
-MTIME_TSAFE_INIT(8);
+MTIME_TSAFE_INIT(10);
 MTIME_TSAFE_NAMES_INIT(
   "Seed extraction", 
   "Chaining", 
@@ -58,7 +58,9 @@ MTIME_TSAFE_NAMES_INIT(
   "Chaining - Dynamic Programming", 
   "Chaining - Chain position", 
   "Chaining - Backtracking", 
-  "Orphan recovery"
+  "Orphan recovery",
+  "Seed extraction - Seeds finding",
+  "Seed extraction - Seeds occurrences"
 );
 #include <slp_definitions.hpp>
 #include <chain.hpp>
@@ -682,10 +684,10 @@ public:
 
         verbose("Insertion size estimation complete!");
         verbose("Number of high quality samples: ", ins_count);
-        verbose("Mean: ", ins_mean);
-        verbose("Variance: ", ins_variance);
-        verbose("Sample Variance: ", ins_sample_variance);
-        verbose("Standard Deviation: ", ins_std_dev);
+        verbose("                          Mean: ", ins_mean);
+        verbose("                      Variance: ", ins_variance);
+        verbose("               Sample Variance: ", ins_sample_variance);
+        verbose("            Standard Deviation: ", ins_std_dev);
       }
     }
     __ins_mtx.unlock();
@@ -835,12 +837,13 @@ public:
   // Aligning pair-ended sequences
   bool align(paired_alignment_t &al, bool finalize = true)
   { 
-    MTIME_INIT(3);   
+    MTIME_INIT(10);   
     MTIME_START(0); // Timing helper
 
     // Find MEMs
     if ( filter_dir )
     {
+      MTIME_START(8); // Timing helper
       // Direction 1
       // find_seeds(al.mate1, al.mems, 0, MATE_1 | MATE_F);
       // find_seeds(&al.mate2_rev, al.mems, al.mate1->seq.l, MATE_2 | MATE_RC);
@@ -890,6 +893,9 @@ public:
       if ((al.avg_seed_length_dir2 > al.avg_seed_length_dir1) and ((al.avg_seed_length_dir2 - al.avg_seed_length_dir1) > dir_thr))
         al.mems.erase(al.mems.begin(), al.mems.begin()  + al.n_mems_dir1);
 
+      MTIME_END(8); //Timing helper
+      MTIME_START(9); //Timing helper
+      
       mem_finder.populate_seeds(al.mems);
       al.n_seeds_dir1 = 0;
       al.n_seeds_dir2 = 0;
@@ -911,6 +917,7 @@ public:
       {
         al.avg_w_seed_length_dir2 /= al.n_seeds_dir2;
       }
+      MTIME_END(9); //Timing helper
 
     }
     else

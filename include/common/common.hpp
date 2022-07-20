@@ -495,7 +495,7 @@ void my_load(std::vector<X> &x, std::istream &in, typename std::enable_if<std::i
   MTIME_REPORT(i)
 
 #define MTIME_TSAFE_REPORT(_i) \
-  verbose("Timing variable", _i, ":", __tsafe_durations[_i], "\t(", __tsafe_names[i], ")");
+  verbose("Timing variable", _i, ":",std::setw(9), __tsafe_durations[_i], "\t(", __tsafe_names[i], ")");
 
 #define MTIME_TSAFE_REPORT_ALL                          \
   for (size_t i = 0; i < __tsafe_durations.size(); ++i) \
