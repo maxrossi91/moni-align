@@ -85,8 +85,8 @@ public:
         {
             size_t length;
             lengths.read((char *)&length, 5);
-            if (run_heads_s[i] <= TERMINATOR) // change 0 to 1
-                run_heads_s[i] = TERMINATOR;
+            if (run_heads_s[i] <= this->TERMINATOR) // change 0 to 1
+                run_heads_s[i] = this->TERMINATOR;
 
             std::fill_n(std::back_inserter(runs_bv), length - 1, false);
             runs_bv.push_back(i % B == B - 1);
@@ -182,6 +182,12 @@ public:
         ri::rle_string<sparse_bitvector_t, string_t>::load(in);
     }
 
+
+    std::string get_file_extension() const
+    {
+        return ".rle";
+    }
+    
 protected:
     void build_rlbwt(std::ifstream &heads, std::ifstream &lengths, ulint B) 
     {
@@ -211,8 +217,8 @@ protected:
         {
             size_t length = 0;
             lengths.read((char *)&length, 5);
-            if (run_heads_s[i] <= TERMINATOR) // change 0 to 1
-                run_heads_s[i] = TERMINATOR;
+            if (run_heads_s[i] <= this->TERMINATOR) // change 0 to 1
+                run_heads_s[i] = this->TERMINATOR;
 
             std::fill_n(std::back_inserter(runs_bv), length - 1, false);
             runs_bv.push_back(i % B == B - 1);
@@ -274,8 +280,8 @@ ms_rle_string<ri::sparse_sd_vector, ri::huff_string>::ms_rle_string(std::ifstrea
     {
         size_t length = 0;
         lengths.read((char *)&length, 5);
-        if (run_heads_s[i] <= TERMINATOR) // change 0 to 1
-            run_heads_s[i] = TERMINATOR;
+        if (run_heads_s[i] <= this->TERMINATOR) // change 0 to 1
+            run_heads_s[i] = this->TERMINATOR;
 
         if(i % B == B - 1)
             runs_bv_onset.push_back(this->n + length - 1);

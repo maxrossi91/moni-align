@@ -48,6 +48,13 @@ target_include_directories(rlebwt_ms_build PUBLIC    "../include/ms"
                                         )
 target_compile_options(rlebwt_ms_build PUBLIC "-std=c++17")
 
+add_executable(build_rle_string build_rle_string.cpp)
+target_link_libraries(build_rle_string common sdsl divsufsort divsufsort64 malloc_count ri)
+target_include_directories(build_rle_string PUBLIC    "../include/ms" 
+                                        "../include/common" 
+                                        )
+target_compile_options(build_rle_string PUBLIC "-std=c++17")
+
 # add_executable(extend_klib extend_klib.cpp ${klib_SOURCE_DIR}/ksw.c ${bigbwt_SOURCE_DIR}/xerrors.c)
 # target_link_libraries(extend_klib common malloc_count sdsl divsufsort divsufsort64 ri klib ssw pthread)
 # target_include_directories(extend_klib PUBLIC    "../include/ms" 

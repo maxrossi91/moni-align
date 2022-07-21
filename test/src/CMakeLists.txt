@@ -144,6 +144,16 @@ add_executable(backward_test backward_test.cpp)
 target_link_libraries(backward_test backward)
 target_compile_options(backward_test PUBLIC "-std=c++17")
 
+
+add_executable(rle_string_test rle_string_test.cpp)
+target_link_libraries(rle_string_test common sdsl divsufsort divsufsort64 malloc_count ri klib z lvsam Catch2::Catch2)
+target_include_directories(rle_string_test PUBLIC
+                                        "../../include/common" 
+                                        "../../include/ms"
+                                        )
+target_compile_options(rle_string_test PUBLIC "-std=c++17")
+
+
 # list(APPEND CMAKE_MODULE_PATH ${Catch2_SOURCE_DIR}/extras)
 # include(CTest)
 # include(Catch)

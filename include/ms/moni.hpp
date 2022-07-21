@@ -33,11 +33,11 @@
 
 #include <r_index.hpp>
 
-#include <ms_rle_string.hpp>
+#include <ms_rle_simple_string.hpp>
 #include <thresholds_ds.hpp>
 
 template <class sparse_bv_type = ri::sparse_sd_vector,
-          class rle_string_t = ms_rle_string_sd,
+          class rle_string_t = ms_rle_simple_string_sd,
           class thresholds_t = thr_bv<rle_string_t> >
 class ms_pointers : public ri::r_index<sparse_bv_type, rle_string_t>
 {

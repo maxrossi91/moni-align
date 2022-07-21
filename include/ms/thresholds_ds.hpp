@@ -475,7 +475,7 @@ public:
         swap(*this, other);
     }
 
-    size_t operator[] (size_t& i)
+    size_t operator[] (size_t& i) const
     {
         assert(i < bwt->number_of_runs());
 
@@ -491,7 +491,7 @@ public:
     }
 
     // number of thresholds for the character c before position i 
-    size_t rank(const size_t i, const uint8_t c)
+    size_t rank(const size_t i, const uint8_t c) const
     {
         return thresholds_per_letter[c].rank(i); // j-1 because the select is 0 based
     }
