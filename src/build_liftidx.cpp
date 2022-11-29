@@ -48,7 +48,6 @@ inline lift::Lift get_null_lift(const size_t len)
 // struct containing command line parameters and other globals
 struct Args
 {
-  size_t w = 10;
   std::string filename = "";
   std::string outpath = ""; // path where to output the file
 };
@@ -61,7 +60,6 @@ void parseArgs(int argc, char *const argv[], Args &arg)
 
   std::string usage("usage: " + std::string(argv[0]) + " infile [-o outpath]\n\n" +
                     "Computes the .idx file storing the sequence names and starting positions.\n" +
-                    "  wsize: [integer] - sliding window size (def. 10).\n" +
                     "outpath: [string]  - path to where to output the file.\n");
 
   std::string sarg;
@@ -69,10 +67,6 @@ void parseArgs(int argc, char *const argv[], Args &arg)
   {
     switch (c)
     {
-    case 'w':
-      sarg.assign(optarg);
-      arg.w = stoi(sarg);
-      break;
     case 'o':
       arg.outpath.assign(optarg);
       break;
@@ -130,7 +124,7 @@ int main(int argc, char *const argv[])
   kseq_destroy(seq);
   gzclose(fp);
 
-  liftidx idx(onset, names, lifts, u, args.w);
+  liftidx idx(onset, names, lifts, u);
 
   std::chrono::high_resolution_clock::time_point t_insert_end = std::chrono::high_resolution_clock::now();
 

@@ -39,7 +39,6 @@ namespace fs = std::filesystem;
 // struct containing command line parameters and other globals
 struct Args
 {
-  size_t w = 10;
   std::string filename = "";
   std::string outpath = ""; // path where to output the file
 };
@@ -52,18 +51,13 @@ void parseArgs(int argc, char *const argv[], Args &arg)
 
   std::string usage("usage: " + std::string(argv[0]) + " infile [-o outpath]\n\n" +
                     "Computes the .idx file storing the sequence names and starting positions.\n" +
-                    "  wsize: [integer] - sliding window size (def. 10).\n" +
                     "outpath: [string]  - path to where to output the file.\n");
 
   std::string sarg;
-  while ((c = getopt(argc, argv, "o:w:")) != -1)
+  while ((c = getopt(argc, argv, "o:")) != -1)
   {
     switch (c)
     {
-    case 'w':
-      sarg.assign(optarg);
-      arg.w = stoi(sarg);
-      break;
     case 'o':
       arg.outpath.assign(optarg);
       break;
@@ -97,7 +91,7 @@ int main(int argc, char *const argv[])
   verbose("Building the sequence index");
   std::chrono::high_resolution_clock::time_point t_insert_start = std::chrono::high_resolution_clock::now();
 
-  seqidx idx(args.filename, args.w);
+  seqidx idx(args.filename);
 
   std::chrono::high_resolution_clock::time_point t_insert_end = std::chrono::high_resolution_clock::now();
 
