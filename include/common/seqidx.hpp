@@ -40,8 +40,9 @@ public:
      * @brief Construct a new seqidx object
      * 
      * @param filename filepath of the fasta/q file
+     * @param w the length of the trailing dollars
      */
-    seqidx(std::string filename)
+    seqidx(std::string filename, size_t w_)
     {
         gzFile fp(gzopen(filename.c_str(), "r"));
         if (fp == nullptr)
@@ -51,6 +52,7 @@ public:
 
         std::vector<size_t> onset(1,0);
         u = 0;
+        w = w_;
 
         while (kseq_read(seq) >= 0)
         {
@@ -77,8 +79,9 @@ public:
      * @param onset the popsitions
      * @param names_ 
      * @param l 
+     * @param w the length of the trailing dollars
      */
-    seqidx(const std::vector<size_t>& onset, const std::vector<std::string>& names_, const size_t l)
+    seqidx(const std::vector<size_t>& onset, const std::vector<std::string>& names_, const size_t l, size_t w_)
     {
         assert(onset.size() == names_.size() + 1);
         assert(onset[0] == 0);
@@ -86,6 +89,7 @@ public:
         assert(std::is_sorted(onset.begin(), onset.end()));
 
         u = l;
+        w = w_;
         names = std::vector<std::string>(names_);
 
 
@@ -108,11 +112,13 @@ public:
         starts(other.starts)
     {
         rank1 = sdsl::sd_vector<>::rank_1_type(&starts);
-        select1 = sdsl::sd_vector<>::select_1_type(&starts);        
+        select1 = sdsl::sd_vector<>::select_1_type(&starts);  
+        u = other.u;      
+        w = other.w;      
     }
 
     /**
-     * @brief Return the length of the i-th sequence
+     * @brief Return the length of the i-th sequence without the trailing w characters
      * 
      * @param i 
      * @return size_t 
@@ -120,7 +126,7 @@ public:
     inline size_t length(const size_t i)
     {
         assert(i < names.size());
-        return select1(i+2) - select1(i+1);
+        return select1(i+2) - select1(i+1) - w;
     }
 
     /**
@@ -131,7 +137,7 @@ public:
      */
     inline std::string operator[](const size_t pos)
     {
-        return names[rank1(pos + 1)-1]; // pos+1 becausethe rank counts the 1s before
+        return names[rank1(pos + 1)-1]; // pos+1 because the rank counts the 1s before
     }
 
     /**
@@ -189,8 +195,9 @@ public:
         size_t w_bytes = 0;
 
         out.write((char *)&u, sizeof(u));
+        out.write((char *)&w, sizeof(w));
 
-        w_bytes += sizeof(u);
+        w_bytes += sizeof(u) + sizeof(w);
 
         if (u == 0)
             return w_bytes;
@@ -209,6 +216,7 @@ public:
     {
 
         in.read((char *)&u, sizeof(u));
+        in.read((char *)&w, sizeof(w));
 
         if (u == 0)
             return;
@@ -236,6 +244,7 @@ public:
 
 protected:
     size_t u; // Total length
+    size_t w; // length of the trailing dollars
     
     sdsl::sd_vector<> starts;
     sdsl::sd_vector<>::rank_1_type rank1;
