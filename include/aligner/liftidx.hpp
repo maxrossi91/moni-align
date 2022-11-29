@@ -49,9 +49,10 @@ public:
     liftidx( const std::vector<size_t>& onset, 
             const std::vector<std::string>& names_, 
             std::vector<std::pair<lift::Lift,size_t>>& lifts_, 
-            const size_t l
+            const size_t l,
+            const size_t w
         ):
-        seqidx(onset,names_,l),
+        seqidx(onset,names_,l,w),
         lifts(lifts_)
     {
         // NtD
