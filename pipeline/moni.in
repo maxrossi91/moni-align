@@ -135,7 +135,7 @@ def build_pfp(args):
   if args.verbose: command += "--verbose "
 
   if args.reference is not None: 
-    command += "-r {ref} -v {vcf} -H {H} --use-acceleration ".format(
+    command += "-r {ref} -v {vcf} -H {H} ".format( # --use-acceleration ".format( # Apparently --use-acceleration is bugged
       ref = args.reference.replace(',',' '),
       vcf = args.vcf.replace(',',' '),
       H   = args.haplotype 
