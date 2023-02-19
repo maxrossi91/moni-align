@@ -126,6 +126,7 @@ public:
       int32_t score = 0;
       size_t pos = 0; // Position of the leftmost match of the read in the global reference
       size_t lft = 0; // Position of the lift in the reference coordinates
+      bool unmapped_lft = false; // Set if the liftover result in unmapped read
     } score_t;
 
     /**
@@ -1609,7 +1610,7 @@ public:
           sam = new sam_t(read);
 
         auto tmp_score = fill_chain(mems,chain_anchors,lcs,lcs_len,rcs,rcs_len,read,score_only,sam); 
-        score.score = tmp_score.score;
+        score.unmapped_lft = tmp_score.unmapped_lft;
         sam->flag = (strand?16:0);
         sam->zs = score2;
         // sam->mapq = compute_mapq(sam->as, sam->zs, min_score, sam->read->seq.l * smatch);
@@ -1618,7 +1619,7 @@ public:
                                         mapq_coeff_len, mapq_coeff_fac, sub_n, 0, frac_rep);
         // sam->reverse = (strand != 0);
         // sam->rname = idx[sam->pos - 1];
-        if(output && score.score >= min_score)
+        if(output && !score.unmapped_lft)
         {
           write_sam(out,*sam);
           delete sam;
@@ -1739,7 +1740,7 @@ public:
         // sam_m1.rnext = std::string(mate2->name.s);
         // sam_m2.rnext = std::string(mate1->name.s);
 
-        if(score.m1.score >= al.min_score_m1 and score.m2.score >= al.min_score_m2)
+        if(score.m1.score >= al.min_score_m1 && !score.m1.unmapped_lft && score.m2.score >= al.min_score_m2 && !score.m2.unmapped_lft)
         {
 
           sam_m1.pnext = sam_m2.pos;
@@ -1777,7 +1778,7 @@ public:
             sam_m1.flag |= SAM_MATE_REVERSED | SAM_FIRST_IN_PAIR;
             sam_m2.flag |= SAM_REVERSED | SAM_SECOND_IN_PAIR;
           }
-        }else if(score.m1.score >= al.min_score_m1) {
+        }else if(score.m1.score >= al.min_score_m1 && !score.m1.unmapped_lft) {
           sam_m1.rname = idx[sam_m1.pos - 1];
           sam_m1.zs = al.score2_m1;
           
@@ -1785,7 +1786,7 @@ public:
           sam_m2.flag = SAM_PAIRED | SAM_UNMAPPED | SAM_SECOND_IN_PAIR;
           if(strand)
             sam_m1.flag |= SAM_REVERSED;
-        }else if(score.m2.score >= al.min_score_m2) {
+        }else if(score.m2.score >= al.min_score_m2 && !score.m2.unmapped_lft) {
           sam_m2.rname = idx[sam_m2.pos - 1];
           sam_m1.zs = al.score2_m2;
 
@@ -1976,7 +1977,7 @@ orphan_paired_score_t paired_chain_orphan_score(
       // sam_m1.rnext = std::string(mate2->name.s);
       // sam_m2.rnext = std::string(mate1->name.s);
 
-      if(score.m1.score >= al.min_score_m1 and score.m2.score >= al.min_score_m2)
+      if(score.m1.score >= al.min_score_m1 && !score.m1.unmapped_lft and score.m2.score >= al.min_score_m2 && !score.m2.unmapped_lft)
       {
 
         sam_m1.pnext = sam_m2.pos;
@@ -2014,7 +2015,7 @@ orphan_paired_score_t paired_chain_orphan_score(
           sam_m1.flag |= SAM_MATE_REVERSED | SAM_FIRST_IN_PAIR;
           sam_m2.flag |= SAM_REVERSED | SAM_SECOND_IN_PAIR;
         }
-      }else if(score.m1.score >= al.min_score_m1) {
+      }else if(score.m1.score >= al.min_score_m1 && !score.m1.unmapped_lft) {
         // sam_m1.rname = idx[sam_m1.pos - 1];
         sam_m1.zs = al.score2_m1;
 
@@ -2022,7 +2023,7 @@ orphan_paired_score_t paired_chain_orphan_score(
         sam_m2.flag = SAM_PAIRED | SAM_UNMAPPED | SAM_SECOND_IN_PAIR;
         if(strand)
           sam_m1.flag |= SAM_REVERSED;
-      }else if(score.m2.score >= al.min_score_m2) {
+      }else if(score.m2.score >= al.min_score_m2 && !score.m2.unmapped_lft) {
         // sam_m2.rname = idx[sam_m2.pos - 1];
         sam_m1.zs = al.score2_m2;
 
@@ -2178,7 +2179,7 @@ orphan_paired_score_t paired_chain_orphan_score(
           sam->rname = "*";
           sam->cigar = "*";
           sam->rlen = 0;
-          score.score = 0; // Set score to 0 so the read will result as unmapped
+          score.unmapped_lft = true;
         }
         delete tmp;
         bam_destroy1(bam);
@@ -2194,6 +2195,36 @@ orphan_paired_score_t paired_chain_orphan_score(
     return aligned_reads;
   }
 
+  typedef struct fill_chain_state_t {
+    ksw_extz_t ez_lc;
+    ksw_extz_t ez_rc;
+    ksw_extz_t ez;
+    std::vector<ksw_extz_t> ez_cc;
+
+    fill_chain_state_t(size_t cc_size):
+      ez_cc(cc_size)
+    {
+      memset(&ez_lc, 0, sizeof(ksw_extz_t));
+      memset(&ez_rc, 0, sizeof(ksw_extz_t));
+      memset(&ez, 0, sizeof(ksw_extz_t));
+      for(size_t i = 0; i < cc_size; ++i)
+        memset(&ez_cc[i], 0, sizeof(ksw_extz_t));
+    }
+
+    void del(){
+      if (ez_lc.m_cigar > 0)
+        delete ez_lc.cigar;
+      if (ez_rc.m_cigar > 0)
+        delete ez_rc.cigar;
+      if (ez.m_cigar > 0)
+        delete ez.cigar;
+      for( size_t i = 0; i < ez_cc.size(); ++i )
+        if(ez_cc[i].n_cigar > 0)
+          delete ez_cc[i].cigar;
+    }
+
+
+  } fill_chain_state_t;
 
   // If score_only is true we compute the score of the alignment. 
   // If score_only is false, we extend again the read and we write the result
@@ -2609,7 +2640,7 @@ orphan_paired_score_t paired_chain_orphan_score(
         sam->rname = "*";
         sam->cigar = "*";
         sam->rlen = 0;
-        score.score = 0; // Set score to 0 so the read will result as unmapped
+        score.unmapped_lft = true;
       }
       bam_destroy1(bam);
     
