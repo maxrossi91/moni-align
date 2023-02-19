@@ -75,6 +75,8 @@ typedef struct sam_t{
     std::string lift_md = ""; // MD: String encoding mismatched and deleted reference bases
     size_t lift_rlen = 0; // Length of the match in the referenc. Requiredd to compute TLEN
     
+    bool unmapped_lft = false; // Set if the liftover results in unmapped read
+
     uint32_t *cigar_b = nullptr;
     uint32_t n_cigar;
 
@@ -153,7 +155,7 @@ inline void write_sam(FILE *out, const sam_t s)
     fprintf(out, "*");
 
   // Optional TAGs
-  if (!(s.flag & SAM_UNMAPPED))
+  if (!(s.flag & SAM_UNMAPPED) or s.unmapped_lft)
   {
     fprintf(out, "\tAS:i:%d", s.as); // AS
     fprintf(out, "\tNM:i:%d", s.nm); // NM

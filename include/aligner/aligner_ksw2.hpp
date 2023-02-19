@@ -126,7 +126,7 @@ public:
       int32_t score = 0;
       size_t pos = 0; // Position of the leftmost match of the read in the global reference
       size_t lft = 0; // Position of the lift in the reference coordinates
-      bool unmapped_lft = false; // Set if the liftover result in unmapped read
+      bool unmapped_lft = false; // Set if the liftover results in unmapped read
     } score_t;
 
     /**
@@ -2179,6 +2179,7 @@ orphan_paired_score_t paired_chain_orphan_score(
           sam->rname = "*";
           sam->cigar = "*";
           sam->rlen = 0;
+          sam->unmapped_lft = true;
           score.unmapped_lft = true;
         }
         delete tmp;
@@ -2640,6 +2641,7 @@ orphan_paired_score_t paired_chain_orphan_score(
         sam->rname = "*";
         sam->cigar = "*";
         sam->rlen = 0;
+        sam->unmapped_lft = true;
         score.unmapped_lft = true;
       }
       bam_destroy1(bam);
