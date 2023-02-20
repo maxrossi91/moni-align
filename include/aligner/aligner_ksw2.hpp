@@ -142,7 +142,7 @@ public:
       kseq_t read_rev;
 
       sam_t sam;
-      bam1_t bam;
+      // bam1_t bam;
 
       const size_t min_score;
       score_t score;
@@ -164,10 +164,10 @@ public:
         rc_copy_kseq_t(&read_rev, read);
       }
 
-      void write(samFile* out, const sam_hdr_t *hdr)
-      {
-        sam_write1(out, hdr, &bam);
-      }
+      // void write(samFile* out, const sam_hdr_t *hdr)
+      // {
+      //   sam_write1(out, hdr, &bam);
+      // }
 
       void write(FILE* out)
       {
@@ -186,6 +186,7 @@ public:
       
       ~alignment_t()
       {
+        read = nullptr;
         release_memory();
       }
 
@@ -617,6 +618,8 @@ public:
 
     ~paired_alignment_t()
     {
+      mate1 = nullptr;
+      mate2 = nullptr;
       release_memory();
     }
 
@@ -1622,14 +1625,14 @@ public:
         if(output && !score.unmapped_lft)
         {
           write_sam(out,*sam);
-          delete sam;
+          free(sam);
         }
         
         // fill_chain(mems,chain_anchors,lcs,lcs_len,rcs,rcs_len,read,score_only,0,min_score,strand,out); 
       }
 
-      delete rcs;
-      delete lcs;
+      free(rcs);
+      free(lcs);
 
       return score;
   }
@@ -2101,7 +2104,7 @@ orphan_paired_score_t paired_chain_orphan_score(
       bool is_valid = idx.valid(start, end-start+1);
       if (not is_valid)
         score.score = std::numeric_limits<int32_t>::min();
-      delete q;
+      free(q);
     }
 
 
@@ -2173,7 +2176,7 @@ orphan_paired_score_t paired_chain_orphan_score(
           score.score = ez.score;
           score.pos = ref_occ;
           score.pos = start;
-          delete l_ref;
+          free(l_ref);
         }  else { // Read is unmapped because it align on an insertion of length > readlength
           sam->pos = 0;
           sam->rname = "*";
@@ -2182,12 +2185,12 @@ orphan_paired_score_t paired_chain_orphan_score(
           sam->unmapped_lft = true;
           score.unmapped_lft = true;
         }
-        delete tmp;
+        free(tmp);
         bam_destroy1(bam);
     }
 
-    delete ref;
-    delete seq;
+    free(ref);
+    free(seq);
     return score;  
   }
 
@@ -2214,14 +2217,14 @@ orphan_paired_score_t paired_chain_orphan_score(
 
     void del(){
       if (ez_lc.m_cigar > 0)
-        delete ez_lc.cigar;
+        free(ez_lc.cigar);
       if (ez_rc.m_cigar > 0)
-        delete ez_rc.cigar;
+        free(ez_rc.cigar);
       if (ez.m_cigar > 0)
-        delete ez.cigar;
+        free(ez.cigar);
       for( size_t i = 0; i < ez_cc.size(); ++i )
         if(ez_cc[i].n_cigar > 0)
-          delete ez_cc[i].cigar;
+          free(ez_cc[i].cigar);
     }
 
 
@@ -2285,7 +2288,7 @@ orphan_paired_score_t paired_chain_orphan_score(
       for (size_t i = 0; i < lc_len; ++i)
         lc[lc_len -i -1] = seq_nt4_table[(int)tmp_lc[i]];
       
-      delete tmp_lc;
+      free(tmp_lc);
 
       // Query: lcs
       // Target: lc
@@ -2299,7 +2302,7 @@ orphan_paired_score_t paired_chain_orphan_score(
       // std::string blc = print_BLAST_like((uint8_t*)lc,(uint8_t*)lcs,ez_lc.cigar,ez_lc.n_cigar);
       // std::cout<<blc;
 
-      delete lc;
+      free(lc);
     }
 
     // rc: right context of the last mem
@@ -2330,7 +2333,7 @@ orphan_paired_score_t paired_chain_orphan_score(
 
       // std::string brc = print_BLAST_like((uint8_t*)rc,(uint8_t*)rcs,ez_rc.cigar,ez_rc.n_cigar);
       // std::cout<<brc;
-      delete rc;
+      free(rc);
     }
 
 
@@ -2635,7 +2638,7 @@ orphan_paired_score_t paired_chain_orphan_score(
         sam->nm = write_MD_core((uint8_t *)l_ref, seq, lft_cigar, bam->core.n_cigar, tmp, 0, sam->md);
         sam->rlen = ref_len;
 
-        delete l_ref;
+        free(l_ref);
       } else { // Read is unmapped because it align on an insertion of length > readlength
         sam->pos = 0;
         sam->rname = "*";
@@ -2649,21 +2652,21 @@ orphan_paired_score_t paired_chain_orphan_score(
 
 
 
-      delete cigar;
-      delete tmp;
+      free(cigar);
+      free(tmp);
     }
-    delete ref;
-    delete seq;
+    free(ref);
+    free(seq);
 
     if (ez_lc.m_cigar > 0)
-      delete ez_lc.cigar;
+      free(ez_lc.cigar);
     if (ez_rc.m_cigar > 0)
-      delete ez_rc.cigar;
+      free(ez_rc.cigar);
     if (ez.m_cigar > 0)
-      delete ez.cigar;
+      free(ez.cigar);
     for( size_t i = 0; i < ez_cc.size(); ++i )
       if(ez_cc[i].n_cigar > 0)
-        delete ez_cc[i].cigar;
+        free(ez_cc[i].cigar);
 
     return score;
   }

@@ -80,19 +80,20 @@ typedef struct sam_t{
     uint32_t *cigar_b = nullptr;
     uint32_t n_cigar;
 
-    // Quind the sam_t struct for a read
+    // Build the sam_t struct for a read
     sam_t(const kseq_t* read_)
     {
         read = read_;
     }
-    // Quind the sam_t struct for a read
+    // Build the sam_t struct for a read
     sam_t(){}
 
     // Destructor
     ~sam_t()
     {
+      read = nullptr;
       if( cigar_b != nullptr )
-        delete cigar_b;
+        free(cigar_b);
     }
 
     // Validate sam 

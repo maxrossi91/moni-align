@@ -278,9 +278,6 @@ void dispatcher(Args &args){
   verbose("Memory peak: ", malloc_count_peak());
   verbose("Elapsed time (s): ", std::chrono::duration<double, std::ratio<1>>(t_insert_end - t_insert_start).count());
 
-  auto mem_peak = malloc_count_peak();
-  verbose("Memory peak: ", malloc_count_peak());
-
 }
 
 int main(int argc, char *const argv[])
