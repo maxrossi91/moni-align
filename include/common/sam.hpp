@@ -75,22 +75,25 @@ typedef struct sam_t{
     std::string lift_md = ""; // MD: String encoding mismatched and deleted reference bases
     size_t lift_rlen = 0; // Length of the match in the referenc. Requiredd to compute TLEN
     
+    bool unmapped_lft = false; // Set if the liftover results in unmapped read
+
     uint32_t *cigar_b = nullptr;
     uint32_t n_cigar;
 
-    // Quind the sam_t struct for a read
+    // Build the sam_t struct for a read
     sam_t(const kseq_t* read_)
     {
         read = read_;
     }
-    // Quind the sam_t struct for a read
+    // Build the sam_t struct for a read
     sam_t(){}
 
     // Destructor
     ~sam_t()
     {
+      read = nullptr;
       if( cigar_b != nullptr )
-        delete cigar_b;
+        free(cigar_b);
     }
 
     // Validate sam 
@@ -153,7 +156,7 @@ inline void write_sam(FILE *out, const sam_t s)
     fprintf(out, "*");
 
   // Optional TAGs
-  if (!(s.flag & SAM_UNMAPPED))
+  if (!(s.flag & SAM_UNMAPPED) or s.unmapped_lft)
   {
     fprintf(out, "\tAS:i:%d", s.as); // AS
     fprintf(out, "\tNM:i:%d", s.nm); // NM
@@ -255,9 +258,10 @@ inline void write_sam(FILE *out, const sam_t s)
         q_off += len;
         NM += len;
       } else if (op == 2) { // deletion from ref
-        for (j = 0, tmp[len] = 0; j < len; ++j)
-          tmp[j] = "ACGTN"[tseq[t_off + j]];
-        mdz += std::to_string(l_MD) + "^" + std::string(tmp);
+        std::string tmp(len,0);
+        mdz += std::to_string(l_MD) + "^";
+        for (j = 0; j < len; ++j)
+          mdz.push_back("ACGTN"[tseq[t_off + j]]);
         // printf("%d^%s", l_MD, tmp);
         l_MD = 0;
         t_off += len;

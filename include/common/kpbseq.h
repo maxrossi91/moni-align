@@ -64,17 +64,17 @@ static inline size_t get_file_size(std::string filename)
     return size;
 }
 
-static inline std::string to_string(kstring_t &s)
+static inline std::string to_string(const kstring_t &s)
 {
     return std::string(s.s, s.l);
 }
 
-static inline void ks_print(kseq_t *seq)
+static inline void ks_print(const kseq_t *seq)
 {
-    std::cout << "Name: " << to_string(seq->name)
+    std::cout << "Name:    " << to_string(seq->name)
               << "\nComment: " << to_string(seq->comment)
-              << "\nSeq:  " << to_string(seq->seq)
-              << "\nQual: " << to_string(seq->qual)
+              << "\nSeq:     " << to_string(seq->seq)
+              << "\nQual:    " << to_string(seq->qual)
               << std::endl;
 }
 
@@ -276,8 +276,8 @@ inline static size_t kbseq_read(kbseq_t *b, kseq_t *seq, size_t n)
 inline static void kbseq_destroy(kbseq_t *b)
 {
     kbseq_reset(b);
-    delete[] b->buf;
-    delete b;
+    free(b->buf);
+    free(b);
 }
 
 /**
@@ -332,7 +332,7 @@ inline static void kpbseq_destroy(kpbseq_t *p)
 {
     kbseq_destroy(p->mate1);
     kbseq_destroy(p->mate2);
-    delete p;
+    free(p);
 }
 
 inline static void kpbseq_reset(kpbseq_t *p)

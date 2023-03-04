@@ -140,6 +140,7 @@ void *mt_align_worker(void *param)
         stats.processed_reads++;
       }
       // std::cout << "Block p " << p->wk_id << " end!" << std::endl;
+      if(stats.processed_reads % 10000 == 0) std::cout << ".";
     }
     kbseq_destroy(b);
   }
@@ -176,6 +177,7 @@ void *mt_align_worker(void *param)
       else
       {
         stats += p->aligner->align(b, sam_fd);
+        if(stats.processed_reads % 10000 == 0) std::cout << ".";
       }
     }
 
@@ -327,6 +329,7 @@ statistics_t st_align(aligner_t *aligner, std::string pattern_filename, std::str
         if (aligner->align(&b->buf[i], sam_fd))
           stats.aligned_reads++;
         stats.processed_reads++;
+        if(stats.processed_reads % 10000 == 0) std::cout << ".";
       }
     }
     kbseq_destroy(b);
@@ -360,6 +363,7 @@ statistics_t st_align(aligner_t *aligner, std::string pattern_filename, std::str
       else
       {
         stats += aligner->align(b,sam_fd);
+        if(stats.processed_reads % 10000 == 0) std::cout << ".";
       }
     }
     if ((stats.processed_reads - pn_reads) > 1000000) {
