@@ -258,9 +258,10 @@ inline void write_sam(FILE *out, const sam_t s)
         q_off += len;
         NM += len;
       } else if (op == 2) { // deletion from ref
-        for (j = 0, tmp[len] = 0; j < len; ++j)
-          tmp[j] = "ACGTN"[tseq[t_off + j]];
-        mdz += std::to_string(l_MD) + "^" + std::string(tmp);
+        std::string tmp(len,0);
+        mdz += std::to_string(l_MD) + "^";
+        for (j = 0; j < len; ++j)
+          mdz.push_back("ACGTN"[tseq[t_off + j]]);
         // printf("%d^%s", l_MD, tmp);
         l_MD = 0;
         t_off += len;

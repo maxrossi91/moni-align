@@ -2116,7 +2116,7 @@ orphan_paired_score_t paired_chain_orphan_score(
         ksw_extz_t ez;
         memset(&ez, 0, sizeof(ksw_extz_t));
 
-        char* tmp = (char*)calloc(max(ref_len,seq_len),1);
+        // char* tmp = (char*)calloc(max(ref_len,seq_len),1);
 
         ksw_reset_extz(&ez);
         // ksw_extd2_sse(km, seq_len, (uint8_t *)seq, ref_len, (uint8_t*)ref, m, mat, gapo, gape, gapo2, gape2, w, zdrop, end_bonus, flag, &ez);
@@ -2135,7 +2135,7 @@ orphan_paired_score_t paired_chain_orphan_score(
         // std::memcopy(sam->cigar_b, ez.cigar, ez.n_cigar * sizeof(uint32_t));
 
         // Compute the MD:Z field and the number of mismatches
-        sam->lift_nm = write_MD_core((uint8_t *)ref, seq, ez.cigar, ez.n_cigar, tmp, 0, sam->lift_md);
+        sam->lift_nm = write_MD_core((uint8_t *)ref, seq, ez.cigar, ez.n_cigar, nullptr, 0, sam->lift_md);
 
         const auto ref = idx.index(ref_occ);
         sam->as = ez.score;
@@ -2170,7 +2170,7 @@ orphan_paired_score_t paired_chain_orphan_score(
           for (size_t i = 0; i < ref_len; ++i)
             l_ref[i] = seq_nt4_table[(int)l_ref[i]];
           // Compute the MD:Z field and the number of mismatches
-          sam->nm = write_MD_core((uint8_t *)l_ref, seq, cigar, bam->core.n_cigar, tmp, 0, sam->md);
+          sam->nm = write_MD_core((uint8_t *)l_ref, seq, cigar, bam->core.n_cigar, nullptr, 0, sam->md);
           sam->rlen = ref_len;
 
           score.score = ez.score;
@@ -2185,7 +2185,7 @@ orphan_paired_score_t paired_chain_orphan_score(
           sam->unmapped_lft = true;
           score.unmapped_lft = true;
         }
-        free(tmp);
+        // free(tmp);
         bam_destroy1(bam);
     }
 
@@ -2481,7 +2481,7 @@ orphan_paired_score_t paired_chain_orphan_score(
     {
       // Compute starting position in reference
 
-      char* tmp = (char*)calloc(max(ref_len,seq_len),1);
+      // char* tmp = (char*)calloc(max(ref_len,seq_len),1);
 
       size_t n_cigar = 0;
       uint32_t *cigar = nullptr;
@@ -2601,7 +2601,7 @@ orphan_paired_score_t paired_chain_orphan_score(
       // std::memcopy(sam->cigar_b, cigar, n_cigar * sizeof(uint32_t));
 
       // Compute the MD:Z field and the number of mismatches
-      sam->lift_nm = write_MD_core((uint8_t*)ref,seq,cigar,n_cigar,tmp,0,sam->lift_md);
+      sam->lift_nm = write_MD_core((uint8_t*)ref,seq,cigar,n_cigar,nullptr,0,sam->lift_md);
 
       const auto ref = idx.index(ref_pos);
       sam->as = score.score;
@@ -2635,7 +2635,7 @@ orphan_paired_score_t paired_chain_orphan_score(
         for (size_t i = 0; i < ref_len; ++i)
           l_ref[i] = seq_nt4_table[(int)l_ref[i]];
         // Compute the MD:Z field and the number of mismatches
-        sam->nm = write_MD_core((uint8_t *)l_ref, seq, lft_cigar, bam->core.n_cigar, tmp, 0, sam->md);
+        sam->nm = write_MD_core((uint8_t *)l_ref, seq, lft_cigar, bam->core.n_cigar, nullptr, 0, sam->md);
         sam->rlen = ref_len;
 
         free(l_ref);
@@ -2653,7 +2653,7 @@ orphan_paired_score_t paired_chain_orphan_score(
 
 
       free(cigar);
-      free(tmp);
+      // free(tmp);
     }
     free(ref);
     free(seq);
