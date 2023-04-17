@@ -1789,6 +1789,14 @@ public:
           sam_m2.flag = SAM_PAIRED | SAM_UNMAPPED | SAM_SECOND_IN_PAIR;
           if(strand)
             sam_m1.flag |= SAM_REVERSED;
+
+          // Using GATK unmapped mate convention: https://gatk.broadinstitute.org/hc/en-us/articles/360035891031-Mate-unmapped-records
+          sam_m2.rname = sam_m1.rname;
+          sam_m2.pos = sam_m1.pos;
+          sam_m2.mapq = sam_m1.mapq;
+          sam_m2.cigar = "*";
+          sam_m2.pnext = sam_m1.pnext = sam_m1.pos;
+          sam_m2.tlen = sam_m1.tlen = 0;
         }else if(score.m2.score >= al.min_score_m2 && !score.m2.unmapped_lft) {
           sam_m2.rname = idx[sam_m2.pos - 1];
           sam_m1.zs = al.score2_m2;
@@ -1797,6 +1805,14 @@ public:
           sam_m2.flag = SAM_PAIRED | SAM_MATE_UNMAPPED | SAM_SECOND_IN_PAIR;
           if(not strand)
             sam_m2.flag |= SAM_REVERSED;
+
+          // Using GATK unmapped mate convention: https://gatk.broadinstitute.org/hc/en-us/articles/360035891031-Mate-unmapped-records
+          sam_m1.rname = sam_m2.rname;
+          sam_m1.pos = sam_m2.pos;
+          sam_m1.mapq = sam_m2.mapq;
+          sam_m1.cigar = "*";
+          sam_m1.pnext = sam_m2.pnext = sam_m2.pos;
+          sam_m1.tlen = sam_m2.tlen = 0;
         }else {
           sam_m1.flag = sam_m2.flag = SAM_PAIRED | SAM_UNMAPPED | SAM_MATE_UNMAPPED;
         }
@@ -2026,6 +2042,15 @@ orphan_paired_score_t paired_chain_orphan_score(
         sam_m2.flag = SAM_PAIRED | SAM_UNMAPPED | SAM_SECOND_IN_PAIR;
         if(strand)
           sam_m1.flag |= SAM_REVERSED;
+
+        // Using GATK unmapped mate convention: https://gatk.broadinstitute.org/hc/en-us/articles/360035891031-Mate-unmapped-records
+        sam_m2.rname   = sam_m1.rname;
+        sam_m2.pos   = sam_m1.pos;
+        sam_m2.mapq  = sam_m1.mapq;
+        sam_m2.cigar = "*";
+        sam_m2.pnext = sam_m1.pnext = sam_m1.pos;
+        sam_m2.tlen  = sam_m1.tlen = 0;
+
       }else if(score.m2.score >= al.min_score_m2 && !score.m2.unmapped_lft) {
         // sam_m2.rname = idx[sam_m2.pos - 1];
         sam_m1.zs = al.score2_m2;
@@ -2034,6 +2059,14 @@ orphan_paired_score_t paired_chain_orphan_score(
         sam_m2.flag = SAM_PAIRED | SAM_MATE_UNMAPPED | SAM_SECOND_IN_PAIR;
         if(not strand)
           sam_m2.flag |= SAM_REVERSED;
+
+        // Using GATK unmapped mate convention: https://gatk.broadinstitute.org/hc/en-us/articles/360035891031-Mate-unmapped-records
+        sam_m1.rname = sam_m2.rname;
+        sam_m1.pos = sam_m2.pos;
+        sam_m1.mapq = sam_m2.mapq;
+        sam_m1.cigar = "*";
+        sam_m1.pnext = sam_m2.pnext = sam_m2.pos;
+        sam_m1.tlen = sam_m2.tlen = 0;
       }else {
         sam_m1.flag = sam_m2.flag = SAM_PAIRED | SAM_UNMAPPED | SAM_MATE_UNMAPPED;
       }
