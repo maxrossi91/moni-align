@@ -155,6 +155,23 @@ int main(int argc, char *const argv[])
   // for(size_t i = 48126296; i < 48126395; ++i)
   //   verbose("Lifting position ", i, ": ", lift.lift(i));
 
+  const auto names = lift.get_names();
+  size_t len = 0;
+  for (size_t i = 0; i < names.size(); len+=lift.length(i)+10, ++i)
+  {
+    const auto pos = len;
+    const auto lpos = lift.lift(pos);
+    const auto lft_ref = lift.index(lpos);
+    verbose("Lifting position ", pos, " in ", names[i], ": ", lpos, " corresponding to: ", lft_ref.second + 1, " in ", lft_ref.first);
+    if (names[i] == "HG01358_H2_chr21")
+    {
+      const auto pos = len + 29312633;
+      const auto lpos = lift.lift(pos);
+      const auto lft_ref = lift.index(lpos);
+      verbose("Lifting position ", pos, " in ", names[i], ": ", lpos, " corresponding to: ", lft_ref.second + 1, " in ", lft_ref.first);
+    }
+  }
+
   auto mem_peak = malloc_count_peak();
   verbose("Memory peak: ", malloc_count_peak());
 

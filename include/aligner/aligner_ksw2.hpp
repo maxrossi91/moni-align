@@ -643,7 +643,7 @@ public:
       // paired_alignment_t alignment(&batch->mate1->buf[i], &batch->mate2->buf[i]);
       paired_alignment_t& alignment = alignments[i];
       alignment.init(&batch->mate1->buf[i], &batch->mate2->buf[i]);
-      if(align(alignment, false) and ((not alignment.second_best_score) or (alignment.best_scores[0].tot - alignment.best_scores[1].tot > ins_learning_score_gap_threshold)))
+      if(align(alignment, false) and ((not alignment.second_best_score) or ((alignment.best_scores[0].tot - alignment.best_scores[1].tot) > ins_learning_score_gap_threshold)))
       {
         // Get stats
         // mate_abs_distance.push_back((double)(alignment.sam_m1.tlen >= 0?alignment.sam_m1.tlen :-alignment.sam_m1.tlen));
@@ -2208,7 +2208,7 @@ orphan_paired_score_t paired_chain_orphan_score(
 
           score.score = ez.score;
           score.pos = ref_occ;
-          score.pos = start;
+          // score.pos = start;
           free(l_ref);
         }  else { // Read is unmapped because it align on an insertion of length > readlength
           sam->pos = 0;
@@ -2671,6 +2671,9 @@ orphan_paired_score_t paired_chain_orphan_score(
         sam->nm = write_MD_core((uint8_t *)l_ref, seq, lft_cigar, bam->core.n_cigar, nullptr, 0, sam->md);
         sam->rlen = ref_len;
 
+        score.score = ez.score;
+        score.pos = ref_pos;
+
         free(l_ref);
       } else { // Read is unmapped because it align on an insertion of length > readlength
         sam->pos = 0;
@@ -2762,7 +2765,7 @@ protected:
     size_t ins_count = 0;     // The standard deviation of the insert size distribution.
     bool ins_learning_complete = false;
     size_t ins_learning_n = 1000; // Number of unique alignments required to learn the insert size distribution
-    size_t ins_learning_score_gap_threshold = 25;
+    size_t ins_learning_score_gap_threshold = 0;
     std::mutex __ins_mtx;
 
 
