@@ -1753,14 +1753,16 @@ public:
           if (sam_m2.pos > sam_m1.pos)
           {
             tlen = (sam_m2.pos + mate2->seq.l) - sam_m1.pos;
+            sam_m1.tlen = tlen;
+            sam_m2.tlen = -tlen;
           }
           else
           {
             tlen = (sam_m1.pos + mate1->seq.l) - sam_m2.pos;
+            sam_m1.tlen = -tlen;
+            sam_m2.tlen = tlen;
           }
            
-          sam_m1.tlen = tlen;
-          sam_m2.tlen = -tlen;
 
           //sam_m1.rname = idx[sam_m1.pos - 1]; // Check if necessary [This is causing the discrepency between OA Ref and Ref. Anyways REF already calculated by fill_chain function]
           //sam_m2.rname = idx[sam_m2.pos - 1];
@@ -2014,14 +2016,16 @@ orphan_paired_score_t paired_chain_orphan_score(
         if (sam_m2.pos > sam_m1.pos)
         {
           tlen = (sam_m2.pos + mate2->seq.l) - sam_m1.pos;
+          sam_m1.tlen = tlen;
+          sam_m2.tlen = -tlen;
         }
         else
         {
           tlen = (sam_m1.pos + mate1->seq.l) - sam_m2.pos;
+          sam_m1.tlen = -tlen;
+          sam_m2.tlen = tlen;
         }
 
-        sam_m1.tlen = tlen;
-        sam_m2.tlen = -tlen;
 
         // sam_m1.rname = idx[sam_m1.pos - 1];
         // sam_m2.rname = idx[sam_m2.pos - 1];
