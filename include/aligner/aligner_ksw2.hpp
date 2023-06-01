@@ -1749,13 +1749,23 @@ public:
           sam_m1.pnext = sam_m2.pos;
           sam_m2.pnext = sam_m1.pos;
 
-          ll tlen = (sam_m2.pos + mate2->seq.l) - sam_m1.pos;
+          ll tlen;
+          if (sam_m2.pos > sam_m1.pos)
+          {
+            tlen = (sam_m2.pos + mate2->seq.l) - sam_m1.pos;
+            sam_m1.tlen = tlen;
+            sam_m2.tlen = -tlen;
+          }
+          else
+          {
+            tlen = (sam_m1.pos + mate1->seq.l) - sam_m2.pos;
+            sam_m1.tlen = -tlen;
+            sam_m2.tlen = tlen;
+          }
+           
 
-          sam_m1.tlen = tlen;
-          sam_m2.tlen = -tlen;
-
-          sam_m1.rname = idx[sam_m1.pos - 1]; // Check if necessary
-          sam_m2.rname = idx[sam_m2.pos - 1];
+          //sam_m1.rname = idx[sam_m1.pos - 1]; // Check if necessary [This is causing the discrepency between OA Ref and Ref. Anyways REF already calculated by fill_chain function]
+          //sam_m2.rname = idx[sam_m2.pos - 1];
 
           // size_t mapq = compute_mapq(score.tot, score2, al.min_score, (sam_m1.read->seq.l + sam_m2.read->seq.l) * smatch);
           // sam_m1.mapq = mapq;
@@ -1782,7 +1792,7 @@ public:
             sam_m2.flag |= SAM_REVERSED | SAM_SECOND_IN_PAIR;
           }
         }else if(score.m1.score >= al.min_score_m1 && !score.m1.unmapped_lft) {
-          sam_m1.rname = idx[sam_m1.pos - 1];
+          //sam_m1.rname = idx[sam_m1.pos - 1]; //Do not need since calculated in fill_chain function
           sam_m1.zs = al.score2_m1;
           
           sam_m1.flag = SAM_PAIRED | SAM_MATE_UNMAPPED | SAM_FIRST_IN_PAIR;
@@ -1798,7 +1808,7 @@ public:
           sam_m2.pnext = sam_m1.pnext = sam_m1.pos;
           sam_m2.tlen = sam_m1.tlen = 0;
         }else if(score.m2.score >= al.min_score_m2 && !score.m2.unmapped_lft) {
-          sam_m2.rname = idx[sam_m2.pos - 1];
+          //sam_m2.rname = idx[sam_m2.pos - 1]; //Do not need since calculated in fill_chain function
           sam_m1.zs = al.score2_m2;
 
           sam_m1.flag = SAM_PAIRED | SAM_UNMAPPED | SAM_FIRST_IN_PAIR;
@@ -2002,10 +2012,20 @@ orphan_paired_score_t paired_chain_orphan_score(
         sam_m1.pnext = sam_m2.pos;
         sam_m2.pnext = sam_m1.pos;
 
-        ll tlen = (sam_m2.pos + mate2->seq.l) - sam_m1.pos;
+        ll tlen;
+        if (sam_m2.pos > sam_m1.pos)
+        {
+          tlen = (sam_m2.pos + mate2->seq.l) - sam_m1.pos;
+          sam_m1.tlen = tlen;
+          sam_m2.tlen = -tlen;
+        }
+        else
+        {
+          tlen = (sam_m1.pos + mate1->seq.l) - sam_m2.pos;
+          sam_m1.tlen = -tlen;
+          sam_m2.tlen = tlen;
+        }
 
-        sam_m1.tlen = tlen;
-        sam_m2.tlen = -tlen;
 
         // sam_m1.rname = idx[sam_m1.pos - 1];
         // sam_m2.rname = idx[sam_m2.pos - 1];
