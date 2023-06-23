@@ -42,153 +42,6 @@ int unique_mems[10] = {37, 27, 24, 17, 18, 12, 36, 16, 36, 12};
 
 TEST_CASE("MEM Testing", "[mems]")
 {   
-    typedef struct paired_alignment_t
-    {
-        bool aligned = false;
-        bool chained = false;
-        bool best_score = false;
-        bool second_best_score = false;
-
-        kseq_t* mate1 = nullptr;
-        kseq_t* mate2 = nullptr;
-
-        kseq_t mate1_rev;
-        kseq_t mate2_rev;
-
-        sam_t sam_m1;
-        sam_t sam_m2;
-
-        // TODO: precompute the nt4 version of the mates
-
-        int32_t min_score_m1 = 0;
-        int32_t min_score_m2 = 0;
-        int32_t min_score = 0;
-        //paired_score_t score;
-        int32_t score2 = 0;
-        int32_t score2_m1 = 0;
-        int32_t score2_m2 = 0;
-
-        float frac_rep_m1 = 0.0;
-        float frac_rep_m2 = 0.0;
-        int sub_n = 0; // approximate number of suboptimal hits
-
-        float mean = 0.0;
-        float std_dev = 0.0;
-
-        // Stats
-        size_t n_seeds_dir1 = 0; // Number of seeds MATE1 MATE2_RC
-        size_t n_seeds_dir2 = 0; // Number of seeds MATE2 MATE1_RC
-        size_t n_mems_dir1 = 0; // Number of MEMs MATE1 MATE2_RC
-        size_t n_mems_dir2 = 0; // Number of MEMs MATE2 MATE1_RC
-        double avg_seed_length_dir1 = 0.0; // Average seed length MATE1 MATE2_RC
-        double avg_seed_length_dir2 = 0.0;   // Average seed length  MATE2 MATE1_RC
-        double avg_w_seed_length_dir1 = 0.0; // Average weighted seed length MATE1 MATE2_RC
-        double avg_w_seed_length_dir2 = 0.0;   // Average weighted seed length  MATE2 MATE1_RC
-        double armonic_avg_seed_length_dir1 = 0.0; // Average weighted seed length MATE1 MATE2_RC
-        double armonic_avg_seed_length_dir2 = 0.0; // Average weighted seed length  MATE2 MATE1_RC
-
-        std::vector<mem_t> mems;
-        std::vector<std::pair<size_t, size_t>> anchors;
-        std::vector<chain_t> chains;
-        // (0) score (1) lift m1 (2) lift m2 (3) index in chains list (4) score m1 (5) score m2
-        // std::vector<std::tuple<int32_t, size_t, size_t, size_t, size_t, size_t>> best_scores;
-        //std::vector<paired_score_t> best_scores;
-        
-        paired_alignment_t(kseq_t *mate1_, kseq_t *mate2_, double mean_ = 0.0, double std_dev_ = 0.0) : 
-        mate1(mate1_),
-        mate2(mate2_),
-        sam_m1(mate1),
-        sam_m2(mate2),
-        min_score_m1(20 + 8 * log(mate1->seq.l)),
-        min_score_m2(20 + 8 * log(mate2->seq.l)),
-        min_score(min_score_m1 + min_score_m2),
-        mean(mean_),
-        std_dev(std_dev_)
-        {
-        // TODO: Add parameter to decide whether the slash mate has to be removed
-        remove_slash_mate(mate1);
-        remove_slash_mate(mate2);
-
-        rc_copy_kseq_t(&mate1_rev, mate1);
-        rc_copy_kseq_t(&mate2_rev, mate2);
-
-        // Initialize SAM infos
-        // Fill sam fields RNEXT
-        if(strcmp(mate1->name.s, mate2->name.s) == 0)
-        {
-            sam_m1.rnext = "=";
-            sam_m2.rnext = "=";
-        }
-        else
-        {
-            sam_m1.rnext = std::string(mate2->name.s);
-            sam_m2.rnext = std::string(mate1->name.s);
-        }
-
-        }
-
-        paired_alignment_t() {}
-        
-        void init(kseq_t *mate1_, kseq_t *mate2_, double mean_ = 0.0, double std_dev_ = 0.0)
-        {
-            mate1 = mate1_;
-            mate2 = mate2_;
-            sam_m1 = sam_t(mate1);
-            sam_m2 = sam_t(mate2);
-            min_score_m1 = 20 + 8 * log(mate1->seq.l);
-            min_score_m2 = 20 + 8 * log(mate2->seq.l);
-            min_score = min_score_m1 + min_score_m2;
-            mean = mean_;
-            std_dev = std_dev_;
-            // TODO: Add parameter to decide whether the slash mate has to be removed
-            remove_slash_mate(mate1);
-            remove_slash_mate(mate2);
-
-            rc_copy_kseq_t(&mate1_rev, mate1);
-            rc_copy_kseq_t(&mate2_rev, mate2);
-
-            // Initialize SAM infos
-            // Fill sam fields RNEXT
-            if(strcmp(mate1->name.s, mate2->name.s) == 0)
-            {
-                sam_m1.rnext = "=";
-                sam_m2.rnext = "=";
-            }
-            else
-            {
-                sam_m1.rnext = std::string(mate2->name.s);
-                sam_m2.rnext = std::string(mate1->name.s);
-            }
-
-        }
-
-        void write(FILE* out)
-        {
-            write_sam(out, sam_m1);
-            write_sam(out, sam_m2);
-        }
-
-        void set_sam_not_aligned()
-        {
-            sam_m1.flag = sam_m2.flag = SAM_PAIRED | SAM_UNMAPPED | SAM_MATE_UNMAPPED;
-        }
-
-        void release_memory()
-        {
-            free_kseq_t(&mate1_rev);
-            free_kseq_t(&mate2_rev);
-        }
-
-        ~paired_alignment_t()
-        {
-            mate1 = nullptr;
-            mate2 = nullptr;
-            release_memory();
-        }
-
-    } paired_alignment_t;
-
-    //*************************** Start Testing **************************************
     kseq_t *mate1 = nullptr;
     kseq_t *mate2 = nullptr;
 
@@ -214,12 +67,12 @@ TEST_CASE("MEM Testing", "[mems]")
     l = kpbseq_read(b, mate1, mate2, b_size);
     REQUIRE(l == b_size);
    
-    std::vector<std::vector<paired_alignment_t>> alignments;
+    std::vector<std::vector<aligner<seed_finder<plain_slp_t, ms_pointers<>>>::paired_alignment_t>> alignments;
     std::vector<kpbseq_t *> memo;
 
     memo.push_back(kpbseq_init());
     copy_kpbseq_t(memo.back(), b);
-    alignments.push_back(std::vector<paired_alignment_t>(l));
+    alignments.push_back(std::vector<aligner<seed_finder<plain_slp_t, ms_pointers<>>>::paired_alignment_t>(l));
     kpbseq_t *batch = memo.back();
 
     verbose("Initializing the MEM finder object");
@@ -228,7 +81,7 @@ TEST_CASE("MEM Testing", "[mems]")
     int num_reads = batch->mate1->l;
     for (size_t i = 0; i < num_reads; ++i)
     {
-        paired_alignment_t& alignment = alignments.back()[i];
+        aligner<seed_finder<plain_slp_t, ms_pointers<>>>::paired_alignment_t& alignment = alignments.back()[i];
         alignment.init(&batch->mate1->buf[i], &batch->mate2->buf[i]);
         verbose("Processing read: ", std::string(alignment.mate1->name.s));
         mem_finder.find_seeds(alignment.mate1, alignment.mems, 0, MATE_1 | MATE_F);
