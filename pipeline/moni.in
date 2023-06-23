@@ -509,7 +509,7 @@ def query_helper(args, exe, exe_name):
         mate1=args.mate1, mate2=args.mate2, th=args.threads)
 
   if exe_name == "MONI" or exe_name == "MONI-EXTEND":
-    command += " -b {} -A {} -B {} -O {} -E {} -L {} ".format(args.batch,args.smatch, args.smismatch, args.gapo, args.gape, args.extl)
+    command += " -b {} -A {} -B {} -O {} -E {} -L {} -l {}".format(args.batch,args.smatch, args.smismatch, args.gapo, args.gape, args.extl, args.minl)
   
   if exe_name == "MONI":
     if args.dir_dis:
@@ -719,6 +719,7 @@ def main():
   extend_parser.add_argument('-t', '--threads',   help='number of helper threads', default=1, type=int)
   extend_parser.add_argument('-b', '--batch',     help='number of reads per thread batch', default=100, type=int)
   extend_parser.add_argument('-g', '--grammar',   help='select the grammar [plain, shaped]', type=str, default='plain')
+  extend_parser.add_argument('-l', '--minl',       help='minimum seed length', type=int, default=25)
   extend_parser.add_argument('-L', '--extl',      help='length of reference substring for extension', type=int, default=100)
   extend_parser.add_argument('-A', '--smatch',    help='match score value', type=int, default=2)
   extend_parser.add_argument('-B', '--smismatch', help='mismatch penalty value', type=int, default=4)
@@ -735,6 +736,7 @@ def main():
   align_parser.add_argument('-t', '--threads',    help='number of helper threads', default=1, type=int)
   align_parser.add_argument('-b', '--batch',      help='number of reads per thread batch', default=512, type=int)
   align_parser.add_argument('-g', '--grammar',    help='select the grammar (only for moni and phoni) [plain, shaped]', type=str, default='plain')
+  align_parser.add_argument('-l', '--minl',       help='minimum seed length', type=int, default=25)
   align_parser.add_argument('-L', '--extl',       help='length of reference substring for extension', type=int, default=100)
   align_parser.add_argument('-A', '--smatch',     help='match score value', type=int, default=2)
   align_parser.add_argument('-B', '--smismatch',  help='mismatch penalty value', type=int, default=4)
