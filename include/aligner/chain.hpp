@@ -210,8 +210,8 @@ bool find_chains(
         if( n_pred > 0) --n_pred;
         }
         else // minimap2: If i is chained wth j, than chaining i with a predecessor of j does not improve the score
-        if (t[j] == i and (++n_pred > max_pred))            
-            break;
+        if (mate_i == mate_j and t[j] == i and (++n_pred > max_pred))
+                continue;
         
         if(p[j] > 0) t[p[j]] = i;
     }
@@ -272,7 +272,7 @@ bool find_chains(
         do {
             chain.paired = chain.paired or (chain.mate != mems[anchors[j].first].mate);
             chain.anchors.push_back(j); // stores th reverse of the chain
-            t[j] = 1;
+            // t[j] = 1;
             j = p[j];
         } while (j >= 0 && t[j] == 0);
         if (j < 0) { // l - prev_l is the length of the chain
