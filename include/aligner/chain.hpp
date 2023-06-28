@@ -94,9 +94,9 @@ bool find_chains(
     // std::vector< std::pair< size_t, size_t > > anchors;
     for(size_t i = 0; i < mems.size(); ++i)
     {
-    for(size_t j = 0; j < mems[i].occs.size(); ++j)
-        anchors.push_back(make_pair(i,j));
-    tot_mem_length +=  mems[i].len * mems[i].occs.size();
+        for(size_t j = 0; j < mems[i].occs.size(); ++j)
+            anchors.push_back(make_pair(i,j));
+        tot_mem_length +=  mems[i].len * mems[i].occs.size();
     }
 
     float avg_mem_length = (float)tot_mem_length / anchors.size();
@@ -127,101 +127,166 @@ bool find_chains(
 
 
     std::vector<ll> f(anchors.size(),0); // Score ending in position i
+    std::vector<ll> f_sec(anchors.size(),0); //Secondary score ending in position i
+
     std::vector<ll> p(anchors.size(),0); // Position of the next anchor giving the max when chained with the one in position i
+    std::vector<ll> p_sec(anchors.size(),0); // Position of the next anchor giving the secondary max when chained with the one in position i
+
     std::vector<ll> msc(anchors.size(),0); // Max score up to position i
+    std::vector<ll> msc_sec(anchors.size(),0); // Secondary max score up to position i
+
     std::vector<ll> t(anchors.size(),0); // Stores i in position p[j], if i is chained with j. See heuristics in minimap2
+    std::vector<ll> t_sec(anchors.size(),0); // Stores i in position p[j], if i is chained with j secondary. See heuristics in minimap2
 
     ll lb = 0;
     // For all the anchors
     for(size_t i = 0 ; i < anchors.size(); ++i)
     {
-    // Get anchor i
-    const auto a_i = anchors[i];
-    const mem_t& mem_i = mems[a_i.first];
-    // const ll k_i = mem_i.occs[a_i.second];
-    const ll x_i = mem_i.occs[a_i.second] + mem_i.len - 1;
-    // const ll z_i = mem_i.idx;
-    const ll y_i = mem_i.rpos;
-    // const ll y_i = mem_i.idx + mem_i.len - 1;
-    const ll w_i = mem_i.len;
-    const size_t mate_i = mem_i.mate;
+        // Get anchor i
+        const auto a_i = anchors[i];
+        const mem_t& mem_i = mems[a_i.first];
+        // const ll k_i = mem_i.occs[a_i.second];
+        const ll x_i = mem_i.occs[a_i.second] + mem_i.len - 1;
+        // const ll z_i = mem_i.idx;
+        const ll y_i = mem_i.rpos;
+        // const ll y_i = mem_i.idx + mem_i.len - 1;
+        const ll w_i = mem_i.len;
+        const size_t mate_i = mem_i.mate;
 
-    ll max_f = w_i;
-    ll max_j = -1;
-    size_t n_pred = 0;
-    // For all previous anchors
-    // Heuristics from minimap2 -> do not try more than 50 anchors
-    if(i - lb > max_iter) lb = i - max_iter;
-    for(ll j = i-1; j >= lb; --j)
-    {
-        const auto a_j = anchors[j];
-        const mem_t& mem_j = mems[a_j.first];
-        const ll x_j = mem_j.occs[a_j.second] + mem_j.len - 1;
-        const ll y_j = mem_j.rpos;
-        // const ll y_j = mem_j.idx + mem_j.len - 1;
-        const size_t mate_j = mem_j.mate;
+        ll max_f = w_i;
+        ll max_sec_f = w_i;
 
-        // Check if anchors are compatible
-        // if mate_i == mate_j they are from the same mate and same orientation
-        // if mate_i ^ mate_j == 3 they are from different mate and withdifferent orientation
-        // TODO: we can change to same orientation replacing 3 with 1
-        if((mate_i != mate_j) and ((mate_i ^ mate_j)!= 3)) continue;
+        ll max_j = -1;
+        ll max_sec_j = -1;
 
-        // If the current anchor is too far, exit.
-        if(x_i > x_j + max_dist_x)
+        size_t n_pred = 0;
+        // For all previous anchors
+        // Heuristics from minimap2 -> do not try more than 50 anchors
+        if(i - lb > max_iter) lb = i - max_iter;
+        for(ll j = i-1; j >= lb; --j)
         {
-            // j = lb - 1;
-            lb = j;
-            continue;
-        }
-        // // skip if incompatible
-        // if(k_i < x_j or z_i < y_j) continue;
+            const auto a_j = anchors[j];
+            const mem_t& mem_j = mems[a_j.first];
+            const ll x_j = mem_j.occs[a_j.second] + mem_j.len - 1;
+            const ll y_j = mem_j.rpos;
+            // const ll y_j = mem_j.idx + mem_j.len - 1;
+            const size_t mate_j = mem_j.mate;
 
-        const ll x_d = x_i - x_j;
-        const ll y_d = y_i - y_j;
-        const int32_t l = (y_d > x_d ? (y_d - x_d) : (x_d - y_d));
-        const uint32_t ilog_l = (l > 0? ilog2_32(l): 0);
+            // Check if anchors are compatible
+            // if mate_i == mate_j they are from the same mate and same orientation
+            // if mate_i ^ mate_j == 3 they are from different mate and withdifferent orientation
+            // TODO: we can change to same orientation replacing 3 with 1
+            if((mate_i != mate_j) and ((mate_i ^ mate_j)!= 3)) continue;
 
-        if((mate_i == mate_j and (y_j >= y_i or y_d > max_dist_y)) or max(y_d, x_d) > G)
-        continue;
-
-        const ll alpha = min(min(y_d,x_d),w_i);
-        // const ll beta = (l > 0? (ll)(.01 * l * avg_mem_length) + ilog_l >> 1 : 0); 
-        ll beta = 0;
-        if(mate_i != mate_j){
-            if (x_d == 0) ++beta; // possibly due to overlapping paired ends; give a minor bonus
-            else {
-                const int c_lin = (int)(l * .01 * avg_mem_length);
-                beta = c_lin < ilog_l ? c_lin : ilog_l;
+            // If the current anchor is too far, exit.
+            if(x_i > x_j + max_dist_x)
+            {
+                // j = lb - 1;
+                lb = j;
+                continue;
             }
-        }else{
-            beta = (l > 0? (ll)(.01 * l * avg_mem_length) + ilog_l >> 1 : 0);
+            // // skip if incompatible
+            // if(k_i < x_j or z_i < y_j) continue;
+
+            const ll x_d = x_i - x_j;
+            const ll y_d = y_i - y_j;
+            const int32_t l = (y_d > x_d ? (y_d - x_d) : (x_d - y_d));
+            const uint32_t ilog_l = (l > 0? ilog2_32(l): 0);
+
+            if((mate_i == mate_j and (y_j >= y_i or y_d > max_dist_y)) or max(y_d, x_d) > G)
+            continue;
+
+            const ll alpha = min(min(y_d,x_d),w_i);
+            // const ll beta = (l > 0? (ll)(.01 * l * avg_mem_length) + ilog_l >> 1 : 0); 
+            ll beta = 0;
+            if(mate_i != mate_j){
+                if (x_d == 0) ++beta; // possibly due to overlapping paired ends; give a minor bonus
+                else {
+                    const int c_lin = (int)(l * .01 * avg_mem_length);
+                    beta = c_lin < ilog_l ? c_lin : ilog_l;
+                }
+            }else{
+                beta = (l > 0? (ll)(.01 * l * avg_mem_length) + ilog_l >> 1 : 0);
+            }
+
+
+
+            // No gap scale as in minimap2
+            ll score = f[j] + (alpha - beta);
+            ll score_sec = f_sec[j] + (alpha - beta);
+
+            // Primary Chain of anchor i
+            if( score > max_f )
+            {
+                max_f = score;
+                max_j = j;
+                if( n_pred > 0) --n_pred;
+            }
+            // Secondary Chain of anchor i
+            else if (score_sec > max_sec_f)
+            {
+                // Check if max_j of primary chain is defined 
+                if (max_j >= 0){
+                    ll tmp = max_j;
+                    bool uniq_chain = true;
+
+                    // Check whether potential j anchor for secondary chain is used in primary chain
+                    // Secondary chain should not use anchors in primary chain, otherwise secondary chain can potentially be a copy of primary chain
+                    while(tmp >= 0)
+                    {
+                        if (mems[anchors[j].first].occs[anchors[j].second] == mems[anchors[tmp].first].occs[anchors[tmp].second])
+                        {
+                            uniq_chain = false;
+                            break;
+                        }
+                        
+                        tmp = p[tmp];
+                    }
+                    if (uniq_chain){ // If anchor is not used in primary chain then set secondary score.
+                        max_sec_f = score_sec;
+                        max_sec_j = j;
+                    }
+                }
+            }
+            else // minimap2: If i is chained wth j, than chaining i with a predecessor of j does not improve the score
+            {
+                if (t[j] == i and (++n_pred > max_pred)) break;
+            }
+            
+            if(p[j] > 0) t[p[j]] = i;
+            if(p_sec[j] > 0) t_sec[p_sec[j]] = i;
         }
 
+        // if (max_f > 0)
+        // {
+        //     printf("Anchor %zu at position %zu has a max score of %zu\n",i,mem_i.occs[a_i.second],max_f);
+        //     if (max_j >= 0){
+        //         printf("Preceding anchor is %zu\n", mems[anchors[max_j].first].occs[anchors[max_j].second]);
+        //     }
+        // }
+        // if (max_sec_f > 0)
+        // {
+        //     printf("Anchor %zu at position %zu has a max secondary score of %zu\n",i,mem_i.occs[a_i.second],max_sec_f);
+        //     if (max_sec_j >= 0){
+        //         printf("Preceding anchor is %zu\n", mems[anchors[max_sec_j].first].occs[anchors[max_sec_j].second]);
+        //     }
+        // }
 
 
-        // No gap scale as in minimap2
-        ll score = f[j] + (alpha - beta);
+        f[i] = max_f;
+        p[i] = max_j;
+        if( max_j >= 0 and msc[max_j] > max_f)
+            msc[i] = msc[max_j];
+        else
+            msc[i] = max_f;
 
-        if( score > max_f )
-        {
-        max_f = score;
-        max_j = j;
-        if( n_pred > 0) --n_pred;
-        }
-        else // minimap2: If i is chained wth j, than chaining i with a predecessor of j does not improve the score
-        if (t[j] == i and (++n_pred > max_pred))            
-            break;
-        
-        if(p[j] > 0) t[p[j]] = i;
-    }
+        f_sec[i] = max_sec_f;
+        p_sec[i] = max_sec_j;
+        if( max_sec_j >= 0 and msc_sec[max_sec_j] > max_sec_f)
+            msc_sec[i] = msc_sec[max_sec_j];
+        else
+            msc_sec[i] = max_sec_f;
 
-    f[i] = max_f;
-    p[i] = max_j;
-    if( max_j >= 0 and msc[max_j] > max_f)
-        msc[i] = msc[max_j];
-    else
-        msc[i] = max_f;
     }
 
     MTIME_END(4);   // Timing helper
@@ -229,12 +294,19 @@ bool find_chains(
 
     // Find the end positions of chains
     memset(t.data(),0,sizeof(size_t) * t.size());
-    for(size_t i = 0; i < anchors.size(); ++i)
-    if(p[i] >= 0) t[p[i]] = 1;
+    for(size_t i = 0; i < anchors.size(); ++i){
+        if(p[i] >= 0) t[p[i]] = 1;
+        if(p_sec[i] >= 0) t_sec[p_sec[i]] = 1;
+    }
+    
     
     size_t n_chains = 0;
-    for(size_t i = 0; i < anchors.size(); ++i)
-    if(t[i] == 0 and msc[i] > min_chain_score) n_chains ++;
+    size_t n_chains_sec = 0;
+    for(size_t i = 0; i < anchors.size(); ++i){
+        if(t[i] == 0 and msc[i] > min_chain_score) n_chains ++;
+        if(t_sec[i] == 0 and msc_sec[i] > min_chain_score) n_chains_sec ++;
+    }
+    
     
     // TODO: check if we want to report also non aligned reads
     if(n_chains == 0)
@@ -242,6 +314,8 @@ bool find_chains(
 
     // TODO: replace the vector of pairs with a lambda for the sort
     std::vector<std::pair<ll,size_t>> chain_starts(n_chains); // Stores uniqe chains and their index of uniqe chains in anchors
+    std::vector<std::pair<ll,size_t>> chain_starts_sec(n_chains_sec); // Stores uniqe secondary chains and their index of uniqe secondary chains in anchors
+
     size_t k = 0;
     for(size_t i = 0; i < anchors.size(); ++i)
     {
@@ -254,9 +328,26 @@ bool find_chains(
         }
     }
 
+    size_t k_sec = 0;
+    for(size_t i = 0; i < anchors.size(); ++i)
+    {
+        if(t_sec[i] == 0 and  msc_sec[i] > min_chain_score)
+        {
+            size_t j = i;
+            while(j >= 0 and f_sec[j] < msc_sec[j]) j = p_sec[j]; // Find teh peak that maximizes f
+            if (j < 0) i = 0;
+            chain_starts_sec[k_sec++] = make_pair(f_sec[j],j);
+        }
+    }
+
     chain_starts.resize(k), chain_starts.shrink_to_fit();
+    chain_starts_sec.resize(k_sec), chain_starts_sec.shrink_to_fit();
+
     n_chains = chain_starts.size();
+    n_chains_sec = chain_starts_sec.size();
+
     std::sort(chain_starts.begin(), chain_starts.end(), std::greater<std::pair<ll,size_t>>());
+    std::sort(chain_starts_sec.begin(), chain_starts_sec.end(), std::greater<std::pair<ll,size_t>>());
     
     // std::vector<std::pair<size_t, std::vector<size_t>>> chains;
     MTIME_END(5);   // Timing helper
@@ -272,9 +363,32 @@ bool find_chains(
         do {
             chain.paired = chain.paired or (chain.mate != mems[anchors[j].first].mate);
             chain.anchors.push_back(j); // stores th reverse of the chain
-            t[j] = 1;
+            //t[j] = 1;
             j = p[j];
         } while (j >= 0 && t[j] == 0);
+        if (j < 0) { // l - prev_l is the length of the chain
+            if (chain.anchors.size() >= min_chain_length)
+            chains.push_back(std::move(chain));     
+        } else if (chain_starts[i].first - f[j] >= min_chain_score) { // Two chains share a common prefix
+            if (chain.anchors.size() >= min_chain_length)
+            chains.push_back(std::move(chain));
+        }
+    }
+
+    // Backtrack
+    memset(t_sec.data(),0,sizeof(size_t) * t_sec.size());
+    for(size_t i = 0; i < n_chains_sec; ++i)
+    {
+        ll j = chain_starts_sec[i].second;
+        chain_t chain;
+        chain.mate = mems[anchors[j].first].mate;
+        chain.score = chain_starts_sec[i].first;
+        do {
+            chain.paired = chain.paired or (chain.mate != mems[anchors[j].first].mate);
+            chain.anchors.push_back(j); // stores th reverse of the chain
+            //t[j] = 1;
+            j = p_sec[j];
+        } while (j >= 0 && t_sec[j] == 0); 
         if (j < 0) { // l - prev_l is the length of the chain
             if (chain.anchors.size() >= min_chain_length)
             chains.push_back(std::move(chain));     
@@ -325,6 +439,11 @@ bool find_chains(
     t.resize(0), t.shrink_to_fit();
     f.resize(0), f.shrink_to_fit();
     msc.resize(0), msc.shrink_to_fit();
+
+    p_sec.resize(0), p_sec.shrink_to_fit();
+    t_sec.resize(0), t_sec.shrink_to_fit();
+    f_sec.resize(0), f_sec.shrink_to_fit();
+    msc_sec.resize(0), msc_sec.shrink_to_fit();
 
     MTIME_END(6); // Timing helper
     MTIME_TSAFE_MERGE;
