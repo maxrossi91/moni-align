@@ -85,7 +85,7 @@ public:
         size_t min_len = 25;    // Minimum MEM length
         size_t ext_len = 100;   // Extension length
         size_t top_k = 1;       // Report the top_k alignments
-        size_t check_k = 30;     // Check the scores of the check_k chains with different scores alignments
+        size_t check_k = 5;     // Check the scores of the check_k chains with different scores alignments
         size_t region_dist = 10; // Maximum distance for two regions to be called "from the same region"
         // double mean = 5;         // The mean of the insert size distribution.
         // double std_dev = 10;     // The standard deviation of the insert size distribution.
@@ -113,8 +113,8 @@ public:
         // Chaining parameters
         ll max_dist_x = 500;    // Max distance for two anchors to be chained
         ll max_dist_y = 100;    // Max distance for two anchors from the same read to be chained
-        ll max_iter = 500;       // Max number of iterations of the chaining algorithhm
-        ll max_pred = 500;       // Max number of predecessor to be considered
+        ll max_iter = 50;       // Max number of iterations of the chaining algorithhm
+        ll max_pred = 50;       // Max number of predecessor to be considered
         ll min_chain_score = 40;// Minimum chain score
         ll min_chain_length = 1;// Minimum chain length
 
