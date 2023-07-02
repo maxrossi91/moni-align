@@ -128,13 +128,10 @@ bool find_chains(
 
     std::vector<ll> f(anchors.size(),0); // Score ending in position i
     std::vector<ll> f_sec(anchors.size(),0); //Secondary score ending in position i
-
     std::vector<ll> p(anchors.size(),0); // Position of the next anchor giving the max when chained with the one in position i
     std::vector<ll> p_sec(anchors.size(),0); // Position of the next anchor giving the secondary max when chained with the one in position i
-
     std::vector<ll> msc(anchors.size(),0); // Max score up to position i
     std::vector<ll> msc_sec(anchors.size(),0); // Secondary max score up to position i
-
     std::vector<ll> t(anchors.size(),0); // Stores i in position p[j], if i is chained with j. See heuristics in minimap2
     std::vector<ll> t_sec(anchors.size(),0); // Stores i in position p[j], if i is chained with j secondary. See heuristics in minimap2
 
@@ -229,12 +226,15 @@ bool find_chains(
                 if (max_j >= 0){
                     ll tmp = max_j;
                     bool uniq_chain = true;
+                    const size_t& mem_j_pos = mems[anchors[j].first].occs[anchors[j].second];
 
                     // Check whether potential j anchor for secondary chain is used in primary chain
                     // Secondary chain should not use anchors in primary chain, otherwise secondary chain can potentially be a copy of primary chain
                     while(tmp >= 0)
                     {
-                        if (mems[anchors[j].first].occs[anchors[j].second] == mems[anchors[tmp].first].occs[anchors[tmp].second])
+                        const size_t& mem_tmp_pos = mems[anchors[tmp].first].occs[anchors[tmp].second];
+
+                        if (mem_j_pos == mem_tmp_pos)
                         {
                             uniq_chain = false;
                             break;
@@ -294,6 +294,7 @@ bool find_chains(
 
     // Find the end positions of chains
     memset(t.data(),0,sizeof(size_t) * t.size());
+    memset(t_sec.data(),0,sizeof(size_t) * t_sec.size());
     for(size_t i = 0; i < anchors.size(); ++i){
         if(p[i] >= 0) t[p[i]] = 1;
         if(p_sec[i] >= 0) t_sec[p_sec[i]] = 1;
@@ -316,29 +317,32 @@ bool find_chains(
     std::vector<std::pair<ll,size_t>> chain_starts(n_chains); // Stores uniqe chains and their index of uniqe chains in anchors
     std::vector<std::pair<ll,size_t>> chain_starts_sec(n_chains_sec); // Stores uniqe secondary chains and their index of uniqe secondary chains in anchors
 
-    size_t k = 0;
-    for(size_t i = 0; i < anchors.size(); ++i)
+    // Lambda for finding chain starts
+    auto find_chain_starts = [&](std::vector<std::pair<ll,size_t>>& chain_starts,
+                                size_t& k,
+                                const std::vector<ll>& t,
+                                const std::vector<ll>& f,
+                                const std::vector<ll>& p,
+                                const std::vector<ll>& msc)
     {
-        if(t[i] == 0 and  msc[i] > min_chain_score)
+        for(size_t i = 0; i < anchors.size(); ++i)
         {
-            size_t j = i;
-            while(j >= 0 and f[j] < msc[j]) j = p[j]; // Find teh peak that maximizes f
-            if (j < 0) i = 0;
-            chain_starts[k++] = make_pair(f[j],j);
+            if(t[i] == 0 and  msc[i] > min_chain_score)
+            {
+                size_t j = i;
+                while(j >= 0 and f[j] < msc[j]) j = p[j]; // Find the peak that maximizes f
+                if (j < 0) i = 0;
+                chain_starts[k++] = make_pair(f[j],j);
+            }
         }
-    }
+    };
 
+    // Find chain starts for primary chains
+    size_t k = 0;
+    find_chain_starts(chain_starts, k, t, f, p, msc);
+    // Find chain starts for secondary chains
     size_t k_sec = 0;
-    for(size_t i = 0; i < anchors.size(); ++i)
-    {
-        if(t_sec[i] == 0 and  msc_sec[i] > min_chain_score)
-        {
-            size_t j = i;
-            while(j >= 0 and f_sec[j] < msc_sec[j]) j = p_sec[j]; // Find teh peak that maximizes f
-            if (j < 0) i = 0;
-            chain_starts_sec[k_sec++] = make_pair(f_sec[j],j);
-        }
-    }
+    find_chain_starts(chain_starts_sec, k_sec, t_sec, f_sec, p_sec, msc_sec);
 
     chain_starts.resize(k), chain_starts.shrink_to_fit();
     chain_starts_sec.resize(k_sec), chain_starts_sec.shrink_to_fit();
@@ -346,62 +350,60 @@ bool find_chains(
     n_chains = chain_starts.size();
     n_chains_sec = chain_starts_sec.size();
 
-    std::sort(chain_starts.begin(), chain_starts.end(), std::greater<std::pair<ll,size_t>>());
-    std::sort(chain_starts_sec.begin(), chain_starts_sec.end(), std::greater<std::pair<ll,size_t>>());
+    // Lambda for sorting chain starts 
+    auto chain_start_cmp = [](const std::pair<ll, size_t>& lhs, const std::pair<ll, size_t>& rhs){
+        return lhs.first > rhs.first;
+    };
+
+    std::sort(chain_starts.begin(), chain_starts.end(), chain_start_cmp);
+    std::sort(chain_starts_sec.begin(), chain_starts_sec.end(), chain_start_cmp);
     
     // std::vector<std::pair<size_t, std::vector<size_t>>> chains;
     MTIME_END(5);   // Timing helper
     MTIME_START(6); // Timing helper
-    // Backtrack
-    memset(t.data(),0,sizeof(size_t) * t.size());
-    for(size_t i = 0; i < n_chains; ++i)
-    {
-        ll j = chain_starts[i].second;
-        chain_t chain;
-        chain.mate = mems[anchors[j].first].mate;
-        chain.score = chain_starts[i].first;
-        do {
-            chain.paired = chain.paired or (chain.mate != mems[anchors[j].first].mate);
-            chain.anchors.push_back(j); // stores th reverse of the chain
-            //t[j] = 1;
-            j = p[j];
-        } while (j >= 0 && t[j] == 0);
-        if (j < 0) { // l - prev_l is the length of the chain
-            if (chain.anchors.size() >= min_chain_length)
-            chains.push_back(std::move(chain));     
-        } else if (chain_starts[i].first - f[j] >= min_chain_score) { // Two chains share a common prefix
-            if (chain.anchors.size() >= min_chain_length)
-            chains.push_back(std::move(chain));
-        }
-    }
 
-    // Backtrack
-    memset(t_sec.data(),0,sizeof(size_t) * t_sec.size());
-    for(size_t i = 0; i < n_chains_sec; ++i)
+    // Lamda for backtrack algorithm
+    auto backtrack = [&](const std::vector<std::pair<ll,size_t>>& chain_starts,
+                        const size_t& n_chains,
+                        const std::vector<ll>& t,
+                        const std::vector<ll>& f,
+                        const std::vector<ll>& p)
     {
-        ll j = chain_starts_sec[i].second;
-        chain_t chain;
-        chain.mate = mems[anchors[j].first].mate;
-        chain.score = chain_starts_sec[i].first;
-        do {
-            chain.paired = chain.paired or (chain.mate != mems[anchors[j].first].mate);
-            chain.anchors.push_back(j); // stores th reverse of the chain
-            //t[j] = 1;
-            j = p_sec[j];
-        } while (j >= 0 && t_sec[j] == 0); 
-        if (j < 0) { // l - prev_l is the length of the chain
-            if (chain.anchors.size() >= min_chain_length)
-            chains.push_back(std::move(chain));     
-        } else if (chain_starts[i].first - f[j] >= min_chain_score) { // Two chains share a common prefix
-            if (chain.anchors.size() >= min_chain_length)
-            chains.push_back(std::move(chain));
+        for (size_t i = 0; i < n_chains; ++i) {
+            ll j = chain_starts[i].second;
+            chain_t chain;
+            chain.mate = mems[anchors[j].first].mate;
+            chain.score = chain_starts[i].first;
+            do {
+                chain.paired = chain.paired or (chain.mate != mems[anchors[j].first].mate);
+                chain.anchors.push_back(j); // stores the reverse of the chain
+                //t[j] = 1
+                j = p[j];
+            } while (j >= 0 && t[j] == 0);
+            if (j < 0) { // l - prev_l is the length of the chain
+                if (chain.anchors.size() >= min_chain_length){
+                    chains.push_back(std::move(chain));
+                }     
+            } else if (chain_starts[i].first - f[j] >= min_chain_score) { // Two chains share a common prefix
+                if (chain.anchors.size() >= min_chain_length){
+                    chains.push_back(std::move(chain));
+                }
+            }
         }
-    }
+    };
+
+    // Backtrack for primary chains
+    memset(t.data(),0,sizeof(size_t) * t.size());
+    backtrack(chain_starts, n_chains, t, f, p);
+
+    // Backtrack for secondary chains
+    memset(t_sec.data(),0,sizeof(size_t) * t_sec.size());
+    backtrack(chain_starts_sec, n_chains_sec, t_sec, f_sec, p_sec);
 
     // Lamda helper to sort the anchors
     auto chain_t_cmp = [](const chain_t& i, const chain_t& j) -> bool
     {
-    return i.score > j.score;
+        return i.score > j.score;
     };
 
     // Sort the chains by max scores.
