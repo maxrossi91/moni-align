@@ -134,6 +134,7 @@ bool find_chains(
     std::vector<ll> msc_sec(anchors.size(),0); // Secondary max score up to position i
     std::vector<ll> t(anchors.size(),0); // Stores i in position p[j], if i is chained with j. See heuristics in minimap2
     std::vector<ll> t_sec(anchors.size(),0); // Stores i in position p[j], if i is chained with j secondary. See heuristics in minimap2
+    std::set<std::pair<size_t,size_t>> used_pair; // Stores the pairs of lifted over positions tested
 
     ll lb = 0;
     // For all the anchors
@@ -164,6 +165,13 @@ bool find_chains(
         {
             const auto a_j = anchors[j];
             const mem_t& mem_j = mems[a_j.first];
+
+            size_t size = used_pair.size();
+            used_pair.insert(std::make_pair(mem_i.lift_occs[a_i.second], mem_j.lift_occs[a_j.second]));
+            size_t updated_size = used_pair.size();
+            // If lifted over pair of anchors already seen and not the reference anchors then skip 
+            if ((size == updated_size) && (mem_i.occs[a_i.second] != mem_i.lift_occs[a_i.second])) continue;
+
             const ll x_j = mem_j.occs[a_j.second] + mem_j.len - 1;
             const ll y_j = mem_j.rpos;
             // const ll y_j = mem_j.idx + mem_j.len - 1;
