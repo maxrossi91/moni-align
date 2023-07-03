@@ -113,8 +113,8 @@ public:
         // Chaining parameters
         ll max_dist_x = 500;    // Max distance for two anchors to be chained
         ll max_dist_y = 100;    // Max distance for two anchors from the same read to be chained
-        ll max_iter = 50;       // Max number of iterations of the chaining algorithhm
-        ll max_pred = 50;       // Max number of predecessor to be considered
+        ll max_iter = 100;       // Max number of iterations of the chaining algorithhm
+        ll max_pred = 100;       // Max number of predecessor to be considered
         ll min_chain_score = 40;// Minimum chain score
         ll min_chain_length = 1;// Minimum chain length
 
@@ -301,6 +301,11 @@ public:
 
     mem_finder.find_seeds(al.read,al.mems, 0, MATE_1 | MATE_F);
     mem_finder.find_seeds(&al.read_rev,al.mems, 0, MATE_1 | MATE_RC);
+
+    // Perform the liftover for all the MEMs
+    for (size_t i = 0; i < al.mems.size(); ++i){
+      lift_occs(al.mems[i]);
+    }
 
     // Compute fraction of repetitive seeds
     al.frac_rep = compute_frac_rep(al.mems, al.read->seq.l, MATE_1);
@@ -901,6 +906,12 @@ public:
       MTIME_START(9); //Timing helper
       
       mem_finder.populate_seeds(al.mems);
+
+      // Perform the liftover for all the MEMs
+      for (size_t i = 0; i < al.mems.size(); ++i){
+        lift_occs(al.mems[i]);
+      }
+
       al.n_seeds_dir1 = 0;
       al.n_seeds_dir2 = 0;
       for (size_t i = 0; i < al.mems.size(); ++i)
@@ -930,6 +941,10 @@ public:
       mem_finder.find_seeds(&al.mate1_rev, al.mems, al.mate2->seq.l, MATE_1 | MATE_RC);
       mem_finder.find_seeds(al.mate2, al.mems, 0, MATE_2 | MATE_F);
       mem_finder.find_seeds(&al.mate2_rev, al.mems, al.mate1->seq.l, MATE_2 | MATE_RC);
+      // Perform the liftover for all the MEMs
+      for (size_t i = 0; i < al.mems.size(); ++i){
+        lift_occs(al.mems[i]);
+      }
     }
     // find_mems(al.mate1, al.mems, 0, MATE_1 | MATE_F);
     // find_mems(&al.mate1_rev, al.mems, al.mate2->seq.l, MATE_1 | MATE_RC );
@@ -1070,6 +1085,14 @@ public:
     return al.aligned;
   }
 
+  // Lifts all the occurance positions of the MEM to the reference position
+  void lift_occs(mem_t& mem)
+  {
+    mem.lift_occs.reserve(mem.occs.size());
+    for (size_t i = 0; i < mem.occs.size(); ++i){
+      mem.lift_occs.push_back(idx.lift(mem.occs[i]));
+    }
+  }
 
   void get_best_scores(paired_alignment_t& al, size_t k)
   {
