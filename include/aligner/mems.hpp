@@ -38,6 +38,7 @@ typedef struct mem_t{
                         // If the mem is in the FWD strand it is the position of the last character in the read
                         // If the mem is in the REV strand it is the position of the first character in the read
     std::vector<size_t> occs; // List of occurrences of the MEM
+    std::vector<size_t> lift_occs; // List of liftover occurances of the MEM
 
     mem_t(size_t p, size_t l, size_t i)
     {
