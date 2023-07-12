@@ -80,6 +80,11 @@ struct Args
 
   // int w = -1;             // Band width
   // int zdrop = -1;         // Zdrop enable
+
+  // chaining parameters
+  ll max_iter = 50;       // Max number of iterations of the chaining algorithhm
+  ll max_pred = 50;       // Max number of predecessor to be considered
+
 };
 
 void parseArgs(int argc, char *const argv[], Args &arg)
@@ -88,7 +93,7 @@ void parseArgs(int argc, char *const argv[], Args &arg)
   extern char *optarg;
   extern int optind;
 
-  std::string usage("usage: " + std::string(argv[0]) + " infile [-p patterns] [-1 mate1] [-2 mate2] [-o output] [-t threads] [-b batch] [-l len] [-q shaped_slp]  [-L ext_l] [-A smatch] [-B smismatc] [-O gapo] [-E gape] [-d dir_en] [-s seeds_en] [-D dir_thr] [-S seeds_thr] [-n no_lcp]\n\n" +
+  std::string usage("usage: " + std::string(argv[0]) + " infile [-p patterns] [-1 mate1] [-2 mate2] [-o output] [-t threads] [-b batch] [-l len] [-q shaped_slp]  [-L ext_l] [-A smatch] [-B smismatc] [-O gapo] [-E gape] [-d dir_en] [-s seeds_en] [-D dir_thr] [-S seeds_thr] [-n no_lcp] [-x max_iter] [-y max_pred]\n\n" +
                     "Align the reads in the pattern against the reference index in infile.\n" +
                     "   pattens: [string]  - path to patterns file.\n" +
                     "     mate1: [string]  - path to file with #1 mates paired with mate2.\n" +
@@ -96,7 +101,7 @@ void parseArgs(int argc, char *const argv[], Args &arg)
                     "    output: [string]  - output file prefix.\n" +
                     "   threads: [integer] - number of threads (def. " + std::to_string(arg.th) + ")\n" +
                     "     batch: [integer] - number of batches per therad pool (def. " + std::to_string(arg.b) + ")\n" + 
-                    "       len: [integer] - minimum MEM lengt (def. " + std::to_string(arg.l) + ")\n" +
+                    "       len: [integer] - minimum MEM length (def. " + std::to_string(arg.l) + ")\n" +
                     "shaped_slp: [boolean] - use shaped slp. (def. " + std::to_string(arg.shaped_slp) + ")\n" +
                     "    no-lcp: [boolean] - use the index without the LCP entries. (def. false)\n" +
                     "     ext_l: [integer] - length of reference substring for extension (def. " + std::to_string(arg.ext_len) + ")\n" +
@@ -104,6 +109,8 @@ void parseArgs(int argc, char *const argv[], Args &arg)
                     "   dir_thr: [float]   - direction filtering threshold (def. " + std::to_string(arg.dir_thr) + ")\n" +
                     " seeds_dis: [boolean] - enable seed filtering (def. " + std::to_string(arg.filter_dir) + ")\n" +
                     " seeds_thr: [float]   - seed filtering threshold (def. " + std::to_string(arg.n_seeds_thr) + ")\n" +
+                    "  max_iter: [integer] - max number of iterations of the chaining algorithm (def. " + std::to_string(arg.max_iter) + ")\n" +
+                    "  max_pred: [integer] - max number of predecessors to be considered in chaining algorithm (def. " + std::to_string(arg.max_pred) + ")\n" +
                     "    smatch: [integer] - match score value (def. " + std::to_string(arg.smatch) + ")\n" +
                     " smismatch: [integer] - mismatch penalty value (def. " + std::to_string(arg.smismatch) + ")\n" +
                     "      gapo: [integer] - gap open penalty value (def. " + std::to_string(arg.gapo) + "," + std::to_string(arg.gapo2) + ")\n" +
@@ -111,7 +118,7 @@ void parseArgs(int argc, char *const argv[], Args &arg)
 
   std::string sarg;
   char* s;
-  while ((c = getopt(argc, argv, "ql:hp:o:t:1:2:b:A:B:O:E:L:dsnD:S:")) != -1)
+  while ((c = getopt(argc, argv, "ql:hp:o:t:1:2:b:A:B:O:E:L:dsnD:S:x:y:")) != -1)
   {
     switch (c)
     {
@@ -179,6 +186,14 @@ void parseArgs(int argc, char *const argv[], Args &arg)
     case 'q':
       arg.shaped_slp = true;
       break;
+    case 'x':
+      sarg.assign(optarg);
+      arg.max_iter = stoi(sarg);
+      break;
+    case 'y':
+      sarg.assign(optarg);
+      arg.max_pred = stoi(sarg);
+      break;
     case 'h':
       error(usage);
     case '?':
@@ -221,6 +236,10 @@ typename aligner_t::config_t configurer(Args &args){
   config.gapo2      = args.gapo2;       // Gap open penalty
   config.gape       = args.gape;        // Gap extension penalty
   config.gape2      = args.gape2;       // Gap extension penalty
+
+  // chaining parameters
+  config.max_iter   = args.max_iter;    // Max number of iterations of the chaining algorithhm
+  config.max_pred   = args.max_pred;    // Max number of predecessor to be considered
 
   return config;
 }
