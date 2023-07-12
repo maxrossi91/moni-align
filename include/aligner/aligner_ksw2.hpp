@@ -113,8 +113,8 @@ public:
         // Chaining parameters
         ll max_dist_x = 500;    // Max distance for two anchors to be chained
         ll max_dist_y = 100;    // Max distance for two anchors from the same read to be chained
-        ll max_iter = 100;       // Max number of iterations of the chaining algorithhm
-        ll max_pred = 100;       // Max number of predecessor to be considered
+        ll max_iter = 50;       // Max number of iterations of the chaining algorithhm
+        ll max_pred = 50;       // Max number of predecessor to be considered
         ll min_chain_score = 40;// Minimum chain score
         ll min_chain_length = 1;// Minimum chain length
 
@@ -204,6 +204,8 @@ public:
                 dir_thr(config.dir_thr),        // Use MEMs average length distance to filter the orientation of the reads
                 filter_seeds(config.filter_seeds),// Filter seed if occurs more than threshold
                 n_seeds_thr(config.n_seeds_thr),// Filter seed if occurs more than threshold
+                max_iter(config.max_iter),      // Max number of iterations of the chaining algorithhm
+                max_pred(config.max_pred),      // Max number of predecessor to be considered
                 smatch(config.smatch),          // Match score default
                 smismatch(config.smismatch),    // Mismatch score default
                 gapo(config.gapo),              // Gap open penalty
@@ -2836,6 +2838,8 @@ protected:
     bool filter_seeds = true;
     size_t n_seeds_thr = 5000;
 
+    ll max_iter = 50;       // Max number of iterations of the chaining algorithhm
+    ll max_pred = 50;       // Max number of predecessor to be considered
 
     chain_config_t chain_config;
 };
