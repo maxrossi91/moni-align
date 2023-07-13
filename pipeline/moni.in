@@ -519,6 +519,8 @@ def query_helper(args, exe, exe_name):
       command += " -d"
     if args.seed_dis:
       command += " -s"
+    if args.secondary_chains:
+      command += " -Z"
     command += " -D {} -S {} ".format(args.dir_thr,args.seed_thr)
 
   if exe_name != "SPUMONI" and args.grammar == "shaped":
@@ -743,6 +745,7 @@ def main():
   align_parser.add_argument('-L', '--extl',       help='length of reference substring for extension', type=int, default=100)
   align_parser.add_argument('-x', '--max_iter',   help='max number of iterations of the chaining algorithm', type=int, default=50)
   align_parser.add_argument('-y', '--max_pred',   help='max number of predecessors to be considered in chaining algorithm', type=int, default=50)
+  align_parser.add_argument('-Z', '--secondary_chains', help='Enable finding secondary chains in paired-end setting', action='store_true')
   align_parser.add_argument('-A', '--smatch',     help='match score value', type=int, default=2)
   align_parser.add_argument('-B', '--smismatch',  help='mismatch penalty value', type=int, default=4)
   align_parser.add_argument('-O', '--gapo',       help='coma separated gap open penalty values', type=str, default='4,13')

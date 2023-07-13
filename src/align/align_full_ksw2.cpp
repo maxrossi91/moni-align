@@ -84,6 +84,7 @@ struct Args
   // chaining parameters
   ll max_iter = 50;       // Max number of iterations of the chaining algorithhm
   ll max_pred = 50;       // Max number of predecessor to be considered
+  bool secondary_chains = false; // Attempt to find secondary chains in paired-end setting
 
 };
 
@@ -93,7 +94,7 @@ void parseArgs(int argc, char *const argv[], Args &arg)
   extern char *optarg;
   extern int optind;
 
-  std::string usage("usage: " + std::string(argv[0]) + " infile [-p patterns] [-1 mate1] [-2 mate2] [-o output] [-t threads] [-b batch] [-l len] [-q shaped_slp]  [-L ext_l] [-A smatch] [-B smismatc] [-O gapo] [-E gape] [-d dir_en] [-s seeds_en] [-D dir_thr] [-S seeds_thr] [-n no_lcp] [-x max_iter] [-y max_pred]\n\n" +
+  std::string usage("usage: " + std::string(argv[0]) + " infile [-p patterns] [-1 mate1] [-2 mate2] [-o output] [-t threads] [-b batch] [-l len] [-q shaped_slp]  [-L ext_l] [-A smatch] [-B smismatc] [-O gapo] [-E gape] [-d dir_en] [-s seeds_en] [-D dir_thr] [-S seeds_thr] [-n no_lcp] [-x max_iter] [-y max_pred] [-Z secondary_chains]\n\n" +
                     "Align the reads in the pattern against the reference index in infile.\n" +
                     "   pattens: [string]  - path to patterns file.\n" +
                     "     mate1: [string]  - path to file with #1 mates paired with mate2.\n" +
@@ -111,6 +112,7 @@ void parseArgs(int argc, char *const argv[], Args &arg)
                     " seeds_thr: [float]   - seed filtering threshold (def. " + std::to_string(arg.n_seeds_thr) + ")\n" +
                     "  max_iter: [integer] - max number of iterations of the chaining algorithm (def. " + std::to_string(arg.max_iter) + ")\n" +
                     "  max_pred: [integer] - max number of predecessors to be considered in chaining algorithm (def. " + std::to_string(arg.max_pred) + ")\n" +
+              "secondary_chains: [boolean] - attempt to find secondary chains in paired-alignment setting (def. " + std::to_string(arg.secondary_chains) + ")\n" +
                     "    smatch: [integer] - match score value (def. " + std::to_string(arg.smatch) + ")\n" +
                     " smismatch: [integer] - mismatch penalty value (def. " + std::to_string(arg.smismatch) + ")\n" +
                     "      gapo: [integer] - gap open penalty value (def. " + std::to_string(arg.gapo) + "," + std::to_string(arg.gapo2) + ")\n" +
@@ -118,7 +120,7 @@ void parseArgs(int argc, char *const argv[], Args &arg)
 
   std::string sarg;
   char* s;
-  while ((c = getopt(argc, argv, "ql:hp:o:t:1:2:b:A:B:O:E:L:dsnD:S:x:y:")) != -1)
+  while ((c = getopt(argc, argv, "ql:hp:o:t:1:2:b:A:B:O:E:L:dsnD:S:x:y:Z")) != -1)
   {
     switch (c)
     {
@@ -194,6 +196,9 @@ void parseArgs(int argc, char *const argv[], Args &arg)
       sarg.assign(optarg);
       arg.max_pred = stoi(sarg);
       break;
+    case 'Z':
+      arg.secondary_chains = true;
+      break;
     case 'h':
       error(usage);
     case '?':
@@ -240,6 +245,7 @@ typename aligner_t::config_t configurer(Args &args){
   // chaining parameters
   config.max_iter   = args.max_iter;    // Max number of iterations of the chaining algorithhm
   config.max_pred   = args.max_pred;    // Max number of predecessor to be considered
+  config.secondary_chains = args.secondary_chains; // Attempt to find secondary chains in paired-end setting
 
   return config;
 }
