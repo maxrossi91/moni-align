@@ -69,6 +69,143 @@ typedef struct{
     ll min_chain_length = 1;
 } chain_config_t;
 
+
+void populate_anchors(
+    std::vector< std::pair< size_t, size_t > >& anchors,
+    const std::vector<mem_t>& mems,
+    size_t& tot_mem_length
+    )
+{
+    for(size_t i = 0; i < mems.size(); ++i) {
+        for(size_t j = 0; j < mems[i].occs.size(); ++j){
+            anchors.push_back(make_pair(i,j));
+        }
+        tot_mem_length +=  mems[i].len * mems[i].occs.size();
+    }
+}
+
+void update_score_and_pred(
+    std::vector<ll>& f,
+    std::vector<ll>& p,
+    std::vector<ll>& msc,
+    const ll& max_f,
+    const ll& max_j,
+    const size_t& i
+    )
+{
+    f[i] = max_f;
+    p[i] = max_j;
+    if( max_j >= 0 and msc[max_j] > max_f)
+        msc[i] = msc[max_j];
+    else
+        msc[i] = max_f;
+}
+
+void find_chain_ends(
+    const std::vector< std::pair< size_t, size_t > >& anchors,
+    const std::vector<ll>& p,
+    std::vector<ll>& t
+    )
+{
+    for(size_t i = 0; i < anchors.size(); ++i){
+        if(p[i] >= 0){
+            t[p[i]] = 1;
+        } 
+    }
+}
+
+void find_n_chains(
+    size_t& n_chains,
+    const std::vector< std::pair< size_t, size_t > >& anchors,
+    const std::vector<ll>& t,
+    const std::vector<ll>& msc,
+    const ll& min_chain_score 
+    )
+{
+    for(size_t i = 0; i < anchors.size(); ++i){
+        if(t[i] == 0 and msc[i] > min_chain_score){
+            n_chains ++;
+        } 
+    }
+}
+
+void find_chain_starts(
+    std::vector<std::pair<ll, size_t>>& chain_starts,
+    size_t& k,
+    const std::vector<ll>& t,
+    const std::vector<ll>& f,
+    const std::vector<ll>& p,
+    const std::vector<ll>& msc,
+    const std::vector< std::pair< size_t, size_t > >& anchors,
+    const ll& min_chain_score
+    )
+{
+    for(size_t i = 0; i < anchors.size(); ++i)
+    {
+        if(t[i] == 0 and  msc[i] > min_chain_score)
+        {
+            size_t j = i;
+            while(j >= 0 and f[j] < msc[j]) j = p[j]; // Find the peak that maximizes f
+            if (j < 0) i = 0;
+            chain_starts[k++] = make_pair(f[j],j);
+        }
+    }
+}
+
+void backtrack(
+    const std::vector<std::pair<ll, size_t>>& chain_starts,
+    const size_t& n_chains,
+    std::vector<ll>& t,
+    const std::vector<ll>& f,
+    const std::vector<ll>& p,
+    std::vector<chain_t>& chains,
+    const std::vector<std::pair<size_t,size_t>>& anchors,
+    const std::vector<mem_t>& mems,
+    const ll& min_chain_score,
+    const ll& min_chain_length
+    )
+{
+    for (size_t i = 0; i < n_chains; ++i) {
+        ll j = chain_starts[i].second;
+        chain_t chain;
+        chain.mate = mems[anchors[j].first].mate;
+        chain.score = chain_starts[i].first;
+        do {
+            chain.paired = chain.paired or (chain.mate != mems[anchors[j].first].mate);
+            chain.anchors.push_back(j); // stores the reverse of the chain
+            //t[j] = 1;
+            j = p[j];
+        } while (j >= 0 && t[j] == 0);
+        if (j < 0) { // l - prev_l is the length of the chain
+            if (chain.anchors.size() >= min_chain_length){
+                chains.push_back(std::move(chain));
+            }     
+        } else if (chain_starts[i].first - f[j] >= min_chain_score) { // Two chains share a common prefix
+            if (chain.anchors.size() >= min_chain_length){
+                chains.push_back(std::move(chain));
+            }
+        }
+    }
+}
+
+void clear_and_shrink_vecs(
+    std::vector<ll>& p,
+    std::vector<ll>& t,
+    std::vector<ll>& f,
+    std::vector<ll>& msc
+    )
+{
+    p.resize(0);
+    p.shrink_to_fit();
+    t.resize(0);
+    t.shrink_to_fit();
+    f.resize(0);
+    f.shrink_to_fit();
+    msc.resize(0);
+    msc.shrink_to_fit();
+}
+
+
 // Given a set of mems, find the chains
 bool find_chains(
     const   std::vector<mem_t>& mems,
@@ -91,14 +228,8 @@ bool find_chains(
     // TODO: improve this initialization
     size_t tot_mem_length = 0;
 
-    // std::vector< std::pair< size_t, size_t > > anchors;
-    for(size_t i = 0; i < mems.size(); ++i)
-    {
-    for(size_t j = 0; j < mems[i].occs.size(); ++j)
-        anchors.push_back(make_pair(i,j));
-    tot_mem_length +=  mems[i].len * mems[i].occs.size();
-    }
-
+    populate_anchors(anchors, mems, tot_mem_length);
+    
     float avg_mem_length = (float)tot_mem_length / anchors.size();
 
     std::sort(anchors.begin(),anchors.end(),cmp);
@@ -216,12 +347,7 @@ bool find_chains(
         if(p[j] > 0) t[p[j]] = i;
     }
 
-    f[i] = max_f;
-    p[i] = max_j;
-    if( max_j >= 0 and msc[max_j] > max_f)
-        msc[i] = msc[max_j];
-    else
-        msc[i] = max_f;
+    update_score_and_pred(f, p, msc, max_f, max_j, i);
     }
 
     MTIME_END(4);   // Timing helper
@@ -229,12 +355,10 @@ bool find_chains(
 
     // Find the end positions of chains
     memset(t.data(),0,sizeof(size_t) * t.size());
-    for(size_t i = 0; i < anchors.size(); ++i)
-    if(p[i] >= 0) t[p[i]] = 1;
+    find_chain_ends(anchors, p, t);
     
     size_t n_chains = 0;
-    for(size_t i = 0; i < anchors.size(); ++i)
-    if(t[i] == 0 and msc[i] > min_chain_score) n_chains ++;
+    find_n_chains(n_chains, anchors, t, msc, min_chain_score);
     
     // TODO: check if we want to report also non aligned reads
     if(n_chains == 0)
@@ -243,16 +367,7 @@ bool find_chains(
     // TODO: replace the vector of pairs with a lambda for the sort
     std::vector<std::pair<ll,size_t>> chain_starts(n_chains); // Stores uniqe chains and their index of uniqe chains in anchors
     size_t k = 0;
-    for(size_t i = 0; i < anchors.size(); ++i)
-    {
-        if(t[i] == 0 and  msc[i] > min_chain_score)
-        {
-            size_t j = i;
-            while(j >= 0 and f[j] < msc[j]) j = p[j]; // Find teh peak that maximizes f
-            if (j < 0) i = 0;
-            chain_starts[k++] = make_pair(f[j],j);
-        }
-    }
+    find_chain_starts(chain_starts, k, t, f, p, msc, anchors, min_chain_score);
 
     chain_starts.resize(k), chain_starts.shrink_to_fit();
     n_chains = chain_starts.size();
@@ -261,28 +376,10 @@ bool find_chains(
     // std::vector<std::pair<size_t, std::vector<size_t>>> chains;
     MTIME_END(5);   // Timing helper
     MTIME_START(6); // Timing helper
+
     // Backtrack
     memset(t.data(),0,sizeof(size_t) * t.size());
-    for(size_t i = 0; i < n_chains; ++i)
-    {
-        ll j = chain_starts[i].second;
-        chain_t chain;
-        chain.mate = mems[anchors[j].first].mate;
-        chain.score = chain_starts[i].first;
-        do {
-            chain.paired = chain.paired or (chain.mate != mems[anchors[j].first].mate);
-            chain.anchors.push_back(j); // stores th reverse of the chain
-            //t[j] = 1;
-            j = p[j];
-        } while (j >= 0 && t[j] == 0);
-        if (j < 0) { // l - prev_l is the length of the chain
-            if (chain.anchors.size() >= min_chain_length)
-            chains.push_back(std::move(chain));     
-        } else if (chain_starts[i].first - f[j] >= min_chain_score) { // Two chains share a common prefix
-            if (chain.anchors.size() >= min_chain_length)
-            chains.push_back(std::move(chain));
-        }
-    }
+    backtrack(chain_starts, n_chains, t, f, p, chains, anchors, mems, min_chain_score, min_chain_length);
 
     // Lamda helper to sort the anchors
     auto chain_t_cmp = [](const chain_t& i, const chain_t& j) -> bool
@@ -321,10 +418,7 @@ bool find_chains(
     // std::sort(chains.begin(), chains.end(), std::greater<std::pair<ll,std::vector<size_t>>>());
 
     // Clear space
-    p.resize(0), p.shrink_to_fit();
-    t.resize(0), t.shrink_to_fit();
-    f.resize(0), f.shrink_to_fit();
-    msc.resize(0), msc.shrink_to_fit();
+    clear_and_shrink_vecs(p, t, f, msc);
 
     MTIME_END(6); // Timing helper
     MTIME_TSAFE_MERGE;
@@ -355,14 +449,8 @@ bool find_chains_secondary(
     // TODO: improve this initialization
     size_t tot_mem_length = 0;
 
-    // std::vector< std::pair< size_t, size_t > > anchors;
-    for(size_t i = 0; i < mems.size(); ++i)
-    {
-        for(size_t j = 0; j < mems[i].occs.size(); ++j)
-            anchors.push_back(make_pair(i,j));
-        tot_mem_length +=  mems[i].len * mems[i].occs.size();
-    }
-
+    populate_anchors(anchors, mems, tot_mem_length);
+    
     float avg_mem_length = (float)tot_mem_length / anchors.size();
 
     std::sort(anchors.begin(),anchors.end(),cmp);
@@ -521,20 +609,8 @@ bool find_chains_secondary(
             if(p_sec[j] > 0) t_sec[p_sec[j]] = i;
         }
 
-        f[i] = max_f;
-        p[i] = max_j;
-        if( max_j >= 0 and msc[max_j] > max_f)
-            msc[i] = msc[max_j];
-        else
-            msc[i] = max_f;
-
-        f_sec[i] = max_sec_f;
-        p_sec[i] = max_sec_j;
-        if( max_sec_j >= 0 and msc_sec[max_sec_j] > max_sec_f)
-            msc_sec[i] = msc_sec[max_sec_j];
-        else
-            msc_sec[i] = max_sec_f;
-
+        update_score_and_pred(f, p, msc, max_f, max_j, i);
+        update_score_and_pred(f_sec, p_sec, msc_sec, max_sec_f, max_sec_j, i);
     }
 
     MTIME_END(4);   // Timing helper
@@ -543,19 +619,14 @@ bool find_chains_secondary(
     // Find the end positions of chains
     memset(t.data(),0,sizeof(size_t) * t.size());
     memset(t_sec.data(),0,sizeof(size_t) * t_sec.size());
-    for(size_t i = 0; i < anchors.size(); ++i){
-        if(p[i] >= 0) t[p[i]] = 1;
-        if(p_sec[i] >= 0) t_sec[p_sec[i]] = 1;
-    }
+    find_chain_ends(anchors, p, t);
+    find_chain_ends(anchors, p_sec, t_sec);
     
     
     size_t n_chains = 0;
     size_t n_chains_sec = 0;
-    for(size_t i = 0; i < anchors.size(); ++i){
-        if(t[i] == 0 and msc[i] > min_chain_score) n_chains ++;
-        if(t_sec[i] == 0 and msc_sec[i] > min_chain_score) n_chains_sec ++;
-    }
-    
+    find_n_chains(n_chains, anchors, t, msc, min_chain_score);
+    find_n_chains(n_chains_sec, anchors, t_sec, msc_sec, min_chain_score);
     
     // TODO: check if we want to report also non aligned reads
     if(n_chains == 0)
@@ -565,32 +636,12 @@ bool find_chains_secondary(
     std::vector<std::pair<ll,size_t>> chain_starts(n_chains); // Stores uniqe chains and their index of uniqe chains in anchors
     std::vector<std::pair<ll,size_t>> chain_starts_sec(n_chains_sec); // Stores uniqe secondary chains and their index of uniqe secondary chains in anchors
 
-    // Lambda for finding chain starts
-    auto find_chain_starts = [&](std::vector<std::pair<ll,size_t>>& chain_starts,
-                                size_t& k,
-                                const std::vector<ll>& t,
-                                const std::vector<ll>& f,
-                                const std::vector<ll>& p,
-                                const std::vector<ll>& msc)
-    {
-        for(size_t i = 0; i < anchors.size(); ++i)
-        {
-            if(t[i] == 0 and  msc[i] > min_chain_score)
-            {
-                size_t j = i;
-                while(j >= 0 and f[j] < msc[j]) j = p[j]; // Find the peak that maximizes f
-                if (j < 0) i = 0;
-                chain_starts[k++] = make_pair(f[j],j);
-            }
-        }
-    };
-
     // Find chain starts for primary chains
     size_t k = 0;
-    find_chain_starts(chain_starts, k, t, f, p, msc);
+    find_chain_starts(chain_starts, k, t, f, p, msc, anchors, min_chain_score);
     // Find chain starts for secondary chains
     size_t k_sec = 0;
-    find_chain_starts(chain_starts_sec, k_sec, t_sec, f_sec, p_sec, msc_sec);
+    find_chain_starts(chain_starts_sec, k_sec, t_sec, f_sec, p_sec, msc_sec, anchors, min_chain_score);
 
     chain_starts.resize(k), chain_starts.shrink_to_fit();
     chain_starts_sec.resize(k_sec), chain_starts_sec.shrink_to_fit();
@@ -610,43 +661,13 @@ bool find_chains_secondary(
     MTIME_END(5);   // Timing helper
     MTIME_START(6); // Timing helper
 
-    // Lamda for backtrack algorithm
-    auto backtrack = [&](const std::vector<std::pair<ll,size_t>>& chain_starts,
-                        const size_t& n_chains,
-                        const std::vector<ll>& t,
-                        const std::vector<ll>& f,
-                        const std::vector<ll>& p)
-    {
-        for (size_t i = 0; i < n_chains; ++i) {
-            ll j = chain_starts[i].second;
-            chain_t chain;
-            chain.mate = mems[anchors[j].first].mate;
-            chain.score = chain_starts[i].first;
-            do {
-                chain.paired = chain.paired or (chain.mate != mems[anchors[j].first].mate);
-                chain.anchors.push_back(j); // stores the reverse of the chain
-                //t[j] = 1
-                j = p[j];
-            } while (j >= 0 && t[j] == 0);
-            if (j < 0) { // l - prev_l is the length of the chain
-                if (chain.anchors.size() >= min_chain_length){
-                    chains.push_back(std::move(chain));
-                }     
-            } else if (chain_starts[i].first - f[j] >= min_chain_score) { // Two chains share a common prefix
-                if (chain.anchors.size() >= min_chain_length){
-                    chains.push_back(std::move(chain));
-                }
-            }
-        }
-    };
-
     // Backtrack for primary chains
     memset(t.data(),0,sizeof(size_t) * t.size());
-    backtrack(chain_starts, n_chains, t, f, p);
+    backtrack(chain_starts, n_chains, t, f, p, chains, anchors, mems, min_chain_score, min_chain_length);
 
     // Backtrack for secondary chains
     memset(t_sec.data(),0,sizeof(size_t) * t_sec.size());
-    backtrack(chain_starts_sec, n_chains_sec, t_sec, f_sec, p_sec);
+    backtrack(chain_starts_sec, n_chains_sec, t_sec, f_sec, p_sec, chains, anchors, mems, min_chain_score, min_chain_length);
 
     // Lamda helper to sort the anchors
     auto chain_t_cmp = [](const chain_t& i, const chain_t& j) -> bool
@@ -685,15 +706,8 @@ bool find_chains_secondary(
     // std::sort(chains.begin(), chains.end(), std::greater<std::pair<ll,std::vector<size_t>>>());
 
     // Clear space
-    p.resize(0), p.shrink_to_fit();
-    t.resize(0), t.shrink_to_fit();
-    f.resize(0), f.shrink_to_fit();
-    msc.resize(0), msc.shrink_to_fit();
-
-    p_sec.resize(0), p_sec.shrink_to_fit();
-    t_sec.resize(0), t_sec.shrink_to_fit();
-    f_sec.resize(0), f_sec.shrink_to_fit();
-    msc_sec.resize(0), msc_sec.shrink_to_fit();
+    clear_and_shrink_vecs(p, t, f, msc); 
+    clear_and_shrink_vecs(p_sec, t_sec, f_sec, msc_sec);
 
     MTIME_END(6); // Timing helper
     MTIME_TSAFE_MERGE;
