@@ -207,6 +207,8 @@ public:
                 n_seeds_thr(config.n_seeds_thr),// Filter seed if occurs more than threshold
                 max_iter(config.max_iter),      // Max number of iterations of the chaining algorithhm
                 max_pred(config.max_pred),      // Max number of predecessor to be considered
+                max_dist_x(config.max_dist_x),  // Max distance for two anchors to be chained
+                max_dist_y(config.max_dist_y),  // Max distance for two anchors from the same read to be chained
                 secondary_chains(config.secondary_chains), // Attempt to find secondary chains in paired-end setting
                 smatch(config.smatch),          // Match score default
                 smismatch(config.smismatch),    // Mismatch score default
@@ -2847,6 +2849,8 @@ protected:
 
     ll max_iter = 50;       // Max number of iterations of the chaining algorithhm
     ll max_pred = 50;       // Max number of predecessor to be considered
+    ll max_dist_x = 500;    // Max distance for two anchors to be chained
+    ll max_dist_y = 100;    // Max distance for two anchors from the same read to be chained
     bool secondary_chains = false; // Find secondary chains in paired-end setting
 
     chain_config_t chain_config;

@@ -84,6 +84,8 @@ struct Args
   // chaining parameters
   ll max_iter = 50;       // Max number of iterations of the chaining algorithhm
   ll max_pred = 50;       // Max number of predecessor to be considered
+  ll max_dist_x = 500;    // Max distance for two anchors to be chained
+  ll max_dist_y = 100;    // Max distance for two anchors from the same read to be chained
   bool secondary_chains = false; // Attempt to find secondary chains in paired-end setting
 
 };
@@ -94,7 +96,7 @@ void parseArgs(int argc, char *const argv[], Args &arg)
   extern char *optarg;
   extern int optind;
 
-  std::string usage("usage: " + std::string(argv[0]) + " infile [-p patterns] [-1 mate1] [-2 mate2] [-o output] [-t threads] [-b batch] [-l len] [-q shaped_slp]  [-L ext_l] [-A smatch] [-B smismatc] [-O gapo] [-E gape] [-d dir_en] [-s seeds_en] [-D dir_thr] [-S seeds_thr] [-n no_lcp] [-x max_iter] [-y max_pred] [-Z secondary_chains]\n\n" +
+  std::string usage("usage: " + std::string(argv[0]) + " infile [-p patterns] [-1 mate1] [-2 mate2] [-o output] [-t threads] [-b batch] [-l len] [-q shaped_slp]  [-L ext_l] [-A smatch] [-B smismatc] [-O gapo] [-E gape] [-d dir_en] [-s seeds_en] [-D dir_thr] [-S seeds_thr] [-n no_lcp] [-c max_iter] [-d max_pred] [-x max_dist_x] [-y max_dist_y] [-Z secondary_chains]\n\n" +
                     "Align the reads in the pattern against the reference index in infile.\n" +
                     "   pattens: [string]  - path to patterns file.\n" +
                     "     mate1: [string]  - path to file with #1 mates paired with mate2.\n" +
@@ -112,7 +114,9 @@ void parseArgs(int argc, char *const argv[], Args &arg)
                     " seeds_thr: [float]   - seed filtering threshold (def. " + std::to_string(arg.n_seeds_thr) + ")\n" +
                     "  max_iter: [integer] - max number of iterations of the chaining algorithm (def. " + std::to_string(arg.max_iter) + ")\n" +
                     "  max_pred: [integer] - max number of predecessors to be considered in chaining algorithm (def. " + std::to_string(arg.max_pred) + ")\n" +
-              "secondary_chains: [boolean] - attempt to find secondary chains in paired-alignment setting (def. " + std::to_string(arg.secondary_chains) + ")\n" +
+                    "max_dist_x: [integer] - max distance for two anchors to be chained (def. " + std::to_string(arg.max_dist_x) + ")\n" +
+                    "max_dist_y: [integer] - max distance for two anchors from the same read to be chained (def. " + std::to_string(arg.max_dist_y) + ")\n" +
+              "secondary_chains: [boolean] - attempt to find secondary chains for paired-end reads (def. " + std::to_string(arg.secondary_chains) + ")\n" +
                     "    smatch: [integer] - match score value (def. " + std::to_string(arg.smatch) + ")\n" +
                     " smismatch: [integer] - mismatch penalty value (def. " + std::to_string(arg.smismatch) + ")\n" +
                     "      gapo: [integer] - gap open penalty value (def. " + std::to_string(arg.gapo) + "," + std::to_string(arg.gapo2) + ")\n" +
@@ -120,7 +124,7 @@ void parseArgs(int argc, char *const argv[], Args &arg)
 
   std::string sarg;
   char* s;
-  while ((c = getopt(argc, argv, "ql:hp:o:t:1:2:b:A:B:O:E:L:dsnD:S:x:y:Z")) != -1)
+  while ((c = getopt(argc, argv, "ql:hp:o:t:1:2:b:A:B:O:E:L:dsnD:S:w:v:x:y:Z")) != -1)
   {
     switch (c)
     {
@@ -188,13 +192,21 @@ void parseArgs(int argc, char *const argv[], Args &arg)
     case 'q':
       arg.shaped_slp = true;
       break;
-    case 'x':
+    case 'w':
       sarg.assign(optarg);
       arg.max_iter = stoi(sarg);
       break;
-    case 'y':
+    case 'v':
       sarg.assign(optarg);
       arg.max_pred = stoi(sarg);
+      break;
+    case 'x':
+      sarg.assign(optarg);
+      arg.max_dist_x = stoi(sarg);
+      break;
+    case 'y':
+      sarg.assign(optarg);
+      arg.max_dist_y = stoi(sarg);
       break;
     case 'Z':
       arg.secondary_chains = true;
@@ -245,6 +257,8 @@ typename aligner_t::config_t configurer(Args &args){
   // chaining parameters
   config.max_iter   = args.max_iter;    // Max number of iterations of the chaining algorithhm
   config.max_pred   = args.max_pred;    // Max number of predecessor to be considered
+  config.max_dist_x = args.max_dist_x;   // Max distance for two anchors to be chained
+  config.max_dist_y = args.max_dist_y;   // Max distance for two anchors from the same read to be chained
   config.secondary_chains = args.secondary_chains; // Attempt to find secondary chains in paired-end setting
 
   return config;

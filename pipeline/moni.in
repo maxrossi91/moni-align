@@ -512,7 +512,7 @@ def query_helper(args, exe, exe_name):
     command += " -b {} -A {} -B {} -O {} -E {} -L {} -l {}".format(args.batch,args.smatch, args.smismatch, args.gapo, args.gape, args.extl, args.minl)
   
   if exe_name == "MONI":
-    command += " -x {} -y {}".format(args.max_iter, args.max_pred)
+    command += " -w {} -v {} -x {} -y {}".format(args.max_iter, args.max_pred, args.max_dist_x, args.max_dist_y)
   
   if exe_name == "MONI":
     if args.dir_dis:
@@ -743,9 +743,11 @@ def main():
   align_parser.add_argument('-g', '--grammar',    help='select the grammar (only for moni and phoni) [plain, shaped]', type=str, default='plain')
   align_parser.add_argument('-l', '--minl',       help='minimum seed length', type=int, default=25)
   align_parser.add_argument('-L', '--extl',       help='length of reference substring for extension', type=int, default=100)
-  align_parser.add_argument('-x', '--max_iter',   help='max number of iterations of the chaining algorithm', type=int, default=50)
-  align_parser.add_argument('-y', '--max_pred',   help='max number of predecessors to be considered in chaining algorithm', type=int, default=50)
-  align_parser.add_argument('-Z', '--secondary_chains', help='Enable finding secondary chains in paired-end setting', action='store_true')
+  align_parser.add_argument('-w', '--max_iter',   help='max number of iterations of the chaining algorithm', type=int, default=50)
+  align_parser.add_argument('-v', '--max_pred',   help='max number of predecessors to be considered in chaining algorithm', type=int, default=50)
+  align_parser.add_argument('-x', '--max_dist_x', help='max distance for two anchors to be chained', type=int, default=500)
+  align_parser.add_argument('-y', '--max_dist_y', help='max distance for two anchors from the same read to be chained', type=int, default=100)
+  align_parser.add_argument('-Z', '--secondary_chains', help='Enable finding secondary chains for paired-end reads', action='store_true')
   align_parser.add_argument('-A', '--smatch',     help='match score value', type=int, default=2)
   align_parser.add_argument('-B', '--smismatch',  help='mismatch penalty value', type=int, default=4)
   align_parser.add_argument('-O', '--gapo',       help='coma separated gap open penalty values', type=str, default='4,13')
