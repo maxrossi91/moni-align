@@ -84,13 +84,13 @@ void populate_anchors(
     }
 }
 
-void update_score_and_pred(
+inline void update_score_and_pred(
     std::vector<ll>& f,
     std::vector<ll>& p,
     std::vector<ll>& msc,
-    const ll& max_f,
-    const ll& max_j,
-    const size_t& i
+    const ll max_f,
+    const ll max_j,
+    const size_t i
     )
 {
     f[i] = max_f;
@@ -114,12 +114,12 @@ void find_chain_ends(
     }
 }
 
-void find_n_chains(
-    size_t& n_chains,
+size_t find_n_chains(
+    size_t n_chains,
     const std::vector< std::pair< size_t, size_t > >& anchors,
     const std::vector<ll>& t,
     const std::vector<ll>& msc,
-    const ll& min_chain_score 
+    const ll min_chain_score 
     )
 {
     for(size_t i = 0; i < anchors.size(); ++i){
@@ -127,6 +127,7 @@ void find_n_chains(
             n_chains ++;
         } 
     }
+    return n_chains;
 }
 
 void find_chain_starts(
@@ -137,7 +138,7 @@ void find_chain_starts(
     const std::vector<ll>& p,
     const std::vector<ll>& msc,
     const std::vector< std::pair< size_t, size_t > >& anchors,
-    const ll& min_chain_score
+    const ll min_chain_score
     )
 {
     for(size_t i = 0; i < anchors.size(); ++i)
@@ -154,15 +155,15 @@ void find_chain_starts(
 
 void backtrack(
     const std::vector<std::pair<ll, size_t>>& chain_starts,
-    const size_t& n_chains,
+    const size_t n_chains,
     std::vector<ll>& t,
     const std::vector<ll>& f,
     const std::vector<ll>& p,
     std::vector<chain_t>& chains,
     const std::vector<std::pair<size_t,size_t>>& anchors,
     const std::vector<mem_t>& mems,
-    const ll& min_chain_score,
-    const ll& min_chain_length
+    const ll min_chain_score,
+    const ll min_chain_length
     )
 {
     for (size_t i = 0; i < n_chains; ++i) {
@@ -358,7 +359,7 @@ bool find_chains(
     find_chain_ends(anchors, p, t);
     
     size_t n_chains = 0;
-    find_n_chains(n_chains, anchors, t, msc, min_chain_score);
+    n_chains = find_n_chains(n_chains, anchors, t, msc, min_chain_score);
     
     // TODO: check if we want to report also non aligned reads
     if(n_chains == 0)
@@ -625,8 +626,8 @@ bool find_chains_secondary(
     
     size_t n_chains = 0;
     size_t n_chains_sec = 0;
-    find_n_chains(n_chains, anchors, t, msc, min_chain_score);
-    find_n_chains(n_chains_sec, anchors, t_sec, msc_sec, min_chain_score);
+    n_chains = find_n_chains(n_chains, anchors, t, msc, min_chain_score);
+    n_chains_sec = find_n_chains(n_chains_sec, anchors, t_sec, msc_sec, min_chain_score);
     
     // TODO: check if we want to report also non aligned reads
     if(n_chains == 0)
