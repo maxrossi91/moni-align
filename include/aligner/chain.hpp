@@ -174,7 +174,7 @@ void backtrack(
         do {
             chain.paired = chain.paired or (chain.mate != mems[anchors[j].first].mate);
             chain.anchors.push_back(j); // stores the reverse of the chain
-            //t[j] = 1;
+            t[j] = 1;
             j = p[j];
         } while (j >= 0 && t[j] == 0);
         if (j < 0) { // l - prev_l is the length of the chain
