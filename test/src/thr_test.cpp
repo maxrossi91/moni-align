@@ -1,4 +1,4 @@
-/* shapedslp_test - Test if the ShapedSLP generates the whole original text
+/* thr_test - Test if plain and compressed version are equals
     Copyright (C) 2020 Massimiliano Rossi
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -12,10 +12,10 @@
     along with this program.  If not, see http://www.gnu.org/licenses/ .
 */
 /*!
-   \file shapedslp_test.cpp
-   \brief shapedslp_test.cpp Test if the ShapedSLP generates the whole original text.
+   \file thr_test.cpp
+   \brief thr_test.cpp Test if plain and compressed version are equals.
    \author Massimiliano Rossi
-   \date 18/09/2020
+   \date 17/11/2020
 */
 
 #include <iostream>
@@ -28,11 +28,16 @@
 
 #include <ms_pointers.hpp>
 
+#include <thresholds_ds.hpp>
+
 #include <malloc_count.h>
 
 #include <SelfShapedSlp.hpp>
 #include <DirectAccessibleGammaCode.hpp>
 #include <SelectType.hpp>
+
+#define maxr(a,b) ((a) = std::max((a),(b)))
+#define minr(a,b) ((a) = std::min((a), (b)))
 
 //*********************** Argument options ***************************************
 // struct containing command line parameters and other globals
@@ -125,23 +130,27 @@ void parseArgs(int argc, char *const argv[], Args &arg)
 
 int main(int argc, char *const argv[])
 {
-  using SelSd = SelectSdvec<>;
-  using DagcSd = DirectAccessibleGammaCode<SelSd>;
 
   Args args;
   parseArgs(argc, argv, args);
 
-  // Building the r-index
-  verbose("Building random access");
+  verbose("Loading the matching statistics index");
   std::chrono::high_resolution_clock::time_point t_insert_start = std::chrono::high_resolution_clock::now();
 
-  // pfp_ra ra(args.filename, args.w);
-  std::string filename_slp = args.filename + ".slp";
-  SelfShapedSlp<uint32_t, DagcSd, DagcSd, SelSd> ra;
-  ifstream fs(filename_slp);
-  ra.load(fs);
+  std::string bwt_fname = args.filename + ".bwt";
 
-  size_t n = ra.getLen();
+  std::string bwt_heads_fname = bwt_fname + ".heads";
+  std::ifstream ifs_heads(bwt_heads_fname);
+  if (!ifs_heads.is_open())
+    error("open() file " + bwt_heads_fname + " failed");
+  std::string bwt_len_fname = bwt_fname + ".len";
+  std::ifstream ifs_len(bwt_len_fname);
+  if (!ifs_len.is_open())
+    error("open() file " + bwt_len_fname + " failed");
+  ms_rle_string_sd bwt = ms_rle_string_sd(ifs_heads, ifs_len);
+
+  ifs_heads.close();
+  ifs_len.close();
 
   std::chrono::high_resolution_clock::time_point t_insert_end = std::chrono::high_resolution_clock::now();
 
@@ -149,34 +158,37 @@ int main(int argc, char *const argv[])
   verbose("Memory peak: ", malloc_count_peak());
   verbose("Elapsed time (s): ", std::chrono::duration<double, std::ratio<1>>(t_insert_end - t_insert_start).count());
 
-  verbose("Reading text");
+  verbose("Building the thresholds from file");
+
   t_insert_start = std::chrono::high_resolution_clock::now();
 
-  std::vector<uint8_t> text;
-  if(args.is_fasta)
-    read_fasta_file(args.filename.c_str(),text);
-  else
-    read_file(args.filename.c_str(),text);
+
+  thr_plain<> plain(args.filename,&bwt);
+  verbose("Plain thresholds construction complete");
+  thr_bv<> bv(args.filename,&bwt);
 
   t_insert_end = std::chrono::high_resolution_clock::now();
 
   verbose("Memory peak: ", malloc_count_peak());
   verbose("Elapsed time (s): ", std::chrono::duration<double, std::ratio<1>>(t_insert_end - t_insert_start).count());
 
-  verbose("Checking if equals");
+  verbose("Checking the thresholds");
+
   t_insert_start = std::chrono::high_resolution_clock::now();
 
-  if(n != text.size())
-    error("Text size is different", " ra: ", n, " text: ", text.size());
-
-  for(size_t i = 0; i < n; ++i)
-    if(ra.charAt(i) != text[i])
-      error("Different character in position ", i, " ra: ", ra.charAt(i), " text: ", text[i]);
+  for (size_t i = 0; i < bwt.number_of_runs(); ++i)
+  {
+    if(plain[i] != bv[i])
+      error("Plain and bv are different in position ", i , " . Plain: ", plain[i], " Compressed: ", bv[i]);
+  }
 
   t_insert_end = std::chrono::high_resolution_clock::now();
 
   verbose("Memory peak: ", malloc_count_peak());
   verbose("Elapsed time (s): ", std::chrono::duration<double, std::ratio<1>>(t_insert_end - t_insert_start).count());
+
+
+  
 
   auto mem_peak = malloc_count_peak();
   verbose("Memory peak: ", malloc_count_peak());
@@ -184,6 +196,7 @@ int main(int argc, char *const argv[])
   size_t space = 0;
   if (args.memo)
   {
+    verbose("Thresholds size (bytes): ", space);
   }
 
   if (args.store)

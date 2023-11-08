@@ -1,4 +1,4 @@
-/* shapedslp_test - Test if the ShapedSLP generates the whole original text
+/* matching_statistics - Computes the matching statistics from BWT and Thresholds
     Copyright (C) 2020 Massimiliano Rossi
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -12,10 +12,10 @@
     along with this program.  If not, see http://www.gnu.org/licenses/ .
 */
 /*!
-   \file shapedslp_test.cpp
-   \brief shapedslp_test.cpp Test if the ShapedSLP generates the whole original text.
+   \file matching_statistics.cpp
+   \brief matching_statistics.cpp Computes the matching statistics from BWT and Thresholds.
    \author Massimiliano Rossi
-   \date 18/09/2020
+   \date 13/07/2020
 */
 
 #include <iostream>
@@ -26,7 +26,7 @@
 
 #include <sdsl/io.hpp>
 
-#include <ms_pointers.hpp>
+#include <moni.hpp>
 
 #include <malloc_count.h>
 
@@ -131,17 +131,18 @@ int main(int argc, char *const argv[])
   Args args;
   parseArgs(argc, argv, args);
 
-  // Building the r-index
-  verbose("Building random access");
+  verbose("Loading the matching statistics index");
   std::chrono::high_resolution_clock::time_point t_insert_start = std::chrono::high_resolution_clock::now();
 
-  // pfp_ra ra(args.filename, args.w);
-  std::string filename_slp = args.filename + ".slp";
-  SelfShapedSlp<uint32_t, DagcSd, DagcSd, SelSd> ra;
-  ifstream fs(filename_slp);
-  ra.load(fs);
+  
+  ms_pointers<> ms;
 
-  size_t n = ra.getLen();
+  std::string filename_ms = args.filename + ms.get_file_extension();
+  verbose("Index filename: " + filename_ms);
+
+  ifstream fs_ms(filename_ms);
+  ms.load(fs_ms);
+  fs_ms.close();
 
   std::chrono::high_resolution_clock::time_point t_insert_end = std::chrono::high_resolution_clock::now();
 
@@ -149,34 +150,32 @@ int main(int argc, char *const argv[])
   verbose("Memory peak: ", malloc_count_peak());
   verbose("Elapsed time (s): ", std::chrono::duration<double, std::ratio<1>>(t_insert_end - t_insert_start).count());
 
-  verbose("Reading text");
+  verbose("Loading random access");
   t_insert_start = std::chrono::high_resolution_clock::now();
 
-  std::vector<uint8_t> text;
-  if(args.is_fasta)
-    read_fasta_file(args.filename.c_str(),text);
-  else
-    read_file(args.filename.c_str(),text);
+  std::string filename_slp = args.filename + ".slp";
+
+  SelfShapedSlp<uint32_t, DagcSd, DagcSd, SelSd> ra;
+
+  ifstream fs(filename_slp);
+  ra.load(fs);
+  fs.close();
 
   t_insert_end = std::chrono::high_resolution_clock::now();
 
+  verbose("Matching statistics index loading complete");
   verbose("Memory peak: ", malloc_count_peak());
   verbose("Elapsed time (s): ", std::chrono::duration<double, std::ratio<1>>(t_insert_end - t_insert_start).count());
 
-  verbose("Checking if equals");
-  t_insert_start = std::chrono::high_resolution_clock::now();
 
-  if(n != text.size())
-    error("Text size is different", " ra: ", n, " text: ", text.size());
+  sdsl::nullstream ns;
 
-  for(size_t i = 0; i < n; ++i)
-    if(ra.charAt(i) != text[i])
-      error("Different character in position ", i, " ra: ", ra.charAt(i), " text: ", text[i]);
+  size_t ms_size = ms.serialize(ns);
+  // size_t ra_size = ra.serialize(ns);
 
-  t_insert_end = std::chrono::high_resolution_clock::now();
-
-  verbose("Memory peak: ", malloc_count_peak());
-  verbose("Elapsed time (s): ", std::chrono::duration<double, std::ratio<1>>(t_insert_end - t_insert_start).count());
+  ms.print_stats();
+  verbose("MS size (bytes): ", ms_size);
+  // verbose("RA size (bytes): ", ra_size);
 
   auto mem_peak = malloc_count_peak();
   verbose("Memory peak: ", malloc_count_peak());
@@ -184,6 +183,7 @@ int main(int argc, char *const argv[])
   size_t space = 0;
   if (args.memo)
   {
+    verbose("Thresholds size (bytes): ", space);
   }
 
   if (args.store)

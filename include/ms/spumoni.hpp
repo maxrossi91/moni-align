@@ -1,4 +1,4 @@
-/* ms_pointers - Computes the matching statistics pointers from BWT and Thresholds 
+/* spumoni - Computes the pseudo Matching Statistics 
     Copyright (C) 2020 Massimiliano Rossi
 
     This program is free software: you can redistribute it and/or modify
@@ -15,10 +15,10 @@
     along with this program.  If not, see http://www.gnu.org/licenses/ .
 */
 /*!
-   \file ms_pointers.hpp
-   \brief ms_pointers.hpp Computes the matching statistics pointers from BWT and Thresholds.
+   \file spumoni.hpp
+   \brief spumoni.hpp Computes the pseudo Matching Statistics.
    \author Massimiliano Rossi
-   \date 09/07/2020
+   \date 03/03/2021
 */
 
 #ifndef _MS_POINTERS_HH
@@ -45,7 +45,7 @@ public:
     thresholds_t thresholds;
 
     // std::vector<ulint> samples_start;
-    int_vector<> samples_start;
+    // int_vector<> samples_start;
     // int_vector<> samples_end;
     // std::vector<ulint> samples_last;
 
@@ -107,21 +107,15 @@ public:
         int log_r = bitsize(uint64_t(this->r));
         int log_n = bitsize(uint64_t(this->bwt.size()));
 
+        verbose("Text length: n = ", n);
         verbose("Number of BWT equal-letter runs: r = ", this->r);
         verbose("Rate n/r = ", double(this->bwt.size()) / this->r);
         verbose("log2(r) = ", log2(double(this->r)));
         verbose("log2(n/r) = ", log2(double(this->bwt.size()) / this->r));
 
-        // this->build_F(istring);
-        // istring.clear();
-        // istring.shrink_to_fit();
-
-        read_samples(filename + ".ssa", this->r, n, samples_start);
-        read_samples(filename + ".esa", this->r, n, this->samples_last);
-
         std::chrono::high_resolution_clock::time_point t_insert_end = std::chrono::high_resolution_clock::now();
 
-        verbose("R-index construction complete");
+        verbose("RL-BWT construction complete");
         verbose("Memory peak: ", malloc_count_peak());
         verbose("Elapsed time (s): ", std::chrono::duration<double, std::ratio<1>>(t_insert_end - t_insert_start).count());
 
@@ -130,30 +124,6 @@ public:
         t_insert_start = std::chrono::high_resolution_clock::now();
 
         thresholds = thresholds_t(filename,&this->bwt);
-
-        // std::string tmp_filename = filename + std::string(".thr_pos");
-
-        // struct stat filestat;
-        // FILE *fd;
-
-        // if ((fd = fopen(tmp_filename.c_str(), "r")) == nullptr)
-        //     error("open() file " + tmp_filename + " failed");
-
-        // int fn = fileno(fd);
-        // if (fstat(fn, &filestat) < 0)
-        //     error("stat() file " + tmp_filename + " failed");
-
-        // if (filestat.st_size % THRBYTES != 0)
-        //     error("invilid file " + tmp_filename);
-
-        // size_t length = filestat.st_size / THRBYTES;
-        // thresholds.resize(length);
-
-        // for (size_t i = 0; i < length; ++i)
-        //     if ((fread(&thresholds[i], THRBYTES, 1, fd)) != 1)
-        //         error("fread() file " + tmp_filename + " failed");
-
-        // fclose(fd);
 
         t_insert_end = std::chrono::high_resolution_clock::now();
 
@@ -251,9 +221,7 @@ public:
         verbose("   terminator_position: ", sizeof(this->terminator_position));
         verbose("                     F: ", my_serialize(this->F, ns));
         verbose("                   bwt: ", this->bwt.serialize(ns));
-        verbose("          samples_last: ", this->samples_last.serialize(ns));
         verbose("            thresholds: ", thresholds.serialize(ns));
-        verbose("         samples_start: ", samples_start.serialize(ns));
     }
 
     /*
@@ -285,12 +253,9 @@ public:
         written_bytes += sizeof(this->terminator_position);
         written_bytes += my_serialize(this->F, out, child, "F");
         written_bytes += this->bwt.serialize(out);
-        written_bytes += this->samples_last.serialize(out);
 
         written_bytes += thresholds.serialize(out, child, "thresholds");
-        // written_bytes += my_serialize(thresholds, out, child, "thresholds");
-        // written_bytes += my_serialize(samples_start, out, child, "samples_start");
-        written_bytes += samples_start.serialize(out, child, "samples_start");
+
 
         sdsl::structure_tree::add_size(child, written_bytes);
         return written_bytes;
@@ -298,7 +263,7 @@ public:
 
     std::string get_file_extension() const
     {
-        return thresholds.get_file_extension() + ".ms";
+        return thresholds.get_file_extension() + ".spumoni";
     }
 
     /* load the structure from the istream
@@ -311,19 +276,11 @@ public:
         my_load(this->F, in);
         this->bwt.load(in);
         this->r = this->bwt.number_of_runs();
-        this->samples_last.load(in);
+
 
         thresholds.load(in,&this->bwt);
-        // my_load(thresholds, in);
-        samples_start.load(in);
-        // my_load(samples_start,in);
     }
 
-    // // From r-index
-    // ulint get_last_run_sample()
-    // {
-    //     return (samples_last[r - 1] + 1) % bwt.size();
-    // }
 
 protected:
     // Computes the matching statistics pointers for the given pattern
@@ -331,124 +288,69 @@ protected:
     std::vector<size_t> _query(const string_t &pattern, const size_t m)
     {
 
-        std::vector<size_t> ms_pointers(m);
+        std::vector<size_t> lengths(m);
 
         // Start with the empty string
         auto pos = this->bwt_size() - 1;
-        auto sample = this->get_last_run_sample();
+        auto length = 0;
 
         for (size_t i = 0; i < m; ++i)
         {
             auto c = pattern[m - i - 1];
-            const auto n_c = this->bwt.number_of_letter(c);
-            if (n_c == 0)
+
+            if (this->bwt.number_of_letter(c) == 0)
             {
-                sample = 0;
-                // Perform one backward step
-                pos = LF(pos, c);
+                length = 0;
             }
             else if (pos < this->bwt.size() && this->bwt[pos] == c)
             {
-                sample--;
-                // Perform one backward step
-                pos = LF(pos, c);
+                length++;
             }
             else
             {
                 // Get threshold
-                ri::ulint run_of_pos = this->bwt.run_of_position(pos);
-                auto rnk_c = this->bwt.run_and_head_rank(run_of_pos, c);
-
+                ri::ulint rnk = this->bwt.rank(pos, c);
                 size_t thr = this->bwt.size() + 1;
 
                 ulint next_pos = pos;
 
-                if( rnk_c.second < n_c)
+                // if (rnk < (this->F[c] - this->F[c-1]) // I can use F to compute it
+                if (rnk < this->bwt.number_of_letter(c))
                 {
-                    size_t run_of_j = this->bwt.run_head_select(rnk_c.first + 1, c);
-                    sample = samples_start[run_of_j];
+                    // j is the first position of the next run of c's
+                    ri::ulint j = this->bwt.select(rnk, c);
+                    ri::ulint run_of_j = this->bwt.run_of_position(j);
+
                     thr = thresholds[run_of_j]; // If it is the first run thr = 0
-                    // Perform one backward step
-                    next_pos = this->F[c] + rnk_c.second;
+
+                    length = 0;
+
+                    next_pos = j;
                 }
 
                 if (pos < thr)
                 {
-                    // Jump up
-                    size_t run_of_j = this->bwt.run_head_select(rnk_c.first, c);
-                    sample = this->samples_last[run_of_j];
-                    // Perform one backward step
-                    next_pos = this->F[c] + rnk_c.second - 1;
+
+                    rnk--;
+                    ri::ulint j = this->bwt.select(rnk, c);
+                    ri::ulint run_of_j = this->bwt.run_of_position(j);
+                    length = 0;
+
+                    next_pos = j;
                 }
 
                 pos = next_pos;
-
             }
 
-            ms_pointers[m - i - 1] = sample;
-            
+            lengths[m - i - 1] = length;
+
             // Perform one backward step
             pos = LF(pos, c);
         }
 
-        return ms_pointers;
+        return lengths;
     }
-    // // From r-index
-    // vector<ulint> build_F(std::ifstream &ifs)
-    // {
-    //     ifs.clear();
-    //     ifs.seekg(0);
-    //     F = vector<ulint>(256, 0);
-    //     uchar c;
-    //     ulint i = 0;
-    //     while (ifs >> c)
-    //     {
-    //         if (c > TERMINATOR)
-    //             F[c]++;
-    //         else
-    //         {
-    //             F[TERMINATOR]++;
-    //             terminator_position = i;
-    //         }
-    //         i++;
-    //     }
-    //     for (ulint i = 255; i > 0; --i)
-    //         F[i] = F[i - 1];
-    //     F[0] = 0;
-    //     for (ulint i = 1; i < 256; ++i)
-    //         F[i] += F[i - 1];
-    //     return F;
-    // }
 
-    // // From r-index
-    // vector<pair<ulint, ulint>> &read_run_starts(std::string fname, ulint n, vector<pair<ulint, ulint>> &ssa)
-    // {
-    //     ssa.clear();
-    //     std::ifstream ifs(fname);
-    //     uint64_t x = 0;
-    //     uint64_t y = 0;
-    //     uint64_t i = 0;
-    //     while (ifs.read((char *)&x, 5) && ifs.read((char *)&y, 5))
-    //     {
-    //         ssa.push_back(pair<ulint, ulint>(y ? y - 1 : n - 1, i));
-    //         i++;
-    //     }
-    //     return ssa;
-    // }
-
-    // // From r-index
-    // vector<ulint> &read_run_ends(std::string fname, ulint n, vector<ulint> &esa)
-    // {
-    //     esa.clear();
-    //     std::ifstream ifs(fname);
-    //     uint64_t x = 0;
-    //     uint64_t y = 0;
-    //     while (ifs.read((char *)&x, 5) && ifs.read((char *)&y, 5))
-    //     {
-    //         esa.push_back(y ? y - 1 : n - 1);
-    //     }
-    //     return esa;
-    // }
 };
 
 // Computes the matching statistics pointers for the given pattern
@@ -457,11 +359,11 @@ template <typename string_t>
 std::vector<size_t> ms_pointers<ri::sparse_sd_vector, ms_rle_string_sd, thr_bv<ms_rle_string_sd>>::_query(const string_t &pattern, const size_t m)
 {
 
-    std::vector<size_t> ms_pointers(m);
+    std::vector<size_t> lengths(m);
 
     // Start with the empty string
     auto pos = this->bwt_size() - 1;
-    auto sample = this->get_last_run_sample();
+    auto length = 0;
 
     for (size_t i = 0; i < m; ++i)
     {
@@ -469,13 +371,13 @@ std::vector<size_t> ms_pointers<ri::sparse_sd_vector, ms_rle_string_sd, thr_bv<m
         const auto n_c = this->bwt.number_of_letter(c);
         if (n_c == 0)
         {
-            sample = 0;
+            length = 0;
             // Perform one backward step
             pos = LF(pos, c);
         }
         else if (pos < this->bwt.size() && this->bwt[pos] == c)
         {
-            sample--;
+            length++;
             // Perform one backward step
             pos = LF(pos, c);
         }
@@ -489,25 +391,22 @@ std::vector<size_t> ms_pointers<ri::sparse_sd_vector, ms_rle_string_sd, thr_bv<m
             if (rnk_c.first > thr_c)
             {
                 // Jump up
-                size_t run_of_j = this->bwt.run_head_select(rnk_c.first, c);
-                sample = samples_last[run_of_j];
                 // Perform one backward step
                 pos = this->F[c] + rnk_c.second - 1;
             }
             else
             {
                 // Jump down
-                size_t run_of_j = this->bwt.run_head_select(rnk_c.first + 1, c);
-                sample = samples_start[run_of_j];
                 // Perform one backward step
                 pos = this->F[c] + rnk_c.second;
             }
+            length = 0;
         }
         // Store the sample
-        ms_pointers[m - i - 1] = sample;
+        lengths[m - i - 1] = length;
     }
 
-    return ms_pointers;
+    return lengths;
 }
 
 #endif /* end of include guard: _MS_POINTERS_HH */

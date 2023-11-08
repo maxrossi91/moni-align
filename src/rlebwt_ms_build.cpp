@@ -1,4 +1,4 @@
-/* matching_statistics - Computes the matching statistics from BWT and Thresholds
+/* rlebwt_ms_build - Build the matching statistics data structure
     Copyright (C) 2020 Massimiliano Rossi
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -12,8 +12,8 @@
     along with this program.  If not, see http://www.gnu.org/licenses/ .
 */
 /*!
-   \file matching_statistics.cpp
-   \brief matching_statistics.cpp Computes the matching statistics from BWT and Thresholds.
+   \file rlebwt_ms_build.cpp
+   \brief rlebwt_ms_build.cpp Build the matching statistics data structure.
    \author Massimiliano Rossi
    \date 13/07/2020
 */
@@ -33,6 +33,62 @@
 #include <SelfShapedSlp.hpp>
 #include <DirectAccessibleGammaCode.hpp>
 #include <SelectType.hpp>
+
+//*********************** Argument options ***************************************
+// struct containing command line parameters and other globals
+struct Args
+{
+  std::string filename = "";
+  bool memo = false;         // print the memory usage
+  bool csv = false;          // print stats on stderr in csv format
+  bool rle = false;          // outpt RLBWT
+};
+
+void parseArgs(int argc, char *const argv[], Args &arg)
+{
+  int c;
+  extern char *optarg;
+  extern int optind;
+
+  std::string usage("usage: " + std::string(argv[0]) + " infile [-s store] [-m memo] [-c csv] [-p patterns] [-f fasta] [-r rle] [-t threads] [-l len]\n\n" +
+                    "Computes the pfp data structures of infile, provided that infile.parse, infile.dict, and infile.occ exists.\n" +
+                    "   memo: [boolean] - print the data structure memory usage. (def. false)\n" +
+                    "    rle: [boolean] - output run length encoded BWT. (def. false)\n" +
+                    "    csv: [boolean] - print the stats in csv form on strerr. (def. false)\n");
+
+  std::string sarg;
+  while ((c = getopt(argc, argv, "mcrh")) != -1)
+  {
+    switch (c)
+    {
+    case 'm':
+      arg.memo = true;
+      break;
+    case 'c':
+      arg.csv = true;
+      break;
+    case 'r':
+      arg.rle = true;
+      break;
+    case 'h':
+      error(usage);
+    case '?':
+      error("Unknown option.\n", usage);
+      exit(1);
+    }
+  }
+  // the only input parameter is the file name
+  if (argc == optind + 1)
+  {
+    arg.filename.assign(argv[optind]);
+  }
+  else
+  {
+    error("Invalid number of arguments\n", usage);
+  }
+}
+
+//********** end argument options ********************
 
 int main(int argc, char *const argv[])
 {
@@ -56,7 +112,7 @@ int main(int argc, char *const argv[])
   verbose("Elapsed time (s): ", std::chrono::duration<double, std::ratio<1>>(t_insert_end - t_insert_start).count());
 
 
-  std::string outfile = args.filename + ".ms";
+  std::string outfile = args.filename + ms.get_file_extension();
   std::ofstream out(outfile);
   ms.serialize(out);
 
@@ -78,10 +134,6 @@ int main(int argc, char *const argv[])
 
     size_t ms_size = ms.serialize(ns);
     verbose("MS size (bytes): ", ms_size);
-  }
-
-  if (args.store)
-  {
   }
 
   if (args.csv)

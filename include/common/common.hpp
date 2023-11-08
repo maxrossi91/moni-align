@@ -46,6 +46,11 @@
 #include <sdsl/io.hpp>  // serialize and load
 #include <type_traits>  // enable_if_t and is_fundamental
 
+#include <mutex>
+
+#include <stdexcept>
+#include <execinfo.h>
+
 //**************************** From  Big-BWT ***********************************
 // special symbols used by the construction algorithm:
 //   they cannot appear in the input file
@@ -268,6 +273,11 @@ void write_file(const char *filename, std::vector<T> &ptr)
   fclose(fd);
 }
 
+inline bool file_exists(const std::string &name)
+{
+  struct stat buffer;
+  return (stat(name.c_str(), &buffer) == 0);
+}
 //*********************** Time resources ***************************************
 
 /*!
@@ -322,99 +332,33 @@ void LCP_array_cyclic_text(S* s, const std::vector<T>& isa, const std::vector<T>
   }
 }
 
-//*********************** Argument options ***************************************
-// struct containing command line parameters and other globals
-struct Args
-{
-  std::string filename = "";
-  size_t w = 10; // sliding window size and its default
-  bool store = false; // store the data structure in the file
-  bool memo  = false; // print the memory usage
-  bool csv   = false; // print stats on stderr in csv format
-  bool rle   = false; // outpt RLBWT
-  std::string patterns = ""; // path to patterns file
-  size_t l = 25; // minumum MEM length
-  size_t th = 1; // number of threads
-  bool is_fasta = false; // read a fasta file
-};
-
-void parseArgs(int argc, char *const argv[], Args &arg)
-{
-  int c;
-  extern char *optarg;
-  extern int optind;
-
-  std::string usage("usage: " + std::string(argv[0]) + " infile [-s store] [-m memo] [-c csv] [-p patterns] [-f fasta] [-r rle] [-t threads] [-l len]\n\n" +
-                    "Computes the pfp data structures of infile, provided that infile.parse, infile.dict, and infile.occ exists.\n" +
-                    "  wsize: [integer] - sliding window size (def. 10)\n" +
-                    "  store: [boolean] - store the data structure in infile.pfp.ds. (def. false)\n" +
-                    "   memo: [boolean] - print the data structure memory usage. (def. false)\n" +
-                    "  fasta: [boolean] - the input file is a fasta file. (def. false)\n" +
-                    "    rle: [boolean] - output run length encoded BWT. (def. false)\n" +
-                    "pattens: [string]  - path to patterns file.\n" +
-                    "    len: [integer] - minimum MEM lengt (def. 25)\n" +
-                    " thread: [integer] - number of threads (def. 1)\n" +
-                    "    csv: [boolean] - print the stats in csv form on strerr. (def. false)\n");
-
-  std::string sarg;
-  while ((c = getopt(argc, argv, "w:smcfl:rhp:t:")) != -1)
-  {
-    switch (c)
-    {
-    case 'w':
-      sarg.assign(optarg);
-      arg.w = stoi(sarg);
-      break;
-    case 's':
-      arg.store = true;
-      break;
-    case 'm':
-      arg.memo = true;
-      break;
-    case 'c':
-      arg.csv = true;
-      break;
-    case 'r':
-      arg.rle = true;
-      break;
-    case 'p':
-      arg.patterns.assign(optarg);
-      break;
-    case 'l':
-      sarg.assign(optarg);
-      arg.l = stoi(sarg);
-      break;
-    case 't':
-      sarg.assign(optarg);
-      arg.th = stoi(sarg);
-      break;
-    case 'f':
-      arg.is_fasta = true;
-      break;
-    case 'h':
-      error(usage);
-    case '?':
-      error("Unknown option.\n", usage);
-      exit(1);
-    }
-  }
-  // the only input parameter is the file name
-  if (argc == optind + 1)
-  {
-    arg.filename.assign(argv[optind]);
-  }
-  else
-  {
-    error("Invalid number of arguments\n", usage);
-  }
-}
-
-//********** end argument options ********************
-
 
 
 //********** begin my serialize edit from sdsl ********************
 // Those are wrapper around most of the serialization functions of sdsl
+
+template <class T, typename size_type>
+uint64_t
+my_serialize_array(const T* p, const size_type size, std::ostream &out, typename std::enable_if<std::is_fundamental<T>::value>::type * = 0)
+{
+  size_t written_bytes = 0;
+  if (size > 0)
+  {
+
+    size_type idx = 0;
+    while (idx + sdsl::conf::SDSL_BLOCK_SIZE < (size))
+    {
+      out.write((char *)p, sdsl::conf::SDSL_BLOCK_SIZE * sizeof(T));
+      written_bytes += sdsl::conf::SDSL_BLOCK_SIZE * sizeof(T);
+      p += sdsl::conf::SDSL_BLOCK_SIZE;
+      idx += sdsl::conf::SDSL_BLOCK_SIZE;
+    }
+    out.write((char *)p, ((size) - idx) * sizeof(T));
+    written_bytes += ((size) - idx) * sizeof(T);
+
+  }
+  return written_bytes;
+}
 
 //! Serialize each element of an std::vector
 /*!
@@ -433,19 +377,21 @@ my_serialize_vector(const std::vector<T> &vec, std::ostream &out, sdsl::structur
   if (vec.size() > 0)
   {
     sdsl::structure_tree_node *child = sdsl::structure_tree::add_child(v, name, "std::vector<" + sdsl::util::class_name(vec[0]) + ">");
-    size_t written_bytes = 0;
+    // size_t written_bytes = 0;
 
-    const T *p = &vec[0];
-    typename std::vector<T>::size_type idx = 0;
-    while (idx + sdsl::conf::SDSL_BLOCK_SIZE < (vec.size()))
-    {
-      out.write((char *)p, sdsl::conf::SDSL_BLOCK_SIZE * sizeof(T));
-      written_bytes += sdsl::conf::SDSL_BLOCK_SIZE * sizeof(T);
-      p += sdsl::conf::SDSL_BLOCK_SIZE;
-      idx += sdsl::conf::SDSL_BLOCK_SIZE;
-    }
-    out.write((char *)p, ((vec.size()) - idx) * sizeof(T));
-    written_bytes += ((vec.size()) - idx) * sizeof(T);
+    // const T *p = &vec[0];
+    // typename std::vector<T>::size_type idx = 0;
+    // while (idx + sdsl::conf::SDSL_BLOCK_SIZE < (vec.size()))
+    // {
+    //   out.write((char *)p, sdsl::conf::SDSL_BLOCK_SIZE * sizeof(T));
+    //   written_bytes += sdsl::conf::SDSL_BLOCK_SIZE * sizeof(T);
+    //   p += sdsl::conf::SDSL_BLOCK_SIZE;
+    //   idx += sdsl::conf::SDSL_BLOCK_SIZE;
+    // }
+    // out.write((char *)p, ((vec.size()) - idx) * sizeof(T));
+    // written_bytes += ((vec.size()) - idx) * sizeof(T);
+
+    size_t written_bytes = my_serialize_array<T, typename std::vector<T>::size_type>(&vec[0], vec.size(), out);
 
     sdsl::structure_tree::add_size(child, written_bytes);
     return written_bytes;
@@ -465,6 +411,27 @@ my_serialize(const std::vector<X> &x,
   return sdsl::serialize(x.size(), out, v, name) + my_serialize_vector(x, out, v, name);
 }
 
+/**
+ * @brief Load an array of size elements into p. p should be preallocated.
+ * 
+ * \tparam T 
+ * \tparam size_type 
+ * @param p 
+ * @param size 
+ * @param in 
+ */
+template <class T, typename size_type>
+void my_load_array(T *p, const size_type size, std::istream &in, typename std::enable_if<std::is_fundamental<T>::value>::type * = 0)
+{
+  size_type idx = 0;
+  while (idx + sdsl::conf::SDSL_BLOCK_SIZE < (size))
+  {
+    in.read((char *)p, sdsl::conf::SDSL_BLOCK_SIZE * sizeof(T));
+    p += sdsl::conf::SDSL_BLOCK_SIZE;
+    idx += sdsl::conf::SDSL_BLOCK_SIZE;
+  }
+  in.read((char *)p, ((size) - idx) * sizeof(T));
+}
 //! Load all elements of a vector from a input stream
 /*! \param vec  Vector whose elements should be loaded.
  *  \param in   Input stream.
@@ -475,15 +442,16 @@ my_serialize(const std::vector<X> &x,
 template <class T>
 void my_load_vector(std::vector<T> &vec, std::istream &in, typename std::enable_if<std::is_fundamental<T>::value>::type * = 0)
 {
-  T *p = &vec[0];
-  typename std::vector<T>::size_type idx = 0;
-  while (idx + sdsl::conf::SDSL_BLOCK_SIZE < (vec.size()))
-  {
-    in.read((char *)p, sdsl::conf::SDSL_BLOCK_SIZE * sizeof(T));
-    p += sdsl::conf::SDSL_BLOCK_SIZE;
-    idx += sdsl::conf::SDSL_BLOCK_SIZE;
-  }
-  in.read((char *)p, ((vec.size()) - idx) * sizeof(T));
+  // T *p = &vec[0];
+  // typename std::vector<T>::size_type idx = 0;
+  // while (idx + sdsl::conf::SDSL_BLOCK_SIZE < (vec.size()))
+  // {
+  //   in.read((char *)p, sdsl::conf::SDSL_BLOCK_SIZE * sizeof(T));
+  //   p += sdsl::conf::SDSL_BLOCK_SIZE;
+  //   idx += sdsl::conf::SDSL_BLOCK_SIZE;
+  // }
+  // in.read((char *)p, ((vec.size()) - idx) * sizeof(T));
+  my_load_array<T, typename std::vector<T>::size_type>(&vec[0], vec.size(), in);
 }
 
 template <typename X>
@@ -495,7 +463,164 @@ void my_load(std::vector<X> &x, std::istream &in, typename std::enable_if<std::i
   my_load_vector(x, in);
 }
 
+//*********************** Timing *********************************************
+
+#ifdef MTIME
+
+#ifndef _MTIME
+#define _MTIME
+
+#define MTIME_TSAFE_INIT(_n)                                                    \
+  std::mutex __mtime_mtx;                                                       \
+  std::vector<double> __tsafe_durations(_n, 0.0);                               
+
+#define MTIME_TSAFE_NAMES_INIT( args... )                                       \
+  std::vector<std::string> __tsafe_names = {args};
+
+#define MTIME_INIT(_n)                                                                                                                \
+  std::vector<std::chrono::high_resolution_clock::time_point> __watches(_n);                                                          \
+  std::vector<double> __durations(_n, 0.0);
+
+#define MTIME_START(_i) \
+  __watches[_i] = std::chrono::high_resolution_clock::now();
+
+#define MTIME_END(_i) \
+  __durations[_i] += std::chrono::duration<double, std::ratio<1>>(std::chrono::high_resolution_clock::now() - __watches[_i]).count();
+
+#define MTIME_REPORT(_i) \
+  verbose("Timing variable: ", _i, " ", __durations[_i]);
+
+#define MTIME_REPORT_ALL                          \
+  for (size_t i = 0; i < __durations.size(); ++i) \
+  MTIME_REPORT(i)
+
+#define MTIME_TSAFE_REPORT(_i) \
+  verbose("Timing variable", _i, ":",std::setw(9), __tsafe_durations[_i], "\t(", __tsafe_names[i], ")");
+
+#define MTIME_TSAFE_REPORT_ALL                          \
+  for (size_t i = 0; i < __tsafe_durations.size(); ++i) \
+  MTIME_TSAFE_REPORT(i)
+
+#define MTIME_TSAFE_MERGE                         \
+  __mtime_mtx.lock();                             \
+  for (size_t i = 0; i < __durations.size(); ++i) \
+    __tsafe_durations[i] += __durations[i];       \
+  __mtime_mtx.unlock();
 
 
+
+#endif /* _MTIME */
+
+#else
+  #define MTIME_TSAFE_INIT(_n)
+  #define MTIME_TSAFE_NAMES_INIT( args... )
+  #define MTIME_INIT(_n)
+  #define MTIME_START(_i)
+  #define MTIME_END(_i)
+  #define MTIME_REPORT(_i)
+  #define MTIME_REPORT_ALL
+  #define MTIME_TSAFE_REPORT(_i)
+  #define MTIME_TSAFE_REPORT_ALL
+  #define MTIME_TSAFE_MERGE
+#endif
+
+
+
+
+//***********************  Utils ***********************************************
+
+//*************** Borrowed from minimap2 ***************************************
+static const char LogTable256[256] = {
+#define LT(n) n, n, n, n, n, n, n, n, n, n, n, n, n, n, n, n
+	-1, 0, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3, 3, 3, 3, 3,
+	LT(4), LT(5), LT(5), LT(6), LT(6), LT(6), LT(6),
+	LT(7), LT(7), LT(7), LT(7), LT(7), LT(7), LT(7), LT(7)
+};
+
+static inline int ilog2_32(uint32_t v)
+{
+	uint32_t t, tt;
+	if ((tt = v>>16)) return (t = tt>>8) ? 24 + LogTable256[t] : 16 + LogTable256[tt];
+	return (t = v>>8) ? 8 + LogTable256[t] : LogTable256[v];
+}
+//******************************************************************************
+
+#define maxl(a,b) (a) = std::max((a),(b))
+#define minl(a,b) (a) = std::min((a),(b))
+#define dist(a,b) ( (a) > (b)? ((a) - (b)) : ((b) - (a)))
+
+////////////////////////////////////////////////////////////////////////////////
+/// helper functions
+////////////////////////////////////////////////////////////////////////////////
+
+static inline char complement(const char n)
+{
+  switch (n)
+  {
+  case 'A':
+    return 'T';
+  case 'T':
+    return 'A';
+  case 'G':
+    return 'C';
+  case 'C':
+    return 'G';
+  default:
+    return n;
+  }
+}
+////////////////////////////////////////////////////////////////////////////////
+
+
+//*********************** Print Utils ******************************************
+
+
+  static std::string print_BLAST_like(const uint8_t *tseq, const uint8_t *qseq, const uint32_t *cigar, const size_t n_cigar)
+  {
+    std::string target_o;
+    std::string bars_o;
+    std::string seq_o;
+
+
+    int i, q_off, t_off, l_MD = 0;
+    for (i = q_off = t_off = 0; i < (int)n_cigar; ++i) {
+      int j, op = cigar[i]&0xf, len = cigar[i]>>4;
+      assert((op >= 0 && op <= 3) || op == 7 || op == 8);
+      if (op == 0 || op == 7 || op == 8) { // match
+        for (j = 0; j < len; ++j) {
+          if (qseq[q_off + j] != tseq[t_off + j]) {
+            bars_o +="*";
+          } else {
+            bars_o +="|";
+          }
+          target_o += std::to_string(tseq[t_off + j]);
+          seq_o += std::to_string(qseq[q_off + j]);
+        }
+        q_off += len, t_off += len;
+      } else if (op == 1) { // insertion to ref
+        for (j = 0; j < len; ++j) {
+          target_o += " ";
+          bars_o += " ";
+          seq_o += std::to_string(qseq[q_off + j]);
+        }
+        q_off += len;
+      } else if (op == 2) { // deletion from ref
+        for (j = 0; j < len; ++j) {
+          seq_o += " ";
+          bars_o += " ";
+          target_o += std::to_string(tseq[t_off + j]);
+        }
+        t_off += len;
+      } else if (op == 3) { // reference skip
+        for (j = 0; j < len; ++j) {
+          seq_o += " ";
+          bars_o += " ";
+          target_o += std::to_string(tseq[t_off + j]);
+        }
+        t_off += len;
+      }
+    }
+    return target_o + "\n" + bars_o + "\n" + seq_o + "\n";
+  }
 
 #endif /* end of include guard: _COMMON_HH */

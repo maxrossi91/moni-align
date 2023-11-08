@@ -1,4 +1,4 @@
-/* shapedslp_test - Test if the ShapedSLP generates the whole original text
+/* lifting_test - Testing levioSAM lifting
     Copyright (C) 2020 Massimiliano Rossi
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -12,27 +12,26 @@
     along with this program.  If not, see http://www.gnu.org/licenses/ .
 */
 /*!
-   \file shapedslp_test.cpp
-   \brief shapedslp_test.cpp Test if the ShapedSLP generates the whole original text.
+   \file lifting_test.cpp
+   \brief lifting_test.cpp Testing levioSAM lifting.
    \author Massimiliano Rossi
-   \date 18/09/2020
+   \date 19/11/2021
 */
 
 #include <iostream>
 
 #define VERBOSE
 
+#include <kseq.h>
+#include <zlib.h>
+
+KSEQ_INIT(gzFile, gzread);
+
+#include <liftidx.hpp>
 #include <common.hpp>
-
-#include <sdsl/io.hpp>
-
-#include <ms_pointers.hpp>
 
 #include <malloc_count.h>
 
-#include <SelfShapedSlp.hpp>
-#include <DirectAccessibleGammaCode.hpp>
-#include <SelectType.hpp>
 
 //*********************** Argument options ***************************************
 // struct containing command line parameters and other globals
@@ -125,73 +124,56 @@ void parseArgs(int argc, char *const argv[], Args &arg)
 
 int main(int argc, char *const argv[])
 {
-  using SelSd = SelectSdvec<>;
-  using DagcSd = DirectAccessibleGammaCode<SelSd>;
-
   Args args;
   parseArgs(argc, argv, args);
 
-  // Building the r-index
-  verbose("Building random access");
+  verbose("Loading the lifting index");
   std::chrono::high_resolution_clock::time_point t_insert_start = std::chrono::high_resolution_clock::now();
 
-  // pfp_ra ra(args.filename, args.w);
-  std::string filename_slp = args.filename + ".slp";
-  SelfShapedSlp<uint32_t, DagcSd, DagcSd, SelSd> ra;
-  ifstream fs(filename_slp);
-  ra.load(fs);
+  verbose("Index filename: " + args.filename);
 
-  size_t n = ra.getLen();
+  liftidx lift;
+  std::ifstream in(args.filename + lift.get_file_extension());
+  lift.load(in);
+  in.close();
 
   std::chrono::high_resolution_clock::time_point t_insert_end = std::chrono::high_resolution_clock::now();
 
-  verbose("Matching statistics index construction complete");
+  verbose("Lifting index loading complete");
   verbose("Memory peak: ", malloc_count_peak());
   verbose("Elapsed time (s): ", std::chrono::duration<double, std::ratio<1>>(t_insert_end - t_insert_start).count());
 
-  verbose("Reading text");
-  t_insert_start = std::chrono::high_resolution_clock::now();
+  verbose("SAM Header");
+  verbose(lift.to_sam());
 
-  std::vector<uint8_t> text;
-  if(args.is_fasta)
-    read_fasta_file(args.filename.c_str(),text);
-  else
-    read_file(args.filename.c_str(),text);
+  verbose("Lifting positions");
+  verbose("Lifting position ", 48126296, ": ", lift.lift(48126296));
+  verbose("Lifting position ", 68126296, ": ", lift.lift(68126296));
+  verbose("Lifting position ", 130126296, ": ", lift.lift(130126296));
+  verbose("Lifting position ", 180126296, ": ", lift.lift(180126296));
+  verbose("Lifting position ", 230126296, ": ", lift.lift(230126296));
+  // for(size_t i = 48126296; i < 48126395; ++i)
+  //   verbose("Lifting position ", i, ": ", lift.lift(i));
 
-  t_insert_end = std::chrono::high_resolution_clock::now();
-
-  verbose("Memory peak: ", malloc_count_peak());
-  verbose("Elapsed time (s): ", std::chrono::duration<double, std::ratio<1>>(t_insert_end - t_insert_start).count());
-
-  verbose("Checking if equals");
-  t_insert_start = std::chrono::high_resolution_clock::now();
-
-  if(n != text.size())
-    error("Text size is different", " ra: ", n, " text: ", text.size());
-
-  for(size_t i = 0; i < n; ++i)
-    if(ra.charAt(i) != text[i])
-      error("Different character in position ", i, " ra: ", ra.charAt(i), " text: ", text[i]);
-
-  t_insert_end = std::chrono::high_resolution_clock::now();
-
-  verbose("Memory peak: ", malloc_count_peak());
-  verbose("Elapsed time (s): ", std::chrono::duration<double, std::ratio<1>>(t_insert_end - t_insert_start).count());
+  const auto names = lift.get_names();
+  size_t len = 0;
+  for (size_t i = 0; i < names.size(); len+=lift.length(i)+10, ++i)
+  {
+    const auto pos = len;
+    const auto lpos = lift.lift(pos);
+    const auto lft_ref = lift.index(lpos);
+    verbose("Lifting position ", pos, " in ", names[i], ": ", lpos, " corresponding to: ", lft_ref.second + 1, " in ", lft_ref.first);
+    if (names[i] == "HG01358_H2_chr21")
+    {
+      const auto pos = len + 29312633;
+      const auto lpos = lift.lift(pos);
+      const auto lft_ref = lift.index(lpos);
+      verbose("Lifting position ", pos, " in ", names[i], ": ", lpos, " corresponding to: ", lft_ref.second + 1, " in ", lft_ref.first);
+    }
+  }
 
   auto mem_peak = malloc_count_peak();
   verbose("Memory peak: ", malloc_count_peak());
-
-  size_t space = 0;
-  if (args.memo)
-  {
-  }
-
-  if (args.store)
-  {
-  }
-
-  if (args.csv)
-    std::cerr << csv(args.filename.c_str(), time, space, mem_peak) << std::endl;
 
   return 0;
 }

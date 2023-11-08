@@ -39,13 +39,15 @@
 template <class sparse_bv_type = ri::sparse_sd_vector,
           class rle_string_t = ms_rle_string_sd,
           class thresholds_t = thr_bv<rle_string_t> >
-class ms_pointers : ri::r_index<sparse_bv_type, rle_string_t>
+class ms_pointers : public ri::r_index<sparse_bv_type, rle_string_t>
 {
 public:
     thresholds_t thresholds;
 
     // std::vector<ulint> samples_start;
-    int_vector<> samples_start;
+    sparse_bv_type pred_start;
+    int_vector<> samples_start; //text positions corresponding to first characters in BWT runs, in BWT order
+    int_vector<> pred_start_to_run; //stores the BWT run (0...R-1) corresponding to each position in pred_start, in text order
     // int_vector<> samples_end;
     // std::vector<ulint> samples_last;
 
@@ -116,6 +118,12 @@ public:
         // istring.clear();
         // istring.shrink_to_fit();
 
+        verbose("Building phi");
+        build_phi(filename + ".ssa", this->r, n, this->pred, this->pred_to_run);
+
+        verbose("Building inverse of phi");
+        build_phi(filename + ".esa", this->r, n, pred_start, pred_start_to_run);
+
         read_samples(filename + ".ssa", this->r, n, samples_start);
         read_samples(filename + ".esa", this->r, n, this->samples_last);
 
@@ -131,30 +139,6 @@ public:
 
         thresholds = thresholds_t(filename,&this->bwt);
 
-        // std::string tmp_filename = filename + std::string(".thr_pos");
-
-        // struct stat filestat;
-        // FILE *fd;
-
-        // if ((fd = fopen(tmp_filename.c_str(), "r")) == nullptr)
-        //     error("open() file " + tmp_filename + " failed");
-
-        // int fn = fileno(fd);
-        // if (fstat(fn, &filestat) < 0)
-        //     error("stat() file " + tmp_filename + " failed");
-
-        // if (filestat.st_size % THRBYTES != 0)
-        //     error("invilid file " + tmp_filename);
-
-        // size_t length = filestat.st_size / THRBYTES;
-        // thresholds.resize(length);
-
-        // for (size_t i = 0; i < length; ++i)
-        //     if ((fread(&thresholds[i], THRBYTES, 1, fd)) != 1)
-        //         error("fread() file " + tmp_filename + " failed");
-
-        // fclose(fd);
-
         t_insert_end = std::chrono::high_resolution_clock::now();
 
         verbose("Memory peak: ", malloc_count_peak());
@@ -164,7 +148,7 @@ public:
     void read_samples(std::string filename, ulint r, ulint n, int_vector<> &samples)
     {
         int log_n = bitsize(uint64_t(n));
-
+        
         struct stat filestat;
         FILE *fd;
 
@@ -196,6 +180,73 @@ public:
             samples[i++] = val;
         }
 
+        fclose(fd);
+    }
+
+    void build_phi(std::string filename, ulint r, ulint n, sparse_bv_type& pv, int_vector<> &pv_to_run)
+    {
+        int log_r = bitsize(uint64_t(r));
+        int log_n = bitsize(uint64_t(n));
+        
+        struct stat filestat;
+        FILE *fd;
+
+        if ((fd = fopen(filename.c_str(), "r")) == nullptr)
+            error("open() file " + filename + " failed");
+
+        int fn = fileno(fd);
+        if (fstat(fn, &filestat) < 0)
+            error("stat() file " + filename + " failed");
+
+        if (filestat.st_size % SSABYTES != 0)
+            error("invilid file " + filename);
+
+        size_t length = filestat.st_size / (2 * SSABYTES);
+        //Check that the length of the file is 2*r elements of 5 bytes
+        assert(length == r);
+
+        // Create the vector
+        std::vector<std::pair<ulint,ulint>> samples = std::vector<std::pair<ulint,ulint>>(r);
+
+        // Read the vector
+        uint64_t left = 0;
+        uint64_t right = 0;
+        size_t i = 0;
+        while (fread((char *)&left, SSABYTES, 1, fd) && fread((char *)&right, SSABYTES, 1, fd))
+        {
+            ulint val = (right ? right - 1 : n - 1);
+            assert(bitsize(uint64_t(val)) <= log_n);
+            samples[i] = std::make_pair(val,i);
+            i++;
+        }
+
+        // Sort the sa samples
+        std::sort(samples.begin(),samples.end());
+        //build Elias-Fano predecessor
+        {
+            size_t i = 0;
+            std::vector<size_t> pred_bv_onset(r);
+            for(auto p : samples){
+                assert(p.first < this->bwt.size());
+                pred_bv_onset[i++] = p.first;
+            }
+            pv = sparse_bv_type(pred_bv_onset, this->bwt.size());
+        }
+        assert(pv.rank(pv.size()) == r);
+        // //last text position must be sampled
+        // assert(pv[pv.size()-1]);
+        pv_to_run = int_vector<>(r,0,log_r); //stores the BWT run (0...R-1) corresponding to each position in pred, in text order
+        for(ulint i=0;i<samples.size();++i){
+            assert(bitsize(uint64_t(samples[i].second)) <= log_r);
+            pv_to_run[i] = samples[i].second;
+        }
+
+        //  sdsl::nullstream ns;
+
+        // verbose("Memory consumption (bytes).");
+        // verbose("            pv: ", pv.serialize(ns));
+        // verbose("     pv_to_run: ", pv_to_run.serialize(ns));
+        
         fclose(fd);
     }
 
@@ -251,8 +302,12 @@ public:
         verbose("   terminator_position: ", sizeof(this->terminator_position));
         verbose("                     F: ", my_serialize(this->F, ns));
         verbose("                   bwt: ", this->bwt.serialize(ns));
-        verbose("          samples_last: ", this->samples_last.serialize(ns));
         verbose("            thresholds: ", thresholds.serialize(ns));
+        verbose("                  pred: ", this->pred.serialize(ns));
+        verbose("           pred_to_run: ", this->pred_to_run.serialize(ns));
+        verbose("          samples_last: ", this->samples_last.serialize(ns));
+        verbose("            pred_start: ", pred_start.serialize(ns));
+        verbose("     pred_start_to_run: ", pred_start_to_run.serialize(ns));
         verbose("         samples_start: ", samples_start.serialize(ns));
     }
 
@@ -273,6 +328,32 @@ public:
         return l;
     }
 
+    ulint get_first_run_sample() {
+        return (samples_start[0]+1) % this->bwt.size();
+    }
+
+
+    /*
+     * Phi function. Phi_inv(SA[n-1]) is undefined
+     */
+    ulint Phi_inv(ulint i){
+        assert(i != this->bwt.size()-1);
+        //jr is the rank of the predecessor of i (circular)
+        ulint jr = pred_start.predecessor_rank_circular(i);
+        assert(jr<=this->r-1);
+        //the actual predecessor
+        ulint j = pred_start.select(jr);
+        assert(jr<this->r-1 or j == this->bwt.size()-1);
+        //distance from predecessor
+        ulint delta = j<i ? i-j : i+1;
+        //cannot fall on first run: this can happen only if I call Phi(SA[n-1])
+        assert(pred_start_to_run[jr] < samples_start.size() - 1);
+        //sample at the end of previous run
+        assert(pred_start_to_run[jr]+1 < samples_start.size());
+        ulint prev_sample = samples_start[ pred_start_to_run[jr]+1 ];
+        return (prev_sample + delta) % this->bwt.size();
+    }
+
     /* serialize the structure to the ostream
      * \param out     the ostream
      */
@@ -285,11 +366,15 @@ public:
         written_bytes += sizeof(this->terminator_position);
         written_bytes += my_serialize(this->F, out, child, "F");
         written_bytes += this->bwt.serialize(out);
+        written_bytes += this->pred.serialize(out);
+        written_bytes += this->pred_to_run.serialize(out);
         written_bytes += this->samples_last.serialize(out);
 
         written_bytes += thresholds.serialize(out, child, "thresholds");
         // written_bytes += my_serialize(thresholds, out, child, "thresholds");
         // written_bytes += my_serialize(samples_start, out, child, "samples_start");
+        written_bytes += pred_start.serialize(out);
+        written_bytes += pred_start_to_run.serialize(out, child, "pred_start_to_run");
         written_bytes += samples_start.serialize(out, child, "samples_start");
 
         sdsl::structure_tree::add_size(child, written_bytes);
@@ -298,7 +383,7 @@ public:
 
     std::string get_file_extension() const
     {
-        return thresholds.get_file_extension() + ".ms";
+        return thresholds.get_file_extension() + ".full.ms";
     }
 
     /* load the structure from the istream
@@ -311,10 +396,14 @@ public:
         my_load(this->F, in);
         this->bwt.load(in);
         this->r = this->bwt.number_of_runs();
+        this->pred.load(in);
+        this->pred_to_run.load(in);
         this->samples_last.load(in);
 
         thresholds.load(in,&this->bwt);
         // my_load(thresholds, in);
+        pred_start.load(in);
+        pred_start_to_run.load(in);
         samples_start.load(in);
         // my_load(samples_start,in);
     }
@@ -324,6 +413,28 @@ public:
     // {
     //     return (samples_last[r - 1] + 1) % bwt.size();
     // }
+
+    // Test methods
+    std::vector<size_t> get_SA_Phi()
+    {
+        std::vector<size_t> sa_phi;
+
+        sa_phi.push_back(this->get_last_run_sample());
+        while(sa_phi.size() < this->bwt_size() - 1)
+            sa_phi.push_back(this->Phi(sa_phi.back()));
+
+        return sa_phi;
+    }
+    std::vector<size_t> get_SA_Phi_inv()
+    {
+        std::vector<size_t> sa_phi_inv;
+
+        sa_phi_inv.push_back((samples_start[1]+1) % this->bwt.size());
+        while(sa_phi_inv.size() < this->bwt_size() - 1)
+            sa_phi_inv.push_back(Phi_inv(sa_phi_inv.back()));
+
+        return sa_phi_inv;
+    }
 
 protected:
     // Computes the matching statistics pointers for the given pattern
@@ -340,53 +451,55 @@ protected:
         for (size_t i = 0; i < m; ++i)
         {
             auto c = pattern[m - i - 1];
-            const auto n_c = this->bwt.number_of_letter(c);
-            if (n_c == 0)
+
+            if (this->bwt.number_of_letter(c) == 0)
             {
                 sample = 0;
-                // Perform one backward step
-                pos = LF(pos, c);
             }
             else if (pos < this->bwt.size() && this->bwt[pos] == c)
             {
                 sample--;
-                // Perform one backward step
-                pos = LF(pos, c);
             }
             else
             {
                 // Get threshold
-                ri::ulint run_of_pos = this->bwt.run_of_position(pos);
-                auto rnk_c = this->bwt.run_and_head_rank(run_of_pos, c);
-
+                ri::ulint rnk = this->bwt.rank(pos, c);
                 size_t thr = this->bwt.size() + 1;
 
                 ulint next_pos = pos;
 
-                if( rnk_c.second < n_c)
+                // if (rnk < (this->F[c] - this->F[c-1]) // I can use F to compute it
+                if (rnk < this->bwt.number_of_letter(c))
                 {
-                    size_t run_of_j = this->bwt.run_head_select(rnk_c.first + 1, c);
-                    sample = samples_start[run_of_j];
+                    // j is the first position of the next run of c's
+                    ri::ulint j = this->bwt.select(rnk, c);
+                    ri::ulint run_of_j = this->bwt.run_of_position(j);
+
                     thr = thresholds[run_of_j]; // If it is the first run thr = 0
-                    // Perform one backward step
-                    next_pos = this->F[c] + rnk_c.second;
+
+                    // Here we should use Phi_inv that is not implemented yet
+                    // sample = this->Phi(this->samples_last[run_of_j - 1]) - 1;
+                    sample = samples_start[run_of_j];
+
+                    next_pos = j;
                 }
 
                 if (pos < thr)
                 {
-                    // Jump up
-                    size_t run_of_j = this->bwt.run_head_select(rnk_c.first, c);
+
+                    rnk--;
+                    ri::ulint j = this->bwt.select(rnk, c);
+                    ri::ulint run_of_j = this->bwt.run_of_position(j);
                     sample = this->samples_last[run_of_j];
-                    // Perform one backward step
-                    next_pos = this->F[c] + rnk_c.second - 1;
+
+                    next_pos = j;
                 }
 
                 pos = next_pos;
-
             }
 
             ms_pointers[m - i - 1] = sample;
-            
+
             // Perform one backward step
             pos = LF(pos, c);
         }
@@ -484,12 +597,12 @@ std::vector<size_t> ms_pointers<ri::sparse_sd_vector, ms_rle_string_sd, thr_bv<m
             // Get threshold
             ri::ulint run_of_pos = this->bwt.run_of_position(pos);
             auto rnk_c = this->bwt.run_and_head_rank(run_of_pos, c);
-            size_t thr_c = thresholds.rank(pos + 1, c); // +1 because the rank count the thresiold in pos
+            size_t thr_c = thresholds.rank(pos + 1,c); // +1 because the rank count the thresiold in pos
 
-            if (rnk_c.first > thr_c)
+            if(rnk_c.first > thr_c)
             {
                 // Jump up
-                size_t run_of_j = this->bwt.run_head_select(rnk_c.first, c);
+                size_t run_of_j = this->bwt.run_head_select(rnk_c.first,c);
                 sample = samples_last[run_of_j];
                 // Perform one backward step
                 pos = this->F[c] + rnk_c.second - 1;

@@ -1,4 +1,4 @@
-/* shapedslp_test - Test if the ShapedSLP generates the whole original text
+/* matching_statistics - Computes the matching statistics from BWT and Thresholds
     Copyright (C) 2020 Massimiliano Rossi
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -12,10 +12,10 @@
     along with this program.  If not, see http://www.gnu.org/licenses/ .
 */
 /*!
-   \file shapedslp_test.cpp
-   \brief shapedslp_test.cpp Test if the ShapedSLP generates the whole original text.
+   \file matching_statistics.cpp
+   \brief matching_statistics.cpp Computes the matching statistics from BWT and Thresholds.
    \author Massimiliano Rossi
-   \date 18/09/2020
+   \date 13/07/2020
 */
 
 #include <iostream>
@@ -33,6 +33,9 @@
 #include <SelfShapedSlp.hpp>
 #include <DirectAccessibleGammaCode.hpp>
 #include <SelectType.hpp>
+
+#define maxr(a,b) ((a) = std::max((a),(b)))
+#define minr(a,b) ((a) = std::min((a), (b)))
 
 //*********************** Argument options ***************************************
 // struct containing command line parameters and other globals
@@ -123,25 +126,30 @@ void parseArgs(int argc, char *const argv[], Args &arg)
 
 //********** end argument options ********************
 
+
 int main(int argc, char *const argv[])
 {
-  using SelSd = SelectSdvec<>;
-  using DagcSd = DirectAccessibleGammaCode<SelSd>;
 
   Args args;
   parseArgs(argc, argv, args);
 
-  // Building the r-index
-  verbose("Building random access");
+  verbose("Loading the matching statistics index");
   std::chrono::high_resolution_clock::time_point t_insert_start = std::chrono::high_resolution_clock::now();
 
-  // pfp_ra ra(args.filename, args.w);
-  std::string filename_slp = args.filename + ".slp";
-  SelfShapedSlp<uint32_t, DagcSd, DagcSd, SelSd> ra;
-  ifstream fs(filename_slp);
-  ra.load(fs);
+  std::string bwt_fname = args.filename + ".bwt";
 
-  size_t n = ra.getLen();
+  std::string bwt_heads_fname = bwt_fname + ".heads";
+  std::ifstream ifs_heads(bwt_heads_fname);
+  if (!ifs_heads.is_open())
+    error("open() file " + bwt_heads_fname + " failed");
+  std::string bwt_len_fname = bwt_fname + ".len";
+  std::ifstream ifs_len(bwt_len_fname);
+  if (!ifs_len.is_open())
+    error("open() file " + bwt_len_fname + " failed");
+  ms_rle_string_sd bwt = ms_rle_string_sd(ifs_heads, ifs_len);
+
+  ifs_heads.close();
+  ifs_len.close();
 
   std::chrono::high_resolution_clock::time_point t_insert_end = std::chrono::high_resolution_clock::now();
 
@@ -149,34 +157,98 @@ int main(int argc, char *const argv[])
   verbose("Memory peak: ", malloc_count_peak());
   verbose("Elapsed time (s): ", std::chrono::duration<double, std::ratio<1>>(t_insert_end - t_insert_start).count());
 
-  verbose("Reading text");
+  verbose("Reading thresholds from file");
+
   t_insert_start = std::chrono::high_resolution_clock::now();
 
-  std::vector<uint8_t> text;
-  if(args.is_fasta)
-    read_fasta_file(args.filename.c_str(),text);
-  else
-    read_file(args.filename.c_str(),text);
+
+  std::string tmp_filename = args.filename + std::string(".thr_pos");
+
+  size_t n = uint64_t(bwt.size());
+  int log_n = bitsize(uint64_t(bwt.size()));
+
+  struct stat filestat;
+  FILE *fd;
+
+  if ((fd = fopen(tmp_filename.c_str(), "r")) == nullptr)
+    error("open() file " + tmp_filename + " failed");
+
+  int fn = fileno(fd);
+  if (fstat(fn, &filestat) < 0)
+    error("stat() file " + tmp_filename + " failed");
+
+  if (filestat.st_size % THRBYTES != 0)
+    error("invilid file " + tmp_filename);
+
+  size_t length = filestat.st_size / THRBYTES;
+  size_t threshold;
+
+  sdsl::int_vector<> thresholds = sdsl::int_vector<>(length, 0, log_n);
+
+  size_t pos = 0;
+
+  size_t max_thr = 0;
+  long long max_off = 0;
+  long long min_off = n;
+
+  uint8_t char_at_max = 0;
+
+  for (size_t i = 0; i < length; ++i)
+  {
+    if ((fread(&threshold, THRBYTES, 1, fd)) != 1)
+      error("fread() file " + tmp_filename + " failed");
+
+    // verbose(pos, " ",bwt.head_of(i), " ", bwt.run_at(i));
+    if(threshold > 0)
+    {
+      uint8_t c = bwt.head_of(i);
+      size_t pred = bwt.select(bwt.rank(pos-1,c)-1,c); 
+      size_t mid_int = (pos - pred + 1)>>1;
+      assert(threshold > pred);
+      if(threshold < pred)
+      {
+        error("Threshold before the beginning of the run", threshold, " ", pred);
+      }
+      threshold = threshold - pred;
+
+      long long off = mid_int - threshold;
+
+      if(max_thr < threshold)
+      {
+        char_at_max = c;
+        maxr(max_thr,threshold);
+      }
+
+      maxr(max_off,off);
+      minr(min_off,off);
+
+    }
+
+
+
+    thresholds[i] = threshold;
+
+    pos += bwt.run_at(i);
+  }
+
+  fclose(fd);
 
   t_insert_end = std::chrono::high_resolution_clock::now();
 
   verbose("Memory peak: ", malloc_count_peak());
   verbose("Elapsed time (s): ", std::chrono::duration<double, std::ratio<1>>(t_insert_end - t_insert_start).count());
 
-  verbose("Checking if equals");
-  t_insert_start = std::chrono::high_resolution_clock::now();
 
-  if(n != text.size())
-    error("Text size is different", " ra: ", n, " text: ", text.size());
+  verbose("Log n : ", log_n);
+  verbose("Max threshold: ", max_thr);
+  verbose("Char at max: ", char_at_max);
+  int log_thr = bitsize(max_thr);
+  verbose("Log threshold: ", log_thr);
 
-  for(size_t i = 0; i < n; ++i)
-    if(ra.charAt(i) != text[i])
-      error("Different character in position ", i, " ra: ", ra.charAt(i), " text: ", text[i]);
-
-  t_insert_end = std::chrono::high_resolution_clock::now();
-
-  verbose("Memory peak: ", malloc_count_peak());
-  verbose("Elapsed time (s): ", std::chrono::duration<double, std::ratio<1>>(t_insert_end - t_insert_start).count());
+  verbose("Max offset   : ", max_off);
+  verbose("Min offset   : ", min_off);
+  int log_off = bitsize((size_t)(max_off - min_off + 1));
+  verbose("Log offset   : ", log_off);
 
   auto mem_peak = malloc_count_peak();
   verbose("Memory peak: ", malloc_count_peak());
@@ -184,6 +256,7 @@ int main(int argc, char *const argv[])
   size_t space = 0;
   if (args.memo)
   {
+    verbose("Thresholds size (bytes): ", space);
   }
 
   if (args.store)

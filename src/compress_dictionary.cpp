@@ -26,6 +26,53 @@
 
 #include <malloc_count.h>
 
+//*********************** Argument options ***************************************
+// struct containing command line parameters and other globals
+struct Args
+{
+  std::string filename = "";
+  size_t w = 10;             // sliding window size and its default
+};
+
+void parseArgs(int argc, char *const argv[], Args &arg)
+{
+  int c;
+  extern char *optarg;
+  extern int optind;
+
+  std::string usage("usage: " + std::string(argv[0]) + " infile [-w wsize]\n\n" +
+                    "Computes the pfp data structures of infile, provided that infile.parse, infile.dict, and infile.occ exists.\n" +
+                    "  wsize: [integer] - sliding window size (def. 10)\n");
+
+  std::string sarg;
+  while ((c = getopt(argc, argv, "w:smcfl:rhp:t:")) != -1)
+  {
+    switch (c)
+    {
+    case 'w':
+      sarg.assign(optarg);
+      arg.w = stoi(sarg);
+      break;
+    case 'h':
+      error(usage);
+    case '?':
+      error("Unknown option.\n", usage);
+      exit(1);
+    }
+  }
+  // the only input parameter is the file name
+  if (argc == optind + 1)
+  {
+    arg.filename.assign(argv[optind]);
+  }
+  else
+  {
+    error("Invalid number of arguments\n", usage);
+  }
+}
+
+//********** end argument options ********************
+
 int main(int argc, char *const argv[])
 {
 
@@ -112,18 +159,6 @@ int main(int argc, char *const argv[])
 
   auto mem_peak = malloc_count_peak();
   verbose("Memory peak: ", malloc_count_peak());
-
-  size_t space = 0;
-  if (args.memo)
-  {
-  }
-
-  if (args.store)
-  {
-  }
-
-  if (args.csv)
-    std::cerr << csv(args.filename.c_str(), time, space, mem_peak) << std::endl;
 
   return 0;
 }

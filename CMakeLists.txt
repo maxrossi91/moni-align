@@ -1,4 +1,5 @@
 CMAKE_MINIMUM_REQUIRED(VERSION 3.15)
+include_guard(GLOBAL)
 set(CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/CMakeModules")
 
 # Set a default build type if none was specified
@@ -8,6 +9,7 @@ if(NOT CMAKE_BUILD_TYPE)
   set(CMAKE_BUILD_TYPE Release CACHE STRING "Choose the type of build." FORCE)
 endif()
 
+message(STATUS "Install directory: ${CMAKE_INSTALL_PREFIX}")
 # About this project
 # ------------------------------------------------------------------------------
 project(moni)
@@ -18,12 +20,10 @@ SET(VERSION "${VERSION_MAJOR}.${VERSION_MINOR}.${VERSION_PATCH}")
 
 # Set environment
 # ------------------------------------------------------------------------------
-set(CMAKE_INSTALL_PREFIX ${CMAKE_BINARY_DIR}/install)
-
 
 find_package(Git)
 if(GIT_FOUND)
-    message("git found: ${GIT_EXECUTABLE}")
+    message(STATUS "git found: ${GIT_EXECUTABLE}")
 else()
     message(WARNING "git not found. Cloning of submodules will not work.")
 endif()
@@ -51,8 +51,30 @@ endif()
 
 
 add_subdirectory(include)
+add_subdirectory(src)
 add_subdirectory(test/src)
 add_subdirectory(utils)
 # add_subdirectory(benchmarks/src)
 
-configure_file(${PROJECT_SOURCE_DIR}/pipeline/moni ${PROJECT_BINARY_DIR}/moni)
+set(PFP_EXE ${PFP})
+set(PFP_CHECK_EXE ${PFP_CHECK})
+set(PFP_THRESHOLDS_EXE ${pfp_thresholds})
+set(LARGEREPAIR_EXE ${largerepair})
+set(PREPROCESS_EXE ${preprocess})
+set(POSTPROCESS_EXE ${postproc})
+set(MONI_VERSION ${VERSION})
+
+# Configure pipeline for build folder
+set(USE_INSTALL_PATH False)
+configure_file(${PROJECT_SOURCE_DIR}/pipeline/moni.in ${PROJECT_BINARY_DIR}/moni @ONLY)
+
+# Configure pipeline for install folder
+set(USE_INSTALL_PATH True)
+configure_file(${PROJECT_SOURCE_DIR}/pipeline/moni.in ${PROJECT_BINARY_DIR}/moni.install @ONLY)
+
+
+install(TARGETS ms mems rlebwt_ms_build extend_ksw2 compress_dictionary build_seqidx TYPE RUNTIME)
+install(TARGETS rlebwt_ms_full_build align_full_ksw2 TYPE RUNTIME)
+install(TARGETS SlpEncBuild TYPE RUNTIME)
+# isntall(TARGETS pfp_thresholds pfp_thresholds64 TYPE RUNTIME)
+install(PROGRAMS ${PROJECT_BINARY_DIR}/moni.install RENAME moni TYPE BIN)

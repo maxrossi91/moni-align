@@ -30,7 +30,7 @@ extern "C" {
 
 #include <sdsl/io.hpp>
 
-#include <ms_pointers.hpp>
+#include <moni.hpp>
 
 #include <malloc_count.h>
 
@@ -52,6 +52,7 @@ class aligner_t
 public:
   using SelSd = SelectSdvec<>;
   using DagcSd = DirectAccessibleGammaCode<SelSd>;
+  // using SlpT = SelfShapedSlp<uint32_t, DagcSd, DagcSd, SelSd>;
 
   aligner_t(std::string filename, 
             size_t min_len_ = 50, 
@@ -62,7 +63,7 @@ public:
     verbose("Loading the matching statistics index");
     std::chrono::high_resolution_clock::time_point t_insert_start = std::chrono::high_resolution_clock::now();
 
-    std::string filename_ms = filename + ".ms";
+    std::string filename_ms = filename + ms.get_file_extension();
 
     ifstream fs_ms(filename_ms);
     ms.load(fs_ms);
@@ -128,17 +129,22 @@ public:
     auto pointers = ms.query(read->seq.s, read->seq.l);
     std::vector<size_t> lengths(pointers.size());
     size_t l = 0;
+    size_t n_Ns = 0;
     for (size_t i = 0; i < pointers.size(); ++i)
     {
       size_t pos = pointers[i];
       while ((i + l) < read->seq.l && (pos + l) < n && read->seq.s[i + l] == ra.charAt(pos + l))
+      {
+        if(read->seq.s[i + l] == 'N') n_Ns++;
+        else n_Ns = 0;
         ++l;
+      }
 
       lengths[i] = l;
       l = (l == 0 ? 0 : (l - 1));
 
       // Update MEM
-      if (lengths[i] > mem_len)
+      if (lengths[i] > mem_len and n_Ns < lengths[i])
       {
         mem_len = lengths[i];
         mem_pos = pointers[i];
@@ -149,96 +155,137 @@ public:
     // Align the read
     if (mem_len >= min_len)
     {
-      char *str = (char *)malloc(400);
+      // Extract all the occurrences of the MEM
+      std::vector<size_t> occs;
+      occs.push_back(mem_pos);
 
-      int32_t maskLen = read->seq.l / 2;
-      maskLen = maskLen < 15 ? 15 : maskLen;
-
-      // Extract the context from the reference
-      size_t left_occ = (mem_pos > 100 ? mem_pos - 100 : 0);
-      size_t len = mem_len + 100 + (mem_pos > 100 ? 100 : 100 - mem_pos);
-      ra.expandSubstr(left_occ, len, str);
-
-      size_t min_score = 20 + 8 * log(read->seq.l);
-
-      uint8_t* seq = (uint8_t*)malloc(read->seq.l);
-      // Convert A,C,G,T,N into 0,1,2,3,4
-      for (i = 0; i < (int)read->seq.l; ++i)
-        seq[i] = seq_nt4_table[(int)read->seq.s[i]];
-      // for (i = 0; i < (int)read->seq.l; ++i)
-      //   read->seq.s[i] = seq_nt4_table[(int)read->seq.s[i]];
-
-      for (i = 0; i < (int)len; ++i)
-        str[i] = seq_nt4_table[(int)str[i]];
-
-      int score;
-
-
-      kswq_t *q = 0;
-      kswr_t r;
-      
-      r = ksw_align(read->seq.l, (uint8_t *)seq, len, (uint8_t *)str, 5, mat, gapo, gape, xtra, &q);
-      // score = ksw_global(read->seq.l, (uint8_t *)read->seq.s, len, (uint8_t *)str, 5, mat, gapo, gape, w, &n_cigar, &cigar);
-
-      int n_cigar;
-      uint32_t * cigar;
-
-      size_t new_seq_len = r.qe - r.qb;
-      size_t new_ref_len = r.te - r.tb;
-      uint8_t *new_seq = (uint8_t *)(seq + r.qb);
-      // uint8_t *new_seq = (uint8_t *)(read->seq.s + r.qb);
-      uint8_t *new_ref = (uint8_t *)(str + r.tb);
-
-      score = ksw_global(new_seq_len, (uint8_t *) new_seq, new_ref_len, new_ref, 5, mat, gapo, gape, w, &n_cigar, &cigar);
-
-      std::string cig;
-
-      // for(size_t i = 0; i < n_cigar; ++i)
-      // {
-      //   // for (i = 0; i < ez->n_cigar; ++i)
-      //   //   printf("%d%c", ez->cigar[i] >> 4, "MID"[ez->cigar[i] & 0xf]);
-      //   cig += std::to_string(cigar[i] >> 4) + "MID"[cigar[i] & 0xf];
-      // }
-
-      size_t mismatch = mark_mismatch(r.tb, r.qb, r.qe, (int8_t *)str, (int8_t *)seq, read->seq.l, &cigar, &n_cigar);
-      for (c = 0; c < (n_cigar); ++c)
+      // Phi direction
+      size_t curr = mem_pos;
+      size_t next = ms.Phi(curr);
+      size_t lcp =  lceToRBounded(ra,curr,next,mem_len);
+      while(lcp >= mem_len)
       {
-        char letter = cigar_int_to_op(cigar[c]);
-        uint32_t length = cigar_int_to_len(cigar[c]);
-        // fprintf(out, "%lu%c", (unsigned long)length, letter);
-        cig += std::to_string((unsigned long)length) + letter;
+        occs.push_back(next);
+        
+        curr = next;
+        next = ms.Phi(curr);
+        lcp  = lceToRBounded(ra,curr,next,mem_len);
+        // verbose("Phi: " + std::to_string(lcp));
+        // if(occs.size() > 100)
+        //   error("More than 100 occs Phi" + std::string(read->seq.s));
       }
 
-      // if(r.score > 0)
-      //   printf("%s\t%d\t%d\t%s\t%d\t%d\t%d\t%d\t%d\n", "human", r.tb, r.te + 1, read->name.s, r.qb, r.qe + 1, r.score, r.score2, r.te2);
-      //   // std::cout << "\rCurrent score... "<< r.score << std::flush;
-
-      // // Declares a default Aligner
-      // StripedSmithWaterman::Aligner aligner;
-      // // Declares a default filter
-      // StripedSmithWaterman::Filter filter;
-      // // StripedSmithWaterman::Filter filter(true, true, min_score, 32767);
-      // // Declares an alignment that stores the result
-      // StripedSmithWaterman::Alignment alignment;
-      // // Aligns the query to the ref
-      // aligner.Align(read->seq.s, str, len, filter, &alignment, maskLen);
-
-      // // Update alignment method
-      r.tb += left_occ;
-      r.te += left_occ;
-      r.te2 += left_occ;
-
-      if(r.score >= min_score)
+      // Phi_inv direction
+      curr = mem_pos;
+      next = ms.Phi_inv(curr);
+      lcp =  lceToRBounded(ra,curr,next,mem_len);
+      while(lcp >= mem_len)
       {
-        ssw_write_sam(r,"human",read,strand,out,cig,mismatch);
-        aligned = true;
+        occs.push_back(next);
+        
+        curr = next;
+        next = ms.Phi_inv(curr);
+        lcp  = lceToRBounded(ra,curr,next,mem_len);
+        // verbose("Phi_inv: " + std::to_string(next));
+        // if(occs.size() > 100)
+        //   error("More than 100 occs Phi_inv" + std::string(read->seq.s));
       }
 
-      // aligned_reads++;
-      free(cigar);
-      free(q);
-      delete str;
-      delete seq;
+      // verbose("Number of occurrences: " + std::to_string(occs.size()));
+      // For all the occurrences align
+      for(auto curr_mem_pos: occs)
+      {
+        char *str = (char *)malloc(400);
+
+        int32_t maskLen = read->seq.l / 2;
+        maskLen = maskLen < 15 ? 15 : maskLen;
+
+        // Extract the context from the reference
+        size_t left_occ = (curr_mem_pos > 100 ? curr_mem_pos - 100 : 0);
+        size_t len = mem_len + 100 + (curr_mem_pos > 100 ? 100 : 100 - curr_mem_pos);
+        ra.expandSubstr(left_occ, len, str);
+
+        size_t min_score = 20 + 8 * log(read->seq.l);
+
+        uint8_t* seq = (uint8_t*)malloc(read->seq.l);
+        // Convert A,C,G,T,N into 0,1,2,3,4
+        for (i = 0; i < (int)read->seq.l; ++i)
+          seq[i] = seq_nt4_table[(int)read->seq.s[i]];
+        // for (i = 0; i < (int)read->seq.l; ++i)
+        //   read->seq.s[i] = seq_nt4_table[(int)read->seq.s[i]];
+
+        for (i = 0; i < (int)len; ++i)
+          str[i] = seq_nt4_table[(int)str[i]];
+
+        int score;
+
+
+        kswq_t *q = 0;
+        kswr_t r;
+        
+        r = ksw_align(read->seq.l, (uint8_t *)seq, len, (uint8_t *)str, 5, mat, gapo, gape, xtra, &q);
+        // score = ksw_global(read->seq.l, (uint8_t *)read->seq.s, len, (uint8_t *)str, 5, mat, gapo, gape, w, &n_cigar, &cigar);
+
+        int n_cigar;
+        uint32_t * cigar;
+
+        size_t new_seq_len = r.qe - r.qb;
+        size_t new_ref_len = r.te - r.tb;
+        uint8_t *new_seq = (uint8_t *)(seq + r.qb);
+        // uint8_t *new_seq = (uint8_t *)(read->seq.s + r.qb);
+        uint8_t *new_ref = (uint8_t *)(str + r.tb);
+
+        score = ksw_global(new_seq_len, (uint8_t *) new_seq, new_ref_len, new_ref, 5, mat, gapo, gape, w, &n_cigar, &cigar);
+
+        std::string cig;
+
+        // for(size_t i = 0; i < n_cigar; ++i)
+        // {
+        //   // for (i = 0; i < ez->n_cigar; ++i)
+        //   //   printf("%d%c", ez->cigar[i] >> 4, "MID"[ez->cigar[i] & 0xf]);
+        //   cig += std::to_string(cigar[i] >> 4) + "MID"[cigar[i] & 0xf];
+        // }
+
+        size_t mismatch = mark_mismatch(r.tb, r.qb, r.qe, (int8_t *)str, (int8_t *)seq, read->seq.l, &cigar, &n_cigar);
+        for (c = 0; c < (n_cigar); ++c)
+        {
+          char letter = cigar_int_to_op(cigar[c]);
+          uint32_t length = cigar_int_to_len(cigar[c]);
+          // fprintf(out, "%lu%c", (unsigned long)length, letter);
+          cig += std::to_string((unsigned long)length) + letter;
+        }
+
+        // if(r.score > 0)
+        //   printf("%s\t%d\t%d\t%s\t%d\t%d\t%d\t%d\t%d\n", "human", r.tb, r.te + 1, read->name.s, r.qb, r.qe + 1, r.score, r.score2, r.te2);
+        //   // std::cout << "\rCurrent score... "<< r.score << std::flush;
+
+        // // Declares a default Aligner
+        // StripedSmithWaterman::Aligner aligner;
+        // // Declares a default filter
+        // StripedSmithWaterman::Filter filter;
+        // // StripedSmithWaterman::Filter filter(true, true, min_score, 32767);
+        // // Declares an alignment that stores the result
+        // StripedSmithWaterman::Alignment alignment;
+        // // Aligns the query to the ref
+        // aligner.Align(read->seq.s, str, len, filter, &alignment, maskLen);
+
+        // // Update alignment method
+        r.tb += left_occ;
+        r.te += left_occ;
+        r.te2 += left_occ;
+
+        if(r.score >= min_score)
+        {
+          ssw_write_sam(r,"human",read,strand,out,cig,mismatch);
+          aligned = true;
+        }
+
+        // aligned_reads++;
+        free(cigar);
+        free(q);
+        delete str;
+        delete seq;
+      }
     }
     return aligned;
   }
@@ -332,7 +379,7 @@ protected:
       4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4,
       4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4};
 
-  int c, sa = 2, sb = 2, i, j, k, max_rseq = 0;
+  int c, sa = 2, sb = 4, i, j, k, max_rseq = 0;
   int w = 4000;
   int8_t mat[25];
   int gapo = 5, gape = 2, minsc = 0, xtra = KSW_XSTART;
@@ -630,7 +677,100 @@ size_t st_align(aligner_t *aligner, std::string pattern_filename, std::string sa
   kseq_destroy(seq);
   gzclose(fp);
   fclose(sam_fd);
+
+  sleep(5);
+
+  return n_aligned_reads;
 }
+
+//*********************** Argument options ***************************************
+// struct containing command line parameters and other globals
+struct Args
+{
+  std::string filename = "";
+  size_t w = 10;             // sliding window size and its default
+  bool store = false;        // store the data structure in the file
+  bool memo = false;         // print the memory usage
+  bool csv = false;          // print stats on stderr in csv format
+  bool rle = false;          // outpt RLBWT
+  std::string patterns = ""; // path to patterns file
+  size_t l = 25;             // minumum MEM length
+  size_t th = 1;             // number of threads
+  bool is_fasta = false;     // read a fasta file
+};
+
+void parseArgs(int argc, char *const argv[], Args &arg)
+{
+  int c;
+  extern char *optarg;
+  extern int optind;
+
+  std::string usage("usage: " + std::string(argv[0]) + " infile [-s store] [-m memo] [-c csv] [-p patterns] [-f fasta] [-r rle] [-t threads] [-l len]\n\n" +
+                    "Computes the pfp data structures of infile, provided that infile.parse, infile.dict, and infile.occ exists.\n" +
+                    "  wsize: [integer] - sliding window size (def. 10)\n" +
+                    "  store: [boolean] - store the data structure in infile.pfp.ds. (def. false)\n" +
+                    "   memo: [boolean] - print the data structure memory usage. (def. false)\n" +
+                    "  fasta: [boolean] - the input file is a fasta file. (def. false)\n" +
+                    "    rle: [boolean] - output run length encoded BWT. (def. false)\n" +
+                    "pattens: [string]  - path to patterns file.\n" +
+                    "    len: [integer] - minimum MEM lengt (def. 25)\n" +
+                    " thread: [integer] - number of threads (def. 1)\n" +
+                    "    csv: [boolean] - print the stats in csv form on strerr. (def. false)\n");
+
+  std::string sarg;
+  while ((c = getopt(argc, argv, "w:smcfl:rhp:t:")) != -1)
+  {
+    switch (c)
+    {
+    case 'w':
+      sarg.assign(optarg);
+      arg.w = stoi(sarg);
+      break;
+    case 's':
+      arg.store = true;
+      break;
+    case 'm':
+      arg.memo = true;
+      break;
+    case 'c':
+      arg.csv = true;
+      break;
+    case 'r':
+      arg.rle = true;
+      break;
+    case 'p':
+      arg.patterns.assign(optarg);
+      break;
+    case 'l':
+      sarg.assign(optarg);
+      arg.l = stoi(sarg);
+      break;
+    case 't':
+      sarg.assign(optarg);
+      arg.th = stoi(sarg);
+      break;
+    case 'f':
+      arg.is_fasta = true;
+      break;
+    case 'h':
+      error(usage);
+    case '?':
+      error("Unknown option.\n", usage);
+      exit(1);
+    }
+  }
+  // the only input parameter is the file name
+  if (argc == optind + 1)
+  {
+    arg.filename.assign(argv[optind]);
+  }
+  else
+  {
+    error("Invalid number of arguments\n", usage);
+  }
+}
+
+//********** end argument options ********************
 
 int main(int argc, char *const argv[])
 {

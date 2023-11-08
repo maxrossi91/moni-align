@@ -1,12 +1,15 @@
+[![Release](https://img.shields.io/github/release/maxrossi91/moni.svg)](https://github.com/maxrossi91/moni/releases)
+[![Downloads](https://img.shields.io/github/downloads/maxrossi91/moni/total?logo=github)](https://github.com/maxrossi91/moni/archive/master.zip)
+
 # MONI
-```condole
+```console
                            __  __  ____  _   _ _____
                           |  \/  |/ __ \| \ | |_   _|
                           | \  / | |  | |  \| | | |
                           | |\/| | |  | | . ` | | |
                           | |  | | |__| | |\  |_| |_
                           |_|  |_|\____/|_| \_|_____|
-                                            ver 0.0.1
+                                            ver 0.2.0
 ```
 A MEM-finder with Multi-Genome References.
 

@@ -1,4 +1,4 @@
-/* shapedslp_test - Test if the ShapedSLP generates the whole original text
+/* matching_statistics - Computes the matching statistics from BWT and Thresholds
     Copyright (C) 2020 Massimiliano Rossi
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -12,10 +12,10 @@
     along with this program.  If not, see http://www.gnu.org/licenses/ .
 */
 /*!
-   \file shapedslp_test.cpp
-   \brief shapedslp_test.cpp Test if the ShapedSLP generates the whole original text.
+   \file matching_statistics.cpp
+   \brief matching_statistics.cpp Computes the matching statistics from BWT and Thresholds.
    \author Massimiliano Rossi
-   \date 18/09/2020
+   \date 13/07/2020
 */
 
 #include <iostream>
@@ -26,7 +26,8 @@
 
 #include <sdsl/io.hpp>
 
-#include <ms_pointers.hpp>
+#include <moni.hpp>
+#include <moni_lcp.hpp>
 
 #include <malloc_count.h>
 
@@ -48,6 +49,7 @@ struct Args
   size_t l = 25;             // minumum MEM length
   size_t th = 1;             // number of threads
   bool is_fasta = false;     // read a fasta file
+  bool no_lcp = false;       // build without LCP entries
 };
 
 void parseArgs(int argc, char *const argv[], Args &arg)
@@ -56,7 +58,7 @@ void parseArgs(int argc, char *const argv[], Args &arg)
   extern char *optarg;
   extern int optind;
 
-  std::string usage("usage: " + std::string(argv[0]) + " infile [-s store] [-m memo] [-c csv] [-p patterns] [-f fasta] [-r rle] [-t threads] [-l len]\n\n" +
+  std::string usage("usage: " + std::string(argv[0]) + " infile [-s store] [-m memo] [-c csv] [-p patterns] [-f fasta] [-r rle] [-t threads] [-l len] [-n no-lcp]\n\n" +
                     "Computes the pfp data structures of infile, provided that infile.parse, infile.dict, and infile.occ exists.\n" +
                     "  wsize: [integer] - sliding window size (def. 10)\n" +
                     "  store: [boolean] - store the data structure in infile.pfp.ds. (def. false)\n" +
@@ -66,10 +68,11 @@ void parseArgs(int argc, char *const argv[], Args &arg)
                     "pattens: [string]  - path to patterns file.\n" +
                     "    len: [integer] - minimum MEM lengt (def. 25)\n" +
                     " thread: [integer] - number of threads (def. 1)\n" +
+                    " no-lcp: [boolean] - Build the index without the LCP entries. (def. false)\n" +
                     "    csv: [boolean] - print the stats in csv form on strerr. (def. false)\n");
 
   std::string sarg;
-  while ((c = getopt(argc, argv, "w:smcfl:rhp:t:")) != -1)
+  while ((c = getopt(argc, argv, "w:smcfl:rnhp:t:")) != -1)
   {
     switch (c)
     {
@@ -88,6 +91,9 @@ void parseArgs(int argc, char *const argv[], Args &arg)
       break;
     case 'r':
       arg.rle = true;
+      break;
+    case 'n':
+      arg.no_lcp = true;
       break;
     case 'p':
       arg.patterns.assign(optarg);
@@ -123,25 +129,14 @@ void parseArgs(int argc, char *const argv[], Args &arg)
 
 //********** end argument options ********************
 
-int main(int argc, char *const argv[])
-{
-  using SelSd = SelectSdvec<>;
-  using DagcSd = DirectAccessibleGammaCode<SelSd>;
-
-  Args args;
-  parseArgs(argc, argv, args);
-
+template<typename ms_t>
+void build_and_dump(Args args){
   // Building the r-index
-  verbose("Building random access");
+
+  verbose("Building the matching statistics index");
   std::chrono::high_resolution_clock::time_point t_insert_start = std::chrono::high_resolution_clock::now();
 
-  // pfp_ra ra(args.filename, args.w);
-  std::string filename_slp = args.filename + ".slp";
-  SelfShapedSlp<uint32_t, DagcSd, DagcSd, SelSd> ra;
-  ifstream fs(filename_slp);
-  ra.load(fs);
-
-  size_t n = ra.getLen();
+  ms_t ms(args.filename, true);
 
   std::chrono::high_resolution_clock::time_point t_insert_end = std::chrono::high_resolution_clock::now();
 
@@ -149,29 +144,11 @@ int main(int argc, char *const argv[])
   verbose("Memory peak: ", malloc_count_peak());
   verbose("Elapsed time (s): ", std::chrono::duration<double, std::ratio<1>>(t_insert_end - t_insert_start).count());
 
-  verbose("Reading text");
-  t_insert_start = std::chrono::high_resolution_clock::now();
 
-  std::vector<uint8_t> text;
-  if(args.is_fasta)
-    read_fasta_file(args.filename.c_str(),text);
-  else
-    read_file(args.filename.c_str(),text);
+  std::string outfile = args.filename + ms.get_file_extension();
+  std::ofstream out(outfile);
+  ms.serialize(out);
 
-  t_insert_end = std::chrono::high_resolution_clock::now();
-
-  verbose("Memory peak: ", malloc_count_peak());
-  verbose("Elapsed time (s): ", std::chrono::duration<double, std::ratio<1>>(t_insert_end - t_insert_start).count());
-
-  verbose("Checking if equals");
-  t_insert_start = std::chrono::high_resolution_clock::now();
-
-  if(n != text.size())
-    error("Text size is different", " ra: ", n, " text: ", text.size());
-
-  for(size_t i = 0; i < n; ++i)
-    if(ra.charAt(i) != text[i])
-      error("Different character in position ", i, " ra: ", ra.charAt(i), " text: ", text[i]);
 
   t_insert_end = std::chrono::high_resolution_clock::now();
 
@@ -181,17 +158,33 @@ int main(int argc, char *const argv[])
   auto mem_peak = malloc_count_peak();
   verbose("Memory peak: ", malloc_count_peak());
 
+}
+
+
+int main(int argc, char *const argv[])
+{
+  using SelSd = SelectSdvec<>;
+  using DagcSd = DirectAccessibleGammaCode<SelSd>;
+
+  Args args;
+  parseArgs(argc, argv, args);
+
+  if(args.no_lcp) 
+    build_and_dump<ms_pointers<>>(args);
+  else
+    build_and_dump<moni_lcp<>>(args);
+
   size_t space = 0;
   if (args.memo)
   {
+    // sdsl::nullstream ns;
+
+    // size_t ms_size = ms.serialize(ns);
+    // verbose("MS size (bytes): ", ms_size);
   }
 
-  if (args.store)
-  {
-  }
-
-  if (args.csv)
-    std::cerr << csv(args.filename.c_str(), time, space, mem_peak) << std::endl;
+  // if (args.csv)
+    // std::cerr << csv(args.filename.c_str(), time, space, mem_peak) << std::endl;
 
   return 0;
 }
