@@ -1,10 +1,6 @@
 # Set the base image to be the latest Ubuntu image
 FROM ubuntu:latest
 
-# Set environment variables for authentication (REMOVE LATER)
-# ENV GIT_USERNAME=##### # (Have to uncomment and fill in before making image since Github repo is private right now)
-# ENV GIT_TOKEN=#####
-
 # Set the working directory to be build
 WORKDIR /build
 
@@ -45,10 +41,13 @@ RUN curl -LJO https://github.com/samtools/htslib/releases/download/1.15/htslib-1
     make install &&\
     rm ../htslib-1.15.tar.bz2
 
+# Running ldconfig after install so newly installed libraries are found
+RUN ldconfig
+
 # Install Moni
-RUN git clone https://${GIT_USERNAME}:${GIT_TOKEN}@github.com/maxrossi91/moni-align.git &&\
+RUN git clone https://github.com/maxrossi91/moni-align.git &&\
     cd moni-align &&\
-    git checkout fix/chaining-Rahulv2 &&\
+    git checkout develop &&\
     mkdir build &&\
     cd build &&\
     cmake -DCMAKE_LIBRARY_PATH="/build/htslib-1.15/;/root/lib/" -DCMAKE_INCLUDE_PATH="/build/htslib-1.15/;/root/include/" -DCMAKE_PREFIX_PATH="`realpath thirdparty`" .. || true &&\
@@ -67,4 +66,5 @@ RUN cd moni-align &&\
     cmake -DCMAKE_LIBRARY_PATH="/build/htslib-1.15/;/root/lib/" -DCMAKE_INCLUDE_PATH="/build/htslib-1.15/;/root/include/" -DCMAKE_PREFIX_PATH="`realpath thirdparty`" .. &&\
     make
 
-ENTRYPOINT ["/build/moni-align/build/moni"]
+ENV PATH /build/moni-align/build:$PATH
+#ENTRYPOINT ["/build/moni-align/build/moni"]
