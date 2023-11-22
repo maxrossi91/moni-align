@@ -107,6 +107,20 @@ target_include_directories(liftidx_test PUBLIC
                                         )
 target_compile_options(liftidx_test PUBLIC "-std=c++17")
 
+add_executable(chain_test chain_test.cpp)
+target_link_libraries(chain_test common sdsl divsufsort divsufsort64 malloc_count ri klib z lvsam Catch2::Catch2)
+target_include_directories(chain_test PUBLIC
+                                        "../../include/common" 
+                                        "../../include/aligner"
+                                        "../../include/ms"
+                                        "${shaped_slp_SOURCE_DIR}" 
+                                        "${FOLCA_SOURCE_DIR}" 
+                                        "${SUX_SOURCE_DIR}/function" 
+                                        "${SUX_SOURCE_DIR}/support"
+                                        )
+target_compile_options(chain_test PUBLIC "-std=c++17")
+
+
 add_executable(r-index_test r-index_test.cpp)
 target_link_libraries(r-index_test common sdsl divsufsort divsufsort64 malloc_count ri klib z lvsam Catch2::Catch2)
 target_include_directories(r-index_test PUBLIC
