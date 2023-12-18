@@ -66,5 +66,6 @@ RUN cd moni-align &&\
     cmake -DCMAKE_LIBRARY_PATH="/build/htslib-1.15/;/root/lib/" -DCMAKE_INCLUDE_PATH="/build/htslib-1.15/;/root/include/" -DCMAKE_PREFIX_PATH="`realpath thirdparty`" .. &&\
     make
 
+RUN mkdir ../mydir
+WORKDIR /mydir
 ENV PATH /build/moni-align/build:$PATH
-#ENTRYPOINT ["/build/moni-align/build/moni"]
