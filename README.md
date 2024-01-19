@@ -34,8 +34,8 @@ docker pull rvarki/moni-align
 docker run rvarki/moni-align moni -h
 ```
 
-[!NOTE] 
-Make sure to include the -v option in the docker run command before attempting to run any moni commands on your data. The -v option will allow you to [mount](https://docs.docker.com/storage/bind-mounts/) your host directory into the Docker container so that moni can interact with your data. Users are encouraged to mount into `\mnt` directory in the Docker containter. 
+> [!NOTE] 
+> Make sure to include the -v option in the docker run command before attempting to run any moni commands on your data. The -v option will allow you to [mount](https://docs.docker.com/storage/bind-mounts/) your host directory into the Docker container so that moni can interact with your data. Users are encouraged to mount into `\mnt` directory in the Docker containter. 
 
 ## Singularity/Apptainer
 
@@ -70,8 +70,8 @@ cmake ..
 make
 ```
 
-[!WARNING]
-The first make command will fail. Continue with the rest of the steps. 
+> [!WARNING]
+> The first make command will fail. Continue with the rest of the steps. 
 
 2. Run the moni help command
 ```
@@ -79,8 +79,8 @@ export LD_LIBRARY_PATH="${LD_LIBRARY_PATH}:$PWD/thirdparty/lib"
 ./moni -h
 ```
 
-[!IMPORTANT]
-Make to run the export LD_LIBRARY_PATH command prior to running any moni commands if building the project from source.
+> [!IMPORTANT]
+> Make to run the export LD_LIBRARY_PATH command prior to running any moni commands if building the project from source.
 
 # Example
 
