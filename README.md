@@ -1,5 +1,5 @@
-[![Release](https://img.shields.io/github/release/maxrossi91/moni.svg)](https://github.com/maxrossi91/moni/releases)
-[![Downloads](https://img.shields.io/github/downloads/maxrossi91/moni/total?logo=github)](https://github.com/maxrossi91/moni/archive/master.zip)
+<!-- [![Release](https://img.shields.io/github/release/maxrossi91/moni.svg)](https://github.com/maxrossi91/moni/releases)
+[![Downloads](https://img.shields.io/github/downloads/maxrossi91/moni/total?logo=github)](https://github.com/maxrossi91/moni/archive/master.zip) -->
 
 # MONI-Align
 ```console
@@ -86,8 +86,18 @@ export LD_LIBRARY_PATH="${LD_LIBRARY_PATH}:$PWD/thirdparty/lib"
 
 We provide test data located in the `data/mouse` directory to test the commands.
 
+1. Building the index
+```
+./moni build -r ../data/mouse/ref/mouse.chr19.fa.gz -v ../data/mouse/vcf/mouse.chr19.subset.vcf.gz -S ../mouse_samples.txt -H12 -o ../data/mouse/index/mouse 
+```
+This should produce the following files in the `data/mouse/index` directory: `mouse.ldx`, `mouse.lidx`, `mouse.moni.log`, `mouse.plain.slp`, `mouse.slcp`, and `mouse.thrbv.full.lcp.ms`
 
+2. Aligning the reads
+```
+./moni align -i ../data/mouse/index/mouse -1 ../data/mouse/reads/mouse.chr19.R1.fastq -2 ../data/mouse/reads/mouse.chr19.R2.fastq -o ../data/mouse/output/mouse.sam
+```
 
+This should produce the `mouse.sam` file in the `data/mouse/output` directory.
 
 # External resources
 
