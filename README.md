@@ -88,7 +88,7 @@ We provide test data located in the `data/mouse` directory to test the commands.
 
 1. Building the index
 ```
-./moni build -r ../data/mouse/ref/mouse.chr19.fa.gz -v ../data/mouse/vcf/mouse.chr19.subset.vcf.gz -S ../mouse_samples.txt -H12 -o ../data/mouse/index/mouse 
+./moni build -r ../data/mouse/ref/mouse.chr19.fa.gz -v ../data/mouse/vcf/mouse.chr19.subset.vcf.gz -S ../data/mouse/vcf/mouse_samples.txt -H12 -o ../data/mouse/index/mouse 
 ```
 This should produce the following files in the `data/mouse/index` directory: `mouse.ldx`, `mouse.lidx`, `mouse.moni.log`, `mouse.plain.slp`, `mouse.slcp`, and `mouse.thrbv.full.lcp.ms`
 
