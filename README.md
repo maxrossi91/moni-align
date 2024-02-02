@@ -21,7 +21,7 @@ Maximal Exact Matches (MEMs) are extracted between the reads and the multi-genom
 
 # Install
 
-There are two ways to be able to run Moni-align. The easiest way is to run the tool from the Docker or Singularity/Apptainer image. The other way is to build it from source (Linux only).  
+There are two ways to be able to run `moni-align`. The easiest way is to run the tool from the `Docker` or `Singularity/Apptainer` image. The other way is to build it from source (Linux only).  
 
 ## Docker
 
@@ -29,19 +29,19 @@ There are two ways to be able to run Moni-align. The easiest way is to run the t
 ```
 docker pull rvarki/moni-align
 ```
-2. Run the moni help command. 
+2. Run the `moni` help command. 
 ```
 docker run rvarki/moni-align moni -h
 ```
 
 > [!NOTE] 
-> Make sure to include the -v option in the docker run command before attempting to run any moni commands on your data. The -v option will allow you to [mount](https://docs.docker.com/storage/bind-mounts/) your host directory into the Docker container so that moni can interact with your data. Users are encouraged to mount into `\mnt` directory in the Docker containter. 
+> Make sure to include the -v option in the docker run command before attempting to run any `moni` commands on your data. The -v option will allow you to [mount](https://docs.docker.com/storage/bind-mounts/) your host directory into the Docker container so that moni can interact with your data. Users are encouraged to mount into `\mnt` directory in the Docker containter. 
 
 ## Singularity/Apptainer
 
-If working on a high performance computing cluster, you might not have access to Docker due to it needing root permissions. Instead, you can use the Singularity/Apptainer version of the tool.
+If working on a high performance computing cluster, you might not have access to `Docker` due to it needing root permissions. Instead, you can use the `Singularity/Apptainer` version of the tool.
 
-1. Build the SIF image of Moni-align
+1. Build the SIF image of `moni-align`
 ```
 singularity pull moni.sif docker://rvarki/moni-align:latest
 ```
@@ -49,15 +49,23 @@ or
 ```
 apptainer build moni.sif docker://rvarki/moni-align:latest
 ```
-2. Run the moni help command
+2. Run the `moni` help command
 
 ```
 ./moni.sif moni -h
 ```
 
 ## Building from Source
+Currently, building from source only works on Linux machines. 
 
-1. Currently, building from source only works on Linux machines. 
+`moni-align` has the following dependencies:
+
+- `gcc` tool (version 9.3.0/9.4.0)
+- `cmake`tool (version 3.15 or greater) 
+
+After installing the dependencies, the following steps can be run to build the project.
+
+1. Run the build steps 
 
 ```
 git clone https://github.com/maxrossi91/moni-align.git
@@ -73,14 +81,14 @@ make
 > [!WARNING]
 > The first make command will fail. Continue with the rest of the steps. 
 
-2. Run the moni help command
+2. Run the`moni` help command
 ```
 export LD_LIBRARY_PATH="${LD_LIBRARY_PATH}:$PWD/thirdparty/lib"
 ./moni -h
 ```
 
 > [!IMPORTANT]
-> Make to run the export LD_LIBRARY_PATH command prior to running any moni commands if building the project from source.
+> Make to run the export LD_LIBRARY_PATH command prior to running any `moni` commands if building the project from source.
 
 # Example
 
