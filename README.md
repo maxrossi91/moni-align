@@ -35,7 +35,7 @@ docker run rvarki/moni-align moni -h
 ```
 
 > [!NOTE] 
-> Make sure to include the -v option in the docker run command before attempting to run any `moni` commands on your data. The -v option will allow you to [mount](https://docs.docker.com/storage/bind-mounts/) your host directory into the Docker container so that moni can interact with your data. Users are encouraged to mount into `\mnt` directory in the Docker containter. 
+> Make sure to include the -v option in the docker run command before attempting to run any `moni` commands on your data. The -v option will allow you to [mount](https://docs.docker.com/storage/bind-mounts/) your host directory into the Docker container so that `moni` can interact with your data. Users are encouraged to mount into `\mnt` directory in the Docker containter. 
 
 ## Singularity/Apptainer
 
