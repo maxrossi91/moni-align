@@ -1,5 +1,5 @@
 # Set the base image to be the latest Ubuntu image
-FROM ubuntu:latest
+FROM ubuntu:20.04
 
 # Set the working directory to be build
 WORKDIR /build
