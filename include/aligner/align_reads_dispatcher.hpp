@@ -161,7 +161,7 @@ void *mt_align_worker(void *param)
         memo.push_back(kpbseq_init());
         copy_kpbseq_t(memo.back(), b);
         alignments.push_back(std::vector<typename aligner_t::paired_alignment_t>(l));
-        if (p->aligner->learn_fragment_model(memo.back(), alignments.back()))
+        if (p->aligner->learn_fragment_model(memo.back(), alignments.back(), sam_fd))
         {
           for (size_t i = 0; i < alignments.size(); ++i)
           {
@@ -348,7 +348,7 @@ statistics_t st_align(aligner_t *aligner, std::string pattern_filename, std::str
         memo.push_back(kpbseq_init());
         copy_kpbseq_t(memo.back(), b);
         alignments.push_back(std::vector<typename aligner_t::paired_alignment_t>(l));
-        if (aligner->learn_fragment_model(memo.back(), alignments.back()))
+        if (aligner->learn_fragment_model(memo.back(), alignments.back(), sam_fd))
         {
           for( size_t i = 0; i < alignments.size(); ++i ){
             stats += aligner->finalize_learning(alignments[i], sam_fd);

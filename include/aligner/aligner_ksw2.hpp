@@ -109,6 +109,7 @@ public:
         int zdrop = -1;         // Zdrop enable
 
         bool forward_only = true;      // Align only
+        bool report_mems = false;      // Report MEMs instead of read alignment
 
         // Chaining parameters
         ll max_dist_x = 500;    // Max distance for two anchors to be chained
@@ -221,6 +222,7 @@ public:
                 zdrop(config.zdrop),            // Zdrop enable
                 max_penalty(std::max(smatch + smismatch, gapo + gape)), // Maximum penalty score
                 forward_only(config.forward_only),
+                report_mems(config.report_mems), // Report MEMs instead of read alignment
                 mem_finder(filename, config.min_len, config.filter_seeds, config.n_seeds_thr),
                 ra(mem_finder.ra)
   {
@@ -307,6 +309,13 @@ public:
 
     mem_finder.find_seeds(al.read,al.mems, 0, MATE_1 | MATE_F);
     mem_finder.find_seeds(&al.read_rev,al.mems, 0, MATE_1 | MATE_RC);
+
+    if (report_mems)
+    {
+      printf("%s\n", (al.read)->name.s);
+      printf("%s\n", (al.read)->seq.s);
+      printf("%s\n", (al.read)->qual.s);
+    }
 
     // Compute fraction of repetitive seeds
     al.frac_rep = compute_frac_rep(al.mems, al.read->seq.l, MATE_1);
@@ -634,7 +643,7 @@ public:
   // Aligning pair-ended batched sequences
   // Return true if the fragment model has been learned.
   // Assumes alignment to be allocated with the exact number of elements
-  bool learn_fragment_model(kpbseq_t *batch, std::vector<paired_alignment_t>& alignments)
+  bool learn_fragment_model(kpbseq_t *batch, std::vector<paired_alignment_t>& alignments, FILE *out)
   {
     size_t n_aligned = 0;
 
@@ -649,7 +658,8 @@ public:
       // paired_alignment_t alignment(&batch->mate1->buf[i], &batch->mate2->buf[i]);
       paired_alignment_t& alignment = alignments[i];
       alignment.init(&batch->mate1->buf[i], &batch->mate2->buf[i]);
-      if(align(alignment, false) and ((not alignment.second_best_score) or ((alignment.best_scores[0].tot - alignment.best_scores[1].tot) > ins_learning_score_gap_threshold)))
+      fprintf(stdout, "Learn Fragment Model Align\n");
+      if(align(alignment, out, false) and ((not alignment.second_best_score) or ((alignment.best_scores[0].tot - alignment.best_scores[1].tot) > ins_learning_score_gap_threshold)))
       {
         // Get stats
         // mate_abs_distance.push_back((double)(alignment.sam_m1.tlen >= 0?alignment.sam_m1.tlen :-alignment.sam_m1.tlen));
@@ -707,6 +717,9 @@ public:
 
   statistics_t finalize_learning(std::vector<paired_alignment_t> &alignments, FILE *out)
   {
+    fprintf(stdout, "Finalize Learning\n");
+    fprintf(stdout, "Finalize Learning Alignments %d\n", alignments.size());
+
     statistics_t stats;
 
     for (size_t i = 0; i < alignments.size(); ++i)
@@ -738,7 +751,9 @@ public:
         if (alignment.aligned) ++stats.orphan_recovered_reads;
       }
       
-      alignment.write(out);
+      if (!report_mems){
+        alignment.write(out);
+      }
 
       if (alignment.aligned) ++stats.aligned_reads;
     }
@@ -758,14 +773,24 @@ public:
       paired_alignment_t alignment(&batch->mate1->buf[i], &batch->mate2->buf[i]);
       alignment.mean = ins_mean;
       alignment.std_dev = ins_std_dev;
-      if(not align(alignment) and alignment.chained)
+      fprintf(stdout, "First Align Function\n");
+      if (out == nullptr){
+        fprintf(stdout, "File pointer is null\n");
+      }
+      else{
+        fprintf(stdout, "File pointer is not null\n");
+      }
+
+      if(not align(alignment, out) and alignment.chained)
       {
         ++ stats.orphan_reads;
         orphan_recovery(alignment, ins_mean, ins_std_dev);
         if (alignment.aligned) ++stats.orphan_recovered_reads;
       }
       // Write alignment to file
-      alignment.write(out);
+      if (!report_mems){
+        alignment.write(out);
+      }
       if(alignment.aligned) ++stats.aligned_reads;
     }
     
@@ -838,15 +863,32 @@ public:
   bool align(kseq_t *mate1, kseq_t *mate2, FILE *out)
   {
     paired_alignment_t alignment(mate1, mate2);
-    if(not align(alignment))
+    if(not align(alignment, out))
       alignment.set_sam_not_aligned();
     alignment.write(out);
     return alignment.aligned;
   }
 
   // Aligning pair-ended sequences
-  bool align(paired_alignment_t &al, bool finalize = true)
+  bool align(paired_alignment_t &al, FILE* out = nullptr, bool finalize = true)
   { 
+    fprintf(stdout, "Second Align Function\n");
+
+    FILE* testptr = nullptr;
+    if (testptr == nullptr){
+      fprintf(stdout, "Test file pointer is correctly null\n");
+    }
+    else{
+      fprintf(stdout, "Test file pointer is incorrectly null\n");
+    }
+
+    if (out == nullptr){
+      fprintf(stdout, "File pointer is null in paired end align\n");
+    }
+    else{
+        fprintf(stdout, "File pointer is not null in paired end align\n");
+    }
+
     MTIME_INIT(10);   
     MTIME_START(0); // Timing helper
 
@@ -941,6 +983,43 @@ public:
     // find_mems(&al.mate1_rev, al.mems, al.mate2->seq.l, MATE_1 | MATE_RC );
     // find_mems(al.mate2, al.mems, 0, MATE_2 | MATE_F);
     // find_mems(&al.mate2_rev, al.mems, al.mate1->seq.l, MATE_2 | MATE_RC);
+
+    // If reporting just the MEMs, at this point can directly write to the SAM file and skip the rest.
+    if (report_mems && out != nullptr)
+    {
+      // printf("%s\n", (al.mate1)->name.s);
+      // printf("%s\n", (al.mate1)->seq.s);
+      // printf("%s\n", (al.mate1)->qual.s);
+      // printf("%s\n", (al.mate2)->name.s);
+      // printf("%s\n", (al.mate2)->seq.s);
+      // printf("%s\n", (al.mate2)->qual.s);
+
+      // Loop throught the MEMs of the paired-end read and write to the SAM file
+      for (int i = 0; i < al.mems.size(); ++i){
+        for (int j = 0; j < al.mems[i].occs.size(); ++j){
+          if (al.mems[i].mate == 0){
+            al.sam_m1.cigar = std::to_string(al.mems[i].len) + "M";
+            const auto ref = idx.index(al.mems[i].occs[j]);
+            al.sam_m1.pos = ref.second + 1;
+            al.sam_m1.rname = ref.first;
+            al.sam_m1.flag = SAM_SECONDARY_ALIGNMENT;
+            write_sam(out, al.sam_m1);
+          }
+          else{
+            al.sam_m2.cigar = std::to_string(al.mems[i].len) + "M";
+            const auto ref = idx.index(al.mems[i].occs[j]);
+            al.sam_m2.pos = ref.second + 1;
+            al.sam_m2.rname = ref.first;
+            al.sam_m2.flag = SAM_SECONDARY_ALIGNMENT;
+            write_sam(out, al.sam_m2);
+          }
+        }
+      }
+
+      if (finalize){
+        return true;
+      }
+    }
 
     // Compute fraction of repetitive seeds
     al.frac_rep_m1 = compute_frac_rep(al.mems, al.mate1->seq.l, MATE_1);
@@ -2852,6 +2931,7 @@ protected:
     ll max_dist_x = 500;    // Max distance for two anchors to be chained
     ll max_dist_y = 100;    // Max distance for two anchors from the same read to be chained
     bool secondary_chains = false; // Find secondary chains in paired-end setting
+    bool report_mems = false; // Report MEMs instead of read alignment 
 
     chain_config_t chain_config;
 };
