@@ -658,7 +658,6 @@ public:
       // paired_alignment_t alignment(&batch->mate1->buf[i], &batch->mate2->buf[i]);
       paired_alignment_t& alignment = alignments[i];
       alignment.init(&batch->mate1->buf[i], &batch->mate2->buf[i]);
-      fprintf(stdout, "Learn Fragment Model Align\n");
       if(align(alignment, out, false) and ((not alignment.second_best_score) or ((alignment.best_scores[0].tot - alignment.best_scores[1].tot) > ins_learning_score_gap_threshold)))
       {
         // Get stats
@@ -717,9 +716,6 @@ public:
 
   statistics_t finalize_learning(std::vector<paired_alignment_t> &alignments, FILE *out)
   {
-    fprintf(stdout, "Finalize Learning\n");
-    fprintf(stdout, "Finalize Learning Alignments %d\n", alignments.size());
-
     statistics_t stats;
 
     for (size_t i = 0; i < alignments.size(); ++i)
@@ -773,14 +769,7 @@ public:
       paired_alignment_t alignment(&batch->mate1->buf[i], &batch->mate2->buf[i]);
       alignment.mean = ins_mean;
       alignment.std_dev = ins_std_dev;
-      fprintf(stdout, "First Align Function\n");
-      if (out == nullptr){
-        fprintf(stdout, "File pointer is null\n");
-      }
-      else{
-        fprintf(stdout, "File pointer is not null\n");
-      }
-
+      
       if(not align(alignment, out) and alignment.chained)
       {
         ++ stats.orphan_reads;
@@ -872,23 +861,6 @@ public:
   // Aligning pair-ended sequences
   bool align(paired_alignment_t &al, FILE* out = nullptr, bool finalize = true)
   { 
-    fprintf(stdout, "Second Align Function\n");
-
-    FILE* testptr = nullptr;
-    if (testptr == nullptr){
-      fprintf(stdout, "Test file pointer is correctly null\n");
-    }
-    else{
-      fprintf(stdout, "Test file pointer is incorrectly null\n");
-    }
-
-    if (out == nullptr){
-      fprintf(stdout, "File pointer is null in paired end align\n");
-    }
-    else{
-        fprintf(stdout, "File pointer is not null in paired end align\n");
-    }
-
     MTIME_INIT(10);   
     MTIME_START(0); // Timing helper
 
@@ -987,35 +959,42 @@ public:
     // If reporting just the MEMs, at this point can directly write to the SAM file and skip the rest.
     if (report_mems && out != nullptr)
     {
-      // printf("%s\n", (al.mate1)->name.s);
-      // printf("%s\n", (al.mate1)->seq.s);
-      // printf("%s\n", (al.mate1)->qual.s);
-      // printf("%s\n", (al.mate2)->name.s);
-      // printf("%s\n", (al.mate2)->seq.s);
-      // printf("%s\n", (al.mate2)->qual.s);
+      // Cannot modify mate 1 and mate 2 directly. Instead have to create new kseq_t variables to do this. 
+      kseq_t mem_m1_read;
+      kseq_t mem_m2_read;
 
       // Loop throught the MEMs of the paired-end read and write to the SAM file
       for (int i = 0; i < al.mems.size(); ++i){
-        for (int j = 0; j < al.mems[i].occs.size(); ++j){
-          if (al.mems[i].mate == 0){
-            al.sam_m1.cigar = std::to_string(al.mems[i].len) + "M";
+        if (al.mems[i].mate == 0){
+          copy_partial_kseq_t(&mem_m1_read, al.mate1, al.mems[i].idx, al.mems[i].len);
+          for (int j = 0; j < al.mems[i].occs.size(); ++j){
+            sam_t m1_sam = sam_t(&mem_m1_read);
+            m1_sam.cigar = std::to_string(al.mems[i].len) + "M";
             const auto ref = idx.index(al.mems[i].occs[j]);
-            al.sam_m1.pos = ref.second + 1;
-            al.sam_m1.rname = ref.first;
-            al.sam_m1.flag = SAM_SECONDARY_ALIGNMENT;
-            write_sam(out, al.sam_m1);
+            m1_sam.pos = ref.second + 1;
+            m1_sam.rname = ref.first;
+            m1_sam.flag = SAM_SECONDARY_ALIGNMENT;
+            write_sam(out, m1_sam);
           }
-          else{
-            al.sam_m2.cigar = std::to_string(al.mems[i].len) + "M";
+          free_kseq_t(&mem_m1_read);
+        }
+        else{
+          copy_partial_kseq_t(&mem_m2_read, al.mate2, al.mems[i].idx, al.mems[i].len);
+          for (int j = 0; j < al.mems[i].occs.size(); ++j) {
+            sam_t m2_sam = sam_t(&mem_m2_read);
+            m2_sam.cigar = std::to_string(al.mems[i].len) + "M";
             const auto ref = idx.index(al.mems[i].occs[j]);
-            al.sam_m2.pos = ref.second + 1;
-            al.sam_m2.rname = ref.first;
-            al.sam_m2.flag = SAM_SECONDARY_ALIGNMENT;
-            write_sam(out, al.sam_m2);
+            m2_sam.pos = ref.second + 1;
+            m2_sam.rname = ref.first;
+            m2_sam.flag = SAM_SECONDARY_ALIGNMENT;  
+            write_sam(out, m2_sam);
           }
+          free_kseq_t(&mem_m2_read);
         }
       }
 
+      // This if statement is there because learn_fragment_model needs to align the first few reads, otherwise error occurs.
+      // The finalize variable should be false only when the learn_fragment_model calls the align function. If not true, then have to add another bool flag to function. 
       if (finalize){
         return true;
       }
