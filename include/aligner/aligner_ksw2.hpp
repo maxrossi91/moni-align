@@ -285,9 +285,10 @@ public:
   {
     // std::vector<mem_t> mems;
     alignment_t alignment(read);
-    if(not align(alignment))
+    if(not align(alignment, hdr))
       alignment.set_sam_not_aligned();
-    alignment.write(out, hdr);
+    if (!report_mems)
+      alignment.write(out, hdr);
     return alignment.aligned;
   }
 
@@ -295,14 +296,15 @@ public:
   {
     // std::vector<mem_t> mems;
     alignment_t alignment(read);
-    if(not align(alignment))
+    if(not align(alignment, out))
       alignment.set_sam_not_aligned();
-    alignment.write(out);
+    if (!report_mems)
+      alignment.write(out);
     return alignment.aligned;
   }
 
   // Aligning unpaired sequences
-  bool align(alignment_t &al)
+  bool align(alignment_t &al, FILE* out = nullptr)
   {    
     MTIME_INIT(3);
     MTIME_START(0); // Timing helper
@@ -310,11 +312,24 @@ public:
     mem_finder.find_seeds(al.read,al.mems, 0, MATE_1 | MATE_F);
     mem_finder.find_seeds(&al.read_rev,al.mems, 0, MATE_1 | MATE_RC);
 
+    // If reporting just the MEMs, at this point can directly write to the SAM file and skip the rest.
     if (report_mems)
     {
-      printf("%s\n", (al.read)->name.s);
-      printf("%s\n", (al.read)->seq.s);
-      printf("%s\n", (al.read)->qual.s);
+      kseq_t read;
+      for (int i = 0; i < al.mems.size(); ++i){
+        copy_partial_kseq_t(&read, al.read, al.mems[i].idx, al.mems[i].len);
+        for (int j = 0; j < al.mems[i].occs.size(); ++j) {
+            sam_t read_sam = sam_t(&read);
+            read_sam.cigar = std::to_string(al.mems[i].len) + "M";
+            const auto ref = idx.index(al.mems[i].occs[j]);
+            read_sam.pos = ref.second + 1;
+            read_sam.rname = ref.first;
+            read_sam.flag = SAM_SECONDARY_ALIGNMENT;  
+            write_sam(out, read_sam);
+        }
+        free_kseq_t(&read);
+      }
+      return true;
     }
 
     // Compute fraction of repetitive seeds
