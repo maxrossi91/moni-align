@@ -315,6 +315,7 @@ public:
     // If reporting just the MEMs, at this point can directly write to the SAM file and skip the rest.
     if (report_mems)
     {
+      MTIME_END(0); // Timing helper
       kseq_t read;
       for (int i = 0; i < al.mems.size(); ++i){
         copy_partial_kseq_t(&read, al.read, al.mems[i].idx, al.mems[i].len);
@@ -329,7 +330,9 @@ public:
         }
         free_kseq_t(&read);
       }
-      return true;
+      MTIME_TSAFE_MERGE;
+      al.aligned = true;
+      return al.aligned;
     }
 
     // Compute fraction of repetitive seeds
@@ -974,6 +977,7 @@ public:
     // If reporting just the MEMs, at this point can directly write to the SAM file and skip the rest.
     if (report_mems && out != nullptr)
     {
+      MTIME_END(0); //Timing helper
       // Cannot modify mate 1 and mate 2 directly. Instead have to create new kseq_t variables to do this. 
       kseq_t mem_m1_read;
       kseq_t mem_m2_read;
@@ -1011,7 +1015,9 @@ public:
       // This if statement is there because learn_fragment_model needs to align the first few reads, otherwise error occurs.
       // The finalize variable should be false only when the learn_fragment_model calls the align function. If not true, then have to add another bool flag to function. 
       if (finalize){
-        return true;
+        MTIME_TSAFE_MERGE;
+        al.aligned = true;
+        return al.aligned;
       }
     }
 
