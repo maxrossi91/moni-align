@@ -309,8 +309,8 @@ public:
     MTIME_INIT(3);
     MTIME_START(0); // Timing helper
 
-    mem_finder.find_seeds(al.read,al.mems, 0, MATE_1 | MATE_F);
-    mem_finder.find_seeds(&al.read_rev,al.mems, 0, MATE_1 | MATE_RC);
+    mem_finder.find_seeds(al.read,al.mems, 0, MATE_1 | MATE_F, report_mems);
+    mem_finder.find_seeds(&al.read_rev,al.mems, 0, MATE_1 | MATE_RC, report_mems);
 
     // If reporting just the MEMs, at this point can directly write to the SAM file and skip the rest.
     if (report_mems)
@@ -938,7 +938,7 @@ public:
       MTIME_END(8); //Timing helper
       MTIME_START(9); //Timing helper
       
-      mem_finder.populate_seeds(al.mems);
+      mem_finder.populate_seeds(al.mems, report_mems);
       al.n_seeds_dir1 = 0;
       al.n_seeds_dir2 = 0;
       for (size_t i = 0; i < al.mems.size(); ++i)
@@ -964,10 +964,10 @@ public:
     }
     else
     {
-      mem_finder.find_seeds(al.mate1, al.mems, 0, MATE_1 | MATE_F);
-      mem_finder.find_seeds(&al.mate1_rev, al.mems, al.mate2->seq.l, MATE_1 | MATE_RC);
-      mem_finder.find_seeds(al.mate2, al.mems, 0, MATE_2 | MATE_F);
-      mem_finder.find_seeds(&al.mate2_rev, al.mems, al.mate1->seq.l, MATE_2 | MATE_RC);
+      mem_finder.find_seeds(al.mate1, al.mems, 0, MATE_1 | MATE_F, report_mems);
+      mem_finder.find_seeds(&al.mate1_rev, al.mems, al.mate2->seq.l, MATE_1 | MATE_RC, report_mems);
+      mem_finder.find_seeds(al.mate2, al.mems, 0, MATE_2 | MATE_F, report_mems);
+      mem_finder.find_seeds(&al.mate2_rev, al.mems, al.mate1->seq.l, MATE_2 | MATE_RC, report_mems);
     }
     // find_mems(al.mate1, al.mems, 0, MATE_1 | MATE_F);
     // find_mems(&al.mate1_rev, al.mems, al.mate2->seq.l, MATE_1 | MATE_RC );
