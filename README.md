@@ -27,7 +27,7 @@ There are two ways to be able to run `moni-align`. The easiest way is to run the
 
 1. Pull the image from DockerHub
 ```
-docker pull rvarki/moni-align
+docker pull rvarki/moni-align:mems-sam
 ```
 2. Run the `moni` help command. 
 ```
