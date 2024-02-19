@@ -318,14 +318,20 @@ public:
       MTIME_END(0); // Timing helper
       kseq_t read;
       for (int i = 0; i < al.mems.size(); ++i){
-        copy_partial_kseq_t(&read, al.read, al.mems[i].idx, al.mems[i].len);
+        if (al.mems[i].mate & MATE_RC)
+          copy_partial_kseq_t(&read, &al.read_rev, al.mems[i].idx, al.mems[i].len);
+        else
+          copy_partial_kseq_t(&read, al.read, al.mems[i].idx, al.mems[i].len);
         for (int j = 0; j < al.mems[i].occs.size(); ++j) {
             sam_t read_sam = sam_t(&read);
             read_sam.cigar = std::to_string(al.mems[i].len) + "M";
             const auto ref = idx.index(al.mems[i].occs[j]);
             read_sam.pos = ref.second + 1;
             read_sam.rname = ref.first;
-            read_sam.flag = SAM_SECONDARY_ALIGNMENT;  
+            if (al.mems[i].mate & MATE_RC)
+              read_sam.flag = SAM_SECONDARY_ALIGNMENT | SAM_REVERSED; 
+            else
+              read_sam.flag = SAM_SECONDARY_ALIGNMENT;
             write_sam(out, read_sam);
         }
         free_kseq_t(&read);
@@ -938,7 +944,7 @@ public:
       MTIME_END(8); //Timing helper
       MTIME_START(9); //Timing helper
       
-      mem_finder.populate_seeds(al.mems, report_mems);
+      mem_finder.populate_seeds(al.mems, 0, report_mems);
       al.n_seeds_dir1 = 0;
       al.n_seeds_dir2 = 0;
       for (size_t i = 0; i < al.mems.size(); ++i)
@@ -985,27 +991,39 @@ public:
       // Loop throught the MEMs of the paired-end read and write to the SAM file
       for (int i = 0; i < al.mems.size(); ++i){
         if (al.mems[i].mate == 0){
-          copy_partial_kseq_t(&mem_m1_read, al.mate1, al.mems[i].idx, al.mems[i].len);
+          if (al.mems[i].mate & MATE_RC)
+            copy_partial_kseq_t(&mem_m1_read, &al.mate1_rev, al.mems[i].idx, al.mems[i].len);
+          else
+            copy_partial_kseq_t(&mem_m1_read, al.mate1, al.mems[i].idx, al.mems[i].len);
           for (int j = 0; j < al.mems[i].occs.size(); ++j){
             sam_t m1_sam = sam_t(&mem_m1_read);
             m1_sam.cigar = std::to_string(al.mems[i].len) + "M";
             const auto ref = idx.index(al.mems[i].occs[j]);
             m1_sam.pos = ref.second + 1;
             m1_sam.rname = ref.first;
-            m1_sam.flag = SAM_SECONDARY_ALIGNMENT;
+            if (al.mems[i].mate & MATE_RC)
+              m1_sam.flag = SAM_SECONDARY_ALIGNMENT | SAM_REVERSED;
+            else
+              m1_sam.flag = SAM_SECONDARY_ALIGNMENT;
             write_sam(out, m1_sam);
           }
           free_kseq_t(&mem_m1_read);
         }
         else{
-          copy_partial_kseq_t(&mem_m2_read, al.mate2, al.mems[i].idx, al.mems[i].len);
+          if (al.mems[i].mate & MATE_RC)
+            copy_partial_kseq_t(&mem_m2_read, &al.mate2_rev, al.mems[i].idx, al.mems[i].len);
+          else
+            copy_partial_kseq_t(&mem_m2_read, al.mate2, al.mems[i].idx, al.mems[i].len);
           for (int j = 0; j < al.mems[i].occs.size(); ++j) {
             sam_t m2_sam = sam_t(&mem_m2_read);
             m2_sam.cigar = std::to_string(al.mems[i].len) + "M";
             const auto ref = idx.index(al.mems[i].occs[j]);
             m2_sam.pos = ref.second + 1;
             m2_sam.rname = ref.first;
-            m2_sam.flag = SAM_SECONDARY_ALIGNMENT;  
+            if (al.mems[i].mate & MATE_RC)
+              m2_sam.flag = SAM_SECONDARY_ALIGNMENT | SAM_REVERSED;
+            else
+              m2_sam.flag = SAM_SECONDARY_ALIGNMENT;
             write_sam(out, m2_sam);
           }
           free_kseq_t(&mem_m2_read);
