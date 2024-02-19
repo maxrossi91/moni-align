@@ -29,6 +29,7 @@ def main():
     with gzip.open(filename, 'wb') as vcf_file:
         # Write the VCF header
         vcf_file.write('##fileformat=VCFv4.3\n'.encode())
+        vcf_file.write('##contig=<ID={contig}>\n'.format(contig = args.contig).encode())
         vcf_file.write('##FORMAT=<ID=GT,Number=1,Type=String,Description="Genotype">\n'.encode())
         vcf_file.write('#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\t{}\n'.format(args.sample).encode())
 
