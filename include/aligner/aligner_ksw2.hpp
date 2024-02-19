@@ -990,7 +990,7 @@ public:
 
       // Loop throught the MEMs of the paired-end read and write to the SAM file
       for (int i = 0; i < al.mems.size(); ++i){
-        if (al.mems[i].mate == 0){
+        if (al.mems[i].mate == (MATE_1 | MATE_F) || al.mems[i].mate == (MATE_1 | MATE_RC)){
           if (al.mems[i].mate & MATE_RC)
             copy_partial_kseq_t(&mem_m1_read, &al.mate1_rev, al.mems[i].idx, al.mems[i].len);
           else
