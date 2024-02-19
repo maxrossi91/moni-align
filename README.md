@@ -31,7 +31,7 @@ docker pull rvarki/moni-align:mems-sam
 ```
 2. Run the `moni` help command. 
 ```
-docker run rvarki/moni-align moni -h
+docker run rvarki/moni-align:mems-sam moni -h
 ```
 
 > [!NOTE] 
