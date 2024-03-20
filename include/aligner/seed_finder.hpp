@@ -246,10 +246,11 @@ public:
 
     // // Populate the seeds given a list of MEMs
     void populate_seeds(
-        std::vector<mem_t> &mems)
+        std::vector<mem_t> &mems,
+        size_t init_mem_size = 0)
     {
         size_t n_MEMs = mems.size();
-        for (size_t j = 0; j < n_MEMs; ++j)
+        for (size_t j = init_mem_size; j < n_MEMs; ++j)
             populate_seed(mems[j], mems);
     }
 
@@ -260,8 +261,9 @@ public:
         size_t r_offset = 0,
         size_t mate = 0)
     {
+        size_t init_mem_size = mems.size();
         find_mems(read, mems, r_offset, mate);
-        populate_seeds(mems);
+        populate_seeds(mems, init_mem_size);
     }
 
 protected:
