@@ -260,8 +260,12 @@ public:
         size_t r_offset = 0,
         size_t mate = 0)
     {
+        MMEM_START(8);
         find_mems(read, mems, r_offset, mate);
+        MMEM_END(8);
+        MMEM_START(9);
         populate_seeds(mems);
+        MMEM_END(9);
     }
 
 protected:

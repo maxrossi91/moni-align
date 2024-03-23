@@ -217,6 +217,8 @@ bool find_chains(
 {
     MTIME_INIT(7);   
     MTIME_START(3); // Timing helper
+    MMEM_START(3);
+
     /************* minimap2 dynamic programming for mem chaining ***************/
     /* https://github.com/lh3/minimap2/blob/master/chain.c */
 
@@ -235,7 +237,10 @@ bool find_chains(
 
     std::sort(anchors.begin(),anchors.end(),cmp);
     MTIME_END(3); //Timing helper
+    MMEM_END(3);
     MTIME_START(4); //Timing helper
+    MMEM_START(4);
+
     // MTIME_TSAFE_MERGE;
 
     // Dynamic programming
@@ -352,7 +357,9 @@ bool find_chains(
     }
 
     MTIME_END(4);   // Timing helper
+    MMEM_END(4);
     MTIME_START(5); // Timing helper
+    MMEM_START(5);
 
     // Find the end positions of chains
     memset(t.data(),0,sizeof(size_t) * t.size());
@@ -376,7 +383,9 @@ bool find_chains(
     
     // std::vector<std::pair<size_t, std::vector<size_t>>> chains;
     MTIME_END(5);   // Timing helper
+    MMEM_END(5);
     MTIME_START(6); // Timing helper
+    MMEM_START(6);
 
     // Backtrack
     memset(t.data(),0,sizeof(size_t) * t.size());
@@ -418,6 +427,9 @@ bool find_chains(
     // // Sort the chains by max scores.
     // std::sort(chains.begin(), chains.end(), std::greater<std::pair<ll,std::vector<size_t>>>());
 
+    // Record memory prior to clearing vectors
+    MMEM_END(6);
+
     // Clear space
     clear_and_shrink_vecs(p, t, f, msc);
 
@@ -438,6 +450,8 @@ bool find_chains_secondary(
 {
     MTIME_INIT(7);   
     MTIME_START(3); // Timing helper
+    MMEM_START(3);
+
     /************* minimap2 dynamic programming for mem chaining ***************/
     /* https://github.com/lh3/minimap2/blob/master/chain.c */
 
@@ -456,7 +470,10 @@ bool find_chains_secondary(
 
     std::sort(anchors.begin(),anchors.end(),cmp);
     MTIME_END(3); //Timing helper
+    MMEM_END(3);
     MTIME_START(4); //Timing helper
+    MMEM_START(4);
+
     // MTIME_TSAFE_MERGE;
 
     // Dynamic programming
@@ -615,7 +632,9 @@ bool find_chains_secondary(
     }
 
     MTIME_END(4);   // Timing helper
+    MMEM_END(4);
     MTIME_START(5); // Timing helper
+    MMEM_START(5);
 
     // Find the end positions of chains
     memset(t.data(),0,sizeof(size_t) * t.size());
@@ -660,7 +679,9 @@ bool find_chains_secondary(
     
     // std::vector<std::pair<size_t, std::vector<size_t>>> chains;
     MTIME_END(5);   // Timing helper
+    MMEM_END(5);
     MTIME_START(6); // Timing helper
+    MMEM_START(6);
 
     // Backtrack for primary chains
     memset(t.data(),0,sizeof(size_t) * t.size());
@@ -711,6 +732,7 @@ bool find_chains_secondary(
     clear_and_shrink_vecs(p_sec, t_sec, f_sec, msc_sec);
 
     MTIME_END(6); // Timing helper
+    MMEM_END(6);
     MTIME_TSAFE_MERGE;
 
     return true;

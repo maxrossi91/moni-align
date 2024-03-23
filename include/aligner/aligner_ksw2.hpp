@@ -23,6 +23,7 @@
 
 #define VERBOSE
 #define MTIME
+#define MMEM
 
 #include <vector>
 #include <leviosam.hpp> // Included here to avoid conflicts with common.hpp
@@ -62,6 +63,9 @@ MTIME_TSAFE_NAMES_INIT(
   "Seed extraction - Seeds finding",
   "Seed extraction - Seeds occurrences"
 );
+
+MMEM_INIT(10);
+
 #include <slp_definitions.hpp>
 #include <chain.hpp>
 #include <statistics.hpp>
@@ -847,13 +851,17 @@ public:
   // Aligning pair-ended sequences
   bool align(paired_alignment_t &al, bool finalize = true)
   { 
-    MTIME_INIT(10);   
+    MTIME_INIT(10);
+    MMEM_INIT(10);   
+    MMEM_ITER_START;
     MTIME_START(0); // Timing helper
 
     // Find MEMs
     if ( filter_dir )
     {
       MTIME_START(8); // Timing helper
+      MMEM_START(8);
+
       // Direction 1
       // find_seeds(al.mate1, al.mems, 0, MATE_1 | MATE_F);
       // find_seeds(&al.mate2_rev, al.mems, al.mate1->seq.l, MATE_2 | MATE_RC);
@@ -904,7 +912,9 @@ public:
         al.mems.erase(al.mems.begin(), al.mems.begin()  + al.n_mems_dir1);
 
       MTIME_END(8); //Timing helper
+      MMEM_END(8);
       MTIME_START(9); //Timing helper
+      MMEM_START(9);
       
       mem_finder.populate_seeds(al.mems);
       al.n_seeds_dir1 = 0;
@@ -928,6 +938,7 @@ public:
         al.avg_w_seed_length_dir2 /= al.n_seeds_dir2;
       }
       MTIME_END(9); //Timing helper
+      MMEM_END(9);
 
     }
     else
@@ -1194,6 +1205,8 @@ public:
   {
     MTIME_INIT(8);   
     MTIME_START(7); //Timing helper
+    MMEM_START(7);
+
     // We need to use the local alignment of ksw to perform local search
     
     // For all good chaining of both mates of length at least min_length, find the possible distance of the mate
@@ -1266,6 +1279,7 @@ public:
     if (best_scores[0].tot < al.min_score)
     {
       MTIME_END(7); //Timing helper
+      MMEM_END(7);
       MTIME_TSAFE_MERGE;
       return false;
     }
@@ -1306,6 +1320,7 @@ public:
     al.aligned = (al.score.tot >= al.min_score);
 
     MTIME_END(7); //Timing helper
+    MMEM_END(7);
     MTIME_TSAFE_MERGE;
 
     return al.aligned;
@@ -2315,6 +2330,7 @@ orphan_paired_score_t paired_chain_orphan_score(
     // const bool realign = false   // Realign globally the read
   )
   {
+    MMEM_START(2);
     int flag = KSW_EZ_EXTZ_ONLY | KSW_EZ_RIGHT;
 
     if(score_only) 
@@ -2714,6 +2730,7 @@ orphan_paired_score_t paired_chain_orphan_score(
         sam->unmapped_lft = true;
         score.unmapped_lft = true;
       }
+      MMEM_END(2);
       bam_destroy1(bam);
     
 

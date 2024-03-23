@@ -50,6 +50,8 @@
 
 #include <stdexcept>
 #include <execinfo.h>
+//#include <fstream>
+#include <malloc_count.h>
 
 //**************************** From  Big-BWT ***********************************
 // special symbols used by the construction algorithm:
@@ -524,8 +526,99 @@ void my_load(std::vector<X> &x, std::istream &in, typename std::enable_if<std::i
   #define MTIME_TSAFE_MERGE
 #endif
 
+//*********************** Maximum Resident Set Size ****************************
 
+// Function to get current memory usage
+// unsigned long long getCurrentMemoryUsage() {
+//     unsigned long long memoryUsage = 0;
+//     std::ifstream proc("/proc/self/status"); //Linux only
+//     std::string line;
+//     while (std::getline(proc, line)) {
+//         if (line.substr(0, 6) == "VmRSS:") { // Resident Set Size
+//             std::istringstream iss(line.substr(7));
+//             iss >> memoryUsage;
+//             break;
+//         }
+//     }
+//     return memoryUsage;
+// }
 
+#ifdef MMEM
+
+#ifndef _MMEM
+#define _MMEM
+
+#define MMEM_INIT(_n)             \
+  std::vector<size_t> __startrss(_n, 0);      \
+  std::vector<size_t> __endrss(_n, 0);      \
+  std::vector<size_t> __mem(_n, 0);         \
+  std::vector<size_t> __peakrss(_n, 0);     \
+  std::vector<size_t> __iterrss;
+
+#define MMEM_START(_i)      \
+  __startrss[_i] = malloc_count_current();
+
+#define MMEM_END(_i)              \
+  __endrss[_i] = malloc_count_current();           \
+  __mem[_i] = ( (__endrss[_i] - __startrss[_i]) > __mem[_i]) ? (__endrss[_i] - __startrss[_i]) : __mem[_i];   \
+  __peakrss[_i] = ( (malloc_count_current() > __peakrss[_i])) ? malloc_count_current() : __peakrss[_i];
+
+#define MMEM_REPORT(_i)           \
+  verbose("Max RSS Difference variable", _i, " (B):",std::setw(9), __mem[_i], "\t(", __tsafe_names[i], ")");    \
+
+#define MMEM_REPORT_ALL                          \
+  for (size_t i = 0; i < __mem.size(); ++i)        \
+  MMEM_REPORT(i)
+
+#define MMEM_PEAK_REPORT(_i)          \
+  verbose("Peak RSS variable", _i, " (B):",std::setw(9), __peakrss[_i], "\t(", __tsafe_names[i], ")");
+
+#define MMEM_PEAK_REPORT_ALL          \
+  for (size_t i = 0; i < __peakrss.size(); ++i)        \
+  MMEM_PEAK_REPORT(i)  
+
+#define MMEM_ITER_START             \
+  __iterrss.push_back(malloc_count_current());
+
+#define MMEM_ITER_REPORT(_i)         \
+  verbose("Align Iter", _i, " (B):",std::setw(9), __iterrss[_i]); 
+
+#define MMEM_ITER_REPORT_ALL        \
+  for (size_t i = 0; i < __iterrss.size(); ++i)       \
+  MMEM_ITER_REPORT(i)
+                                   
+// #define MMEM_INIT(_n)             \
+//   std::vector<unsigned long long> __startrss(_n, 0);      \
+//   std::vector<unsigned long long> __endrss(_n, 0);      \
+//   std::vector<unsigned long long> __mem(_n, 0);
+
+// #define MMEM_START(_i)      \
+//   __startrss[_i] = getCurrentMemoryUsage();
+
+// #define MMEM_END(_i)              \
+//   __endrss[_i] = getCurrentMemoryUsage();           \
+//   __mem[_i] = ( (__endrss[_i] - __startrss[_i]) > __mem[_i]) ? (__endrss[_i] - __startrss[_i]) : __mem[_i];
+
+// #define MMEM_REPORT(_i)           \
+//   verbose("Max RSS variable", _i, " (KB):",std::setw(9), __mem[_i], "\t(", __tsafe_names[i], ")");
+
+// #define MMEM_REPORT_ALL                          \
+//   for (size_t i = 0; i < __mem.size(); ++i)        \
+//   MMEM_REPORT(i)
+
+#endif /* _MMEM */
+
+#else
+  #define MMEM_INIT(_n)
+  #define MMEM_START(_i)
+  #define MMEM_END(_i)
+  #define MMEM_REPORT(_i)
+  #define MMEM_REPORT_ALL
+  #define MMEM_PEAK_REPORT_ALL
+  #define MMEM_ITER_START
+  #define MMEM_ITER_REPORT(_i)
+  #define MMEM_ITER_REPORT_ALL
+#endif
 
 //***********************  Utils ***********************************************
 

@@ -122,7 +122,7 @@ target_compile_options(r-index_test PUBLIC "-std=c++17")
 
 
 add_executable(ldx_slp_test ldx_slp_test.cpp)
-target_link_libraries(ldx_slp_test common common sdsl lvsam klib z Catch2::Catch2)
+target_link_libraries(ldx_slp_test common common sdsl lvsam klib z malloc_count Catch2::Catch2)
 target_include_directories(ldx_slp_test PUBLIC
                                         "../../include/common" 
                                         "../../include/aligner"
@@ -134,7 +134,7 @@ target_include_directories(ldx_slp_test PUBLIC
 target_compile_options(ldx_slp_test PUBLIC "-std=c++17")
 
 add_executable(sigsegv_bt_handler_test sigsegv_bt_handler_test.cpp)
-target_link_libraries(sigsegv_bt_handler_test common sdsl klib backward)
+target_link_libraries(sigsegv_bt_handler_test common sdsl klib backward malloc_count)
 target_include_directories(sigsegv_bt_handler_test PUBLIC
                                         "../../include/common" 
                                         )
