@@ -552,8 +552,7 @@ void my_load(std::vector<X> &x, std::istream &in, typename std::enable_if<std::i
   std::vector<size_t> __startrss(_n, 0);      \
   std::vector<size_t> __endrss(_n, 0);      \
   std::vector<size_t> __mem(_n, 0);         \
-  std::vector<size_t> __peakrss(_n, 0);     \
-  std::vector<size_t> __iterrss;
+  std::vector<size_t> __peakrss(_n, 0);     
 
 #define MMEM_START(_i)      \
   __startrss[_i] = malloc_count_current();
@@ -577,15 +576,10 @@ void my_load(std::vector<X> &x, std::istream &in, typename std::enable_if<std::i
   for (size_t i = 0; i < __peakrss.size(); ++i)        \
   MMEM_PEAK_REPORT(i)  
 
-#define MMEM_ITER_START             \
-  __iterrss.push_back(malloc_count_current());
-
-#define MMEM_ITER_REPORT(_i)         \
-  verbose("Align Iter", _i, " (B):",std::setw(9), __iterrss[_i]); 
-
-#define MMEM_ITER_REPORT_ALL        \
-  for (size_t i = 0; i < __iterrss.size(); ++i)       \
-  MMEM_ITER_REPORT(i)
+size_t iter_count = 0;    
+#define MMEM_ITER_REPORT         \
+  iter_count += 1;                    \
+  verbose("Align Iter", iter_count, " (B):",std::setw(9), malloc_count_current()); 
                                    
 // #define MMEM_INIT(_n)             \
 //   std::vector<unsigned long long> __startrss(_n, 0);      \
@@ -615,9 +609,7 @@ void my_load(std::vector<X> &x, std::istream &in, typename std::enable_if<std::i
   #define MMEM_REPORT(_i)
   #define MMEM_REPORT_ALL
   #define MMEM_PEAK_REPORT_ALL
-  #define MMEM_ITER_START
-  #define MMEM_ITER_REPORT(_i)
-  #define MMEM_ITER_REPORT_ALL
+  #define MMEM_ITER_REPORT
 #endif
 
 //***********************  Utils ***********************************************

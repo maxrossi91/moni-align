@@ -344,7 +344,6 @@ int main(int argc, char *const argv[])
   MTIME_TSAFE_REPORT_ALL;
   MMEM_REPORT_ALL;
   MMEM_PEAK_REPORT_ALL;
-  MMEM_ITER_REPORT_ALL;
 
   return 0;
 }

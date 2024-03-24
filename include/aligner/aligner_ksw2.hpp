@@ -853,7 +853,7 @@ public:
   { 
     MTIME_INIT(10);
     MMEM_INIT(10);   
-    MMEM_ITER_START;
+    MMEM_ITER_REPORT;
     MTIME_START(0); // Timing helper
 
     // Find MEMs
