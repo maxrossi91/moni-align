@@ -283,6 +283,8 @@ void dispatcher(Args &args){
 
   statistics_t stats;
 
+  MMEM_ITER_REPORT_START("Dispatcher prior to align thread");
+
   if(args.patterns != "")
   {
     std::string sam_filename = args.patterns + "_" + base_name + "_" + std::to_string(args.l) + ".sam";
@@ -321,7 +323,7 @@ void dispatcher(Args &args){
 
 int main(int argc, char *const argv[])
 {
-
+  MMEM_ITER_REPORT_START("Start of Main");
   Args args;
   parseArgs(argc, argv, args);
 
