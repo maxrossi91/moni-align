@@ -31,6 +31,8 @@ extern "C"{
 #include <kseq.h>
 #include <zlib.h>
 
+#include <debug_logger.hpp> //Logging file
+
 ////////////////////////////////////////////////////////////////////////////////
 /// Merge SAMs
 ////////////////////////////////////////////////////////////////////////////////
@@ -116,6 +118,7 @@ struct mt_param_t
 template <typename aligner_t>
 void *mt_align_worker(void *param)
 {
+  logger_t logger;
   mt_param_t<aligner_t> *p = (mt_param_t<aligner_t> *)param;
   statistics_t stats;
 
@@ -158,6 +161,7 @@ void *mt_align_worker(void *param)
     {
       if (learning)
       {
+        logger.filename = "temp.json"
         memo.push_back(kpbseq_init());
         copy_kpbseq_t(memo.back(), b);
         alignments.push_back(std::vector<typename aligner_t::paired_alignment_t>(l));
@@ -166,9 +170,11 @@ void *mt_align_worker(void *param)
           for (size_t i = 0; i < alignments.size(); ++i)
           {
             stats += p->aligner->finalize_learning(alignments[i], sam_fd);
+            logger.reads.push_back(alignments[i].to_JSON());
             kpbseq_destroy(memo[i]);
             alignments[i].clear();alignments[i].shrink_to_fit();
           }
+          logger.write();
           memo.clear(); memo.shrink_to_fit();
           alignments.clear(); alignments.shrink_to_fit();
           learning = false;
