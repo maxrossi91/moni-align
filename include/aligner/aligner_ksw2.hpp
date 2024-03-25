@@ -302,7 +302,7 @@ public:
   // Aligning unpaired sequences
   bool align(alignment_t &al)
   {    
-    MTIME_INIT(3);
+    MTIME_INIT(10);
     MTIME_START(0); // Timing helper
     MTIME_START(8);
     mem_finder.find_mems(al.read,al.mems, 0, MATE_1 | MATE_F);
