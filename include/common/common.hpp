@@ -579,7 +579,10 @@ void my_load(std::vector<X> &x, std::istream &in, typename std::enable_if<std::i
 size_t iter_count = 0;    
 #define MMEM_ITER_REPORT         \
   iter_count += 1;                    \
-  verbose("Align Iter", iter_count, " (B):",std::setw(9), malloc_count_current()); 
+  verbose("Align Iter", iter_count, " (B):",std::setw(9), malloc_count_current());
+
+#define MMEM_ITER_REPORT_START(msg)      \
+  verbose(msg,"(B):",std::setw(9), malloc_count_current());
                                    
 // #define MMEM_INIT(_n)             \
 //   std::vector<unsigned long long> __startrss(_n, 0);      \
@@ -610,6 +613,7 @@ size_t iter_count = 0;
   #define MMEM_REPORT_ALL
   #define MMEM_PEAK_REPORT_ALL
   #define MMEM_ITER_REPORT
+  #define MMEM_ITER_REPORT_START(msg)
 #endif
 
 //***********************  Utils ***********************************************

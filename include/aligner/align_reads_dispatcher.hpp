@@ -288,6 +288,7 @@ statistics_t mt_align(aligner_t *aligner, std::string pattern_filename, std::str
 template <typename aligner_t>
 statistics_t st_align(aligner_t *aligner, std::string pattern_filename, std::string sam_filename, size_t b_size, std::string mate2_filename = "")
 {
+  MMEM_ITER_REPORT_START("Single align thread start");
   size_t pn_reads = 0;
   statistics_t stats;
 
