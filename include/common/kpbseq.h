@@ -203,6 +203,19 @@ inline static void kbseq_realloc(kbseq_t *b)
 }
 
 /**
+ * \brief resize a to size a + b
+ *
+ * \param a the variable to resize to a + b
+ * \param b the variable to account for 
+ */
+inline static void kbseq_resize(kbseq_t *a, kbseq_t *b)
+{
+    a->m = a->l + b->l + 1;
+    kroundup32(a->m);
+    a->buf = (kseq_t *)realloc(a->buf, a->m * sizeof(kseq_t));
+}
+
+/**
  * \brief append seq to b.
  * 
  * \param b the batch o sequences
@@ -246,6 +259,19 @@ inline static void copy_kbseq_t(kbseq_t *a, kbseq_t *b)
     for (size_t i = 0; i < b->l; ++i)
         kbseq_push_back(a, &b->buf[i]);
 }
+
+/**
+ * \brief append b to a
+ *
+ * \param a the destination variable
+ * \param b the source variable
+ */
+ inline static void append_kbseq_t(kbseq_t *a, kbseq_t *b)
+ {
+    kbseq_resize(a,b);
+    for (size_t i = 0; i < b->l; ++i)
+        kbseq_push_back(a, &b->buf[i]); 
+ }
 
 /**
  * \brief Read n sequences from seq and append them to b.
@@ -328,6 +354,19 @@ inline static size_t kpbseq_read(kpbseq_t *p, kseq_t *mate1_s, kseq_t *mate2_s, 
     return l1;
 }
 
+/**
+ * \brief Append all mate sequences from b to a
+ *
+ * \param a the batch where the sequences will be appended to
+ * \param b the batch that contains the sequences to append to a
+ */
+
+ inline static void kpbseq_append(kpbseq_t *a, kpbseq_t *b)
+ {
+    append_kbseq_t(a->mate1, b->mate1);
+    append_kbseq_t(a->mate2, b->mate2);
+ }
+ 
 inline static void kpbseq_destroy(kpbseq_t *p)
 {
     kbseq_destroy(p->mate1);
