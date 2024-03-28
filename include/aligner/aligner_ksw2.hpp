@@ -302,11 +302,15 @@ public:
   // Aligning unpaired sequences
   bool align(alignment_t &al)
   {    
-    MTIME_INIT(3);
+    MTIME_INIT(10);
     MTIME_START(0); // Timing helper
-
-    mem_finder.find_seeds(al.read,al.mems, 0, MATE_1 | MATE_F);
-    mem_finder.find_seeds(&al.read_rev,al.mems, 0, MATE_1 | MATE_RC);
+    MTIME_START(8);
+    mem_finder.find_mems(al.read,al.mems, 0, MATE_1 | MATE_F);
+    mem_finder.find_mems(&al.read_rev,al.mems, 0, MATE_1 | MATE_RC);
+    MTIME_END(8);
+    MTIME_START(9);
+    mem_finder.populate_seeds(al.mems);
+    MTIME_END(9);
 
     // Compute fraction of repetitive seeds
     al.frac_rep = compute_frac_rep(al.mems, al.read->seq.l, MATE_1);
@@ -932,10 +936,15 @@ public:
     }
     else
     {
-      mem_finder.find_seeds(al.mate1, al.mems, 0, MATE_1 | MATE_F);
-      mem_finder.find_seeds(&al.mate1_rev, al.mems, al.mate2->seq.l, MATE_1 | MATE_RC);
-      mem_finder.find_seeds(al.mate2, al.mems, 0, MATE_2 | MATE_F);
-      mem_finder.find_seeds(&al.mate2_rev, al.mems, al.mate1->seq.l, MATE_2 | MATE_RC);
+      MTIME_START(8);
+      mem_finder.find_mems(al.mate1, al.mems, 0, MATE_1 | MATE_F);
+      mem_finder.find_mems(&al.mate1_rev, al.mems, al.mate2->seq.l, MATE_1 | MATE_RC);
+      mem_finder.find_mems(al.mate2, al.mems, 0, MATE_2 | MATE_F);
+      mem_finder.find_mems(&al.mate2_rev, al.mems, al.mate1->seq.l, MATE_2 | MATE_RC);
+      MTIME_END(8);
+      MTIME_START(9);
+      mem_finder.populate_seeds(al.mems);
+      MTIME_END(9);
     }
     // find_mems(al.mate1, al.mems, 0, MATE_1 | MATE_F);
     // find_mems(&al.mate1_rev, al.mems, al.mate2->seq.l, MATE_1 | MATE_RC );
