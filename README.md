@@ -73,14 +73,10 @@ cd moni-align
 mkdir build
 cd build
 cmake ..
-make
 cmake ..
 make
 ```
-
-> [!WARNING]
-> The first make command will fail. Continue with the rest of the steps. 
-
+ 
 2. Run the`moni` help command
 ```
 export LD_LIBRARY_PATH="${LD_LIBRARY_PATH}:$PWD/thirdparty/lib"
@@ -106,6 +102,23 @@ This should produce the following files in the `data/mouse/index` directory: `mo
 ```
 
 This should produce the `mouse.sam` file in the `data/mouse/output` directory.
+
+# MEMs to SAM
+
+To report the MEMs in the SAM file rather than the read alignments, follow step 1 to build the index and then run this command.
+
+```
+./moni align -i ../data/mouse/index/mouse -1 ../data/mouse/reads/mouse.chr19.R1.fastq -2 ../data/mouse/reads/mouse.chr19.R2.fastq -o ../data/mouse/output/mouse.sam --report_mems -d -s -l 25
+```
+
+- The --report_mems command will write the MEMs of mate1 and mate2 found in the forward and reverse direction in the SAM file rather than the read alignments. 
+
+- The -d and -s disable the direction and seed occurance filter.
+
+- The -l command sets the MEM length cutoff filter.
+
+> [!IMPORTANT]
+> Aligning full reads or reporting MEMs from a single reference (i.e only FASTA) requires a bit of a hack due to the LevioSAM coupling in the align function. Easiest way is to create a dummy VCF file and build the index with that file. If reporting full alignments, then there should be no need to do any filtering in theory. If reporting MEMs, then can use SAMtools to filter the SAM file for MEMs that map to the reference.
 
 # External resources
 

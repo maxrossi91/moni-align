@@ -198,7 +198,7 @@ public:
 
     // Populate the seeds given a list of MEMs
     bool populate_seed(
-        mem_t &mem, std::vector<mem_t> &mems)
+        mem_t &mem, std::vector<mem_t> &mems, bool report_mems = false)
     {
         size_t l = mem.len;
         size_t i = mem.idx;
@@ -216,7 +216,7 @@ public:
         size_t lower_suffix = mem.occs.back();
 
         // Take two halves of the MEM
-        if (l >= (min_len << 1))
+        if (l >= (min_len << 1) && !(report_mems))
         {
             size_t ll = l >> 1;
             size_t rl = r - l + ll; // compatible with minimap2 chaining algorithm
@@ -246,11 +246,12 @@ public:
 
     // // Populate the seeds given a list of MEMs
     void populate_seeds(
-        std::vector<mem_t> &mems)
+        std::vector<mem_t> &mems,
+        bool report_mems = false)
     {
         size_t n_MEMs = mems.size();
         for (size_t j = 0; j < n_MEMs; ++j)
-            populate_seed(mems[j], mems);
+            populate_seed(mems[j], mems, report_mems);
     }
 
 
