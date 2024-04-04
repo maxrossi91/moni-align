@@ -321,6 +321,7 @@ public:
     {
       MTIME_END(0); // Timing helper
       kseq_t read;
+      nullptr_kseq_t(&read); // For FASTA reads to ensure nullptr for qual
       for (int i = 0; i < al.mems.size(); ++i){
         if (al.mems[i].mate & MATE_RC)
           copy_partial_kseq_t(&read, &al.read_rev, al.mems[i].idx, al.mems[i].len);
@@ -1069,6 +1070,8 @@ public:
       // Cannot modify mate 1 and mate 2 directly. Instead have to create new kseq_t variables to do this. 
       kseq_t mem_m1_read;
       kseq_t mem_m2_read;
+      nullptr_kseq_t(&mem_m1_read); // For FASTA reads to ensure nullptr for qual
+      nullptr_kseq_t(&mem_m2_read); // For FASTA reads to ensure nullptr for qual
 
       // Loop throught the MEMs of the paired-end read and write to the SAM file
       for (int i = 0; i < al.mems.size(); ++i){
