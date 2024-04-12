@@ -69,6 +69,8 @@ struct Args
   bool filter_seeds = true; // Filter seed if occurs more than threshold
   size_t n_seeds_thr = 5000;   // Filter seed if occurs more than threshold
   
+  bool filter_freq = true; // Filter seed if it occurs with frequency greater than threshold
+  double freq_thr = 0.02; // Filter seed if it occurs with frequency greater than threshold
 
   // ksw2 parameters
   int8_t smatch = 2;      // Match score default
@@ -97,7 +99,7 @@ void parseArgs(int argc, char *const argv[], Args &arg)
   extern char *optarg;
   extern int optind;
 
-  std::string usage("usage: " + std::string(argv[0]) + " infile [-p patterns] [-1 mate1] [-2 mate2] [-o output] [-m report_mems] [-t threads] [-b batch] [-l len] [-q shaped_slp]  [-L ext_l] [-A smatch] [-B smismatc] [-O gapo] [-E gape] [-d dir_en] [-s seeds_en] [-D dir_thr] [-S seeds_thr] [-n no_lcp] [-c max_iter] [-d max_pred] [-x max_dist_x] [-y max_dist_y] [-Z secondary_chains]\n\n" +
+  std::string usage("usage: " + std::string(argv[0]) + " infile [-p patterns] [-1 mate1] [-2 mate2] [-o output] [-m report_mems] [-t threads] [-b batch] [-l len] [-q shaped_slp]  [-L ext_l] [-A smatch] [-B smismatc] [-O gapo] [-E gape] [-d dir_en] [-s seeds_en] [-f freq_en] [-D dir_thr] [-S seeds_thr] [-F freq_thr] [-n no_lcp] [-c max_iter] [-d max_pred] [-x max_dist_x] [-y max_dist_y] [-Z secondary_chains]\n\n" +
                     "Align the reads in the pattern against the reference index in infile.\n" +
                     "   pattens: [string]  - path to patterns file.\n" +
                     "     mate1: [string]  - path to file with #1 mates paired with mate2.\n" +
@@ -114,6 +116,8 @@ void parseArgs(int argc, char *const argv[], Args &arg)
                     "   dir_thr: [float]   - direction filtering threshold (def. " + std::to_string(arg.dir_thr) + ")\n" +
                     " seeds_dis: [boolean] - enable seed filtering (def. " + std::to_string(arg.filter_dir) + ")\n" +
                     " seeds_thr: [float]   - seed filtering threshold (def. " + std::to_string(arg.n_seeds_thr) + ")\n" +
+                    "  freq_dis: [boolean] - enable frequency filtering (def. " + std::to_string(arg.filter_freq) + ")\n" +
+                    "  freq_thr: [float]   - frequency filtering threshold (def. " + std::to_string(arg.freq_thr) + ")\n" +
                     "  max_iter: [integer] - max number of iterations of the chaining algorithm (def. " + std::to_string(arg.max_iter) + ")\n" +
                     "  max_pred: [integer] - max number of predecessors to be considered in chaining algorithm (def. " + std::to_string(arg.max_pred) + ")\n" +
                     "max_dist_x: [integer] - max distance for two anchors to be chained (def. " + std::to_string(arg.max_dist_x) + ")\n" +
@@ -126,7 +130,7 @@ void parseArgs(int argc, char *const argv[], Args &arg)
 
   std::string sarg;
   char* s;
-  while ((c = getopt(argc, argv, "ql:hp:o:t:1:2:b:A:B:O:E:L:dsnD:S:w:v:x:y:Zm")) != -1)
+  while ((c = getopt(argc, argv, "ql:hp:o:t:1:2:b:A:B:O:E:L:dsfnD:S:F:w:v:x:y:Zm")) != -1)
   {
     switch (c)
     {
@@ -172,6 +176,9 @@ void parseArgs(int argc, char *const argv[], Args &arg)
     case 's':
       arg.filter_seeds = false;
       break;
+    case 'f':
+      arg.filter_freq = false;
+      break;
     case 'n':
       arg.no_lcp = true;
       break;
@@ -182,6 +189,10 @@ void parseArgs(int argc, char *const argv[], Args &arg)
     case 'S':
       sarg.assign(optarg);
       arg.n_seeds_thr = stoi(sarg);
+      break;
+    case 'F':
+      sarg.assign(optarg);
+      arg.freq_thr = stod(sarg);
       break;
     case 'O':
       arg.gapo = arg.gapo2 = strtol(optarg, &s, 10);
@@ -250,6 +261,9 @@ typename aligner_t::config_t configurer(Args &args){
   
   config.filter_seeds = args.filter_seeds;  // Filter seed if occurs more than threshold
   config.n_seeds_thr = args.n_seeds_thr;    // Filter seed if occurs more than threshold
+
+  config.filter_freq = args.filter_freq;  // Filter seed if it occurs with frequency greater than threshold
+  config.freq_thr = args.freq_thr;     // Filter seed if it occurs with frequency greater than threshold
   
   // ksw2 parameters
   config.smatch     = args.smatch;      // Match score default

@@ -95,6 +95,9 @@ public:
 
         bool filter_seeds = true; // Filter seed if occurs more than threshold
         size_t n_seeds_thr = 5000;   // Filter seed if occurs more than threshold
+
+        bool filter_freq = true;  // Filter seed if it occurs with frequency greater than threshold
+        double freq_thr = 0.02;   // Filter seed if it occurs with frequency greater than threshold
         
         // ksw2 parameters
         int8_t smatch = 2;      // Match score default
@@ -206,6 +209,8 @@ public:
                 dir_thr(config.dir_thr),        // Use MEMs average length distance to filter the orientation of the reads
                 filter_seeds(config.filter_seeds),// Filter seed if occurs more than threshold
                 n_seeds_thr(config.n_seeds_thr),// Filter seed if occurs more than threshold
+                filter_freq(config.filter_freq),// Filter seed if it occurs with frequency greater than threshold
+                freq_thr(config.freq_thr),      // Filter seed if it occurs with frequency greater than threshold
                 max_iter(config.max_iter),      // Max number of iterations of the chaining algorithhm
                 max_pred(config.max_pred),      // Max number of predecessor to be considered
                 max_dist_x(config.max_dist_x),  // Max distance for two anchors to be chained
@@ -315,6 +320,9 @@ public:
     MTIME_START(9);
     mem_finder.populate_seeds(al.mems, report_mems);
     MTIME_END(9);
+
+    if (filter_freq)
+      seed_freq_filter(al.mems, freq_thr);
 
     // If reporting just the MEMs, at this point can directly write to the SAM file and skip the rest.
     if (report_mems)
@@ -931,6 +939,8 @@ public:
       }
       MTIME_END(9); //Timing helper
 
+      if (filter_freq)
+        seed_freq_filter(al.mems, freq_thr);
     }
     else
     {
@@ -943,6 +953,8 @@ public:
       MTIME_START(9);
       mem_finder.populate_seeds(al.mems, report_mems);
       MTIME_END(9);
+      if (filter_freq)
+        seed_freq_filter(al.mems, freq_thr);
     }
     // find_mems(al.mate1, al.mems, 0, MATE_1 | MATE_F);
     // find_mems(&al.mate1_rev, al.mems, al.mate2->seq.l, MATE_1 | MATE_RC );
@@ -1582,6 +1594,33 @@ public:
 
   // }
 
+  // Filter seeds by frequency of occurance
+  inline void seed_freq_filter(
+    std::vector<mem_t>& mems,
+    const double freq
+  )
+  {
+    size_t total_occ = 1; // Set to 1 to avoid any potential divide by 0 operations
+    std::vector<size_t> remove_indices;
+
+    // Calculate the total number of occurance of MEMs
+    for ( size_t i = 0; i < mems.size(); ++i)
+      total_occ += mems[i].occs.size();
+
+    // Find the indices of MEMs that have occurance freq greater than threshold freq
+    for ( size_t i = 0; i < mems.size(); ++i)
+    {
+      if ( (static_cast<double> (mems[i].occs.size()) / total_occ) > freq)
+        remove_indices.push_back(i);
+    }
+
+    // Sort the delete indices in descending order so indices to be removed will always be valid.
+    std::sort(remove_indices.begin(), remove_indices.end(), std::greater<size_t>());
+
+    // Remove the indices from MEMs vector
+    for (size_t idx: remove_indices)
+      mems.erase(mems.begin() + idx);
+  }
 
   // Compute the fraction of repetitive seeds
   // Inpired from https://github.com/lh3/bwa/blob/0747fcc09d96ff44ce555f0c258d0f9762c20611/bwamem.c#L291
@@ -2910,6 +2949,9 @@ protected:
 
     bool filter_seeds = true;
     size_t n_seeds_thr = 5000;
+
+    bool filter_freq = true;  // Filter seed if it occurs with frequency greater than threshold
+    double freq_thr = 0.02;   // Filter seed if it occurs with frequency greater than threshold
 
     ll max_iter = 50;       // Max number of iterations of the chaining algorithhm
     ll max_pred = 50;       // Max number of predecessor to be considered
