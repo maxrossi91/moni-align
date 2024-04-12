@@ -521,11 +521,13 @@ def query_helper(args, exe, exe_name):
       command += " -d"
     if args.seed_dis:
       command += " -s"
+    if args.freq_dis:
+      command += " -f"
     if args.secondary_chains:
       command += " -Z"
     if args.report_mems:
       command += " -m"
-    command += " -D {} -S {} ".format(args.dir_thr,args.seed_thr)
+    command += " -D {} -S {} -F {} ".format(args.dir_thr,args.seed_thr,args.freq_thr)
 
   if exe_name != "SPUMONI" and args.grammar == "shaped":
     command += " -q"
@@ -761,6 +763,8 @@ def main():
   align_parser.add_argument('-D', '--dir-thr',    help='direction filtering threshold.', type=float, default='50.0')
   align_parser.add_argument('-s', '--seed-dis',   help='disable seed filtering.', action='store_true')
   align_parser.add_argument('-S', '--seed-thr',   help='seed filtering threshold.', type=int, default=5000)
+  align_parser.add_argument('-f', '--freq-dis',   help='disable freq filtering.', action='store_true')
+  align_parser.add_argument('-F', '--freq-thr',   help='frequency filtering threshold.', type=float, default=0.02)
   align_parser.add_argument('--no-lcp',           help='build the moni index without the lcp samples.',action='store_true')
   align_parser.add_argument('--moni',             help='run moni index',action='store_true')
   align_parser.add_argument('--phoni',            help='run phoni index', action='store_true')
