@@ -306,6 +306,12 @@ void dispatcher(Args &args){
 
   if(args.patterns != "")
   {
+    // Do check to see if single-end read file exists
+    gzFile fp;
+    if ((fp = gzopen(args.patterns.c_str(), "r")) == 0)
+      error("open() file " + args.patterns + " failed");
+    gzclose(fp);
+
     std::string sam_filename = args.patterns + "_" + base_name + "_" + std::to_string(args.l) + ".sam";
     if(args.output != "")
       sam_filename = args.output;
@@ -319,6 +325,17 @@ void dispatcher(Args &args){
   }
   else
   {
+    // Do check to see if mate1 and mate2 read file exists
+    gzFile mate1_fp;
+    if ((mate1_fp = gzopen(args.mate1.c_str(), "r")) == 0)
+      error("open() file " + args.mate1 + " failed");
+    gzclose(mate1_fp);
+
+    gzFile mate2_fp;
+    if ((mate2_fp = gzopen(args.mate2.c_str(), "r")) == 0)
+      error("open() file " + args.mate2 + " failed");
+    gzclose(mate2_fp);
+
     std::string sam_filename = args.mate1 + "_" + base_name + "_" + std::to_string(args.l) + ".sam";
     if(args.output != "")
       sam_filename = args.output;
