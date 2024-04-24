@@ -635,80 +635,6 @@ public:
 
   } paired_alignment_t;
 
-  // // Aligning pair-ended batched sequences
-  // // Return true if the fragment model has been learned.
-  // // Assumes alignment to be allocated with the exact number of elements
-  // bool learn_fragment_model(kpbseq_t *batch, std::vector<paired_alignment_t>& alignments)
-  // {
-  //   size_t n_aligned = 0;
-
-  //   // Computing Mean and Variance using Welford's algorithm
-  //   size_t count = 0;   // Number of samples
-  //   double mean = 0.0;  // Accumulates the mean
-  //   double m2 = 0.0;    // Accumulates the squared distance from the mean
-
-  //   int l = batch->mate1->l;
-  //   for (size_t i = 0; i < l; ++i)
-  //   {
-  //     // paired_alignment_t alignment(&batch->mate1->buf[i], &batch->mate2->buf[i]);
-  //     paired_alignment_t& alignment = alignments[i];
-  //     alignment.init(&batch->mate1->buf[i], &batch->mate2->buf[i]);
-  //     if(align(alignment, false) and ((not alignment.second_best_score) or ((alignment.best_scores[0].tot - alignment.best_scores[1].tot) > ins_learning_score_gap_threshold)))
-  //     {
-  //       // Get stats
-  //       // mate_abs_distance.push_back((double)(alignment.sam_m1.tlen >= 0?alignment.sam_m1.tlen :-alignment.sam_m1.tlen));
-  //       // double value = (double)(alignment.sam_m1.tlen >= 0?alignment.sam_m1.tlen :-alignment.sam_m1.tlen);
-  //       double value = (double)(alignment.best_scores[0].dist);
-  //       double delta = value - mean;
-  //       mean += delta / (++count);
-  //       m2 += delta * (value - mean);
-  //     }
-  //   }
-
-  //   // Computes stats
-  //   double variance = m2/count;
-  //   double sampleVariance = m2/(count-1);
-  //   double std_dev = sqrt(variance);
-
-  //   __ins_mtx.lock();
-  //   if (not ins_learning_complete)
-  //   {
-  //     if (ins_count > 0)
-  //     {
-  //       size_t t_count = ins_count + count;
-  //       double delta = ins_mean - mean;
-  //       ins_m2 += m2 + (delta * delta * ins_count * count) / t_count;
-  //       ins_mean = (ins_count * ins_mean + count * mean)/ t_count;
-  //       ins_count = t_count;
-  //     }
-  //     else
-  //     {
-  //       ins_mean = mean;
-  //       ins_std_dev = std_dev;
-  //       ins_m2 = m2;
-  //       ins_count = count;
-  //     }
-  //     verbose("Number of high quality samples processed so far: ", ins_count);
-  //     ins_learning_complete = ins_learning_complete or (ins_count >= ins_learning_n);
-  //     if (ins_learning_complete)
-  //     {
-  //       ins_variance = ins_m2 / ins_count;
-  //       ins_sample_variance = ins_m2 / (ins_count - 1);
-  //       ins_std_dev = sqrt(ins_variance);
-
-  //       verbose("Insertion size estimation complete!");
-  //       verbose("Number of high quality samples: ", ins_count);
-  //       verbose("                          Mean: ", ins_mean);
-  //       verbose("                      Variance: ", ins_variance);
-  //       verbose("               Sample Variance: ", ins_sample_variance);
-  //       verbose("            Standard Deviation: ", ins_std_dev);
-  //     }
-  //   }
-  //   __ins_mtx.unlock();
-
-  //   return ins_learning_complete;
-  // }
-
   // Aligning pair-ended batched sequences
   // Return true if the fragment model has been learned.
   // Assumes alignment to be allocated with the exact number of elements
@@ -782,46 +708,6 @@ public:
 
     return ins_learning_complete;
   }
-
-  // statistics_t finalize_learning(std::vector<paired_alignment_t> &alignments, FILE *out)
-  // {
-  //   statistics_t stats;
-
-  //   for (size_t i = 0; i < alignments.size(); ++i)
-  //   {
-  //     ++stats.processed_reads;
-  //     // paired_alignment_t alignment(&batch->mate1->buf[i], &batch->mate2->buf[i]);
-  //     paired_alignment_t &alignment = alignments[i];
-  //     alignment.mean = ins_mean;
-  //     alignment.std_dev = ins_std_dev;
-
-  //     if (alignment.best_scores.size() == 0)
-  //     {
-  //       alignment.write(out);
-  //       continue;
-  //     }
-
-  //     update_best_scores(alignment);
-
-  //     if (alignment.best_scores[0].tot >= alignment.min_score)
-  //     {
-  //       size_t j = alignment.best_scores[0].chain_i;
-  //       alignment.score = paired_chain_score(alignment, j, false);
-  //       alignment.aligned = (alignment.score.tot >= alignment.min_score);
-  //     }
-  //     else if (alignment.chained)
-  //     {
-  //       ++ stats.orphan_reads;
-  //       orphan_recovery(alignment, ins_mean, ins_std_dev);
-  //       if (alignment.aligned) ++stats.orphan_recovered_reads;
-  //     }
-      
-  //     alignment.write(out);
-
-  //     if (alignment.aligned) ++stats.aligned_reads;
-  //   }
-  //   return stats;
-  // }
 
   // Aligning pair-ended batched sequences
   statistics_t align(kpbseq_t *batch, FILE *out)
