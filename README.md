@@ -139,9 +139,6 @@ Regardless of which method used to build the index, the following files should b
 > [!NOTE]
 > To see the other build options available, type ./moni build -h 
 
-> [!IMPORTANT]
-> By default, there are two types of filters applied: A MEM occurance filter (-S) and MEM orientation (-D) filter. These filters were designed to speed up the alignment step, however both can potentially lead to a loss of sensitivity or specificity in the read alignments. To disable the MEM occurance filter, add the -s option. To disable the MEM orientation filter, add the -d option.
-
 ## Aligning the reads
 
 After building the `moni` index, reads can be aligned to the pangenome. The align function accepts both single and paired-end reads in either FASTA or FASTQ format. Here we show how to run the alignment step with both paired-end and single-end reads.
@@ -179,7 +176,8 @@ Either command should produce the `mouse.sam` file in the `data/mouse/output` di
 > [!NOTE]
 > To see the other build options available, type ./moni align -h
 
-
+> [!IMPORTANT]
+> By default, there are two types of filters applied: A MEM occurance filter (-S) and MEM orientation (-D) filter. These filters were designed to speed up the alignment step, however both can potentially lead to a loss of sensitivity or specificity in the read alignments. To disable the MEM occurance filter, add the -s option. To disable the MEM orientation filter, add the -d option.
 
 ## Writing MEMs to SAM
 
