@@ -213,7 +213,7 @@ find_program(PFP pfp++)
 if(NOT PFP)
     message(STATUS "pfp not found. Building as an external content.")
     FetchContent_Declare(pfp
-            GIT_REPOSITORY "https://github.com/maxrossi91/pfp"
+            GIT_REPOSITORY "https://github.com/rvarki/pfp"
             GIT_TAG leviosam_integration
     )
 
