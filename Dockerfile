@@ -36,7 +36,6 @@ RUN git clone https://github.com/maxrossi91/moni-align.git &&\
     mkdir build &&\
     cd build &&\
     cmake .. &&\
-    make || true &&\
     cmake .. &&\
     make 
 
