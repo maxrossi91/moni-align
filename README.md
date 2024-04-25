@@ -27,7 +27,7 @@ There are two ways to be able to run `moni-align`. The easiest way is to run the
 
 1. Pull the image from DockerHub
 ```
-docker pull rvarki/moni-align
+docker pull rvarki/moni-align:davide
 ```
 2. Run the `moni` help command. 
 ```
@@ -43,11 +43,11 @@ If working on a high performance computing cluster, you might not have access to
 
 1. Build the SIF image of `moni-align`
 ```
-singularity pull moni.sif docker://rvarki/moni-align:latest
+singularity pull moni.sif docker://rvarki/moni-align:davide
 ```
 or
 ```
-apptainer build moni.sif docker://rvarki/moni-align:latest
+apptainer build moni.sif docker://rvarki/moni-align:davide
 ```
 2. Run the `moni` help command
 
@@ -63,6 +63,9 @@ Currently, building from source only works on Linux machines.
 - `gcc` tool (version 9.3.0/9.4.0)
 - `cmake`tool (version 3.15 or greater) 
 
+> [!WARNING]
+> To build from source, it is absolutely necessary to have one of those versions of gcc installed.
+
 After installing the dependencies, the following steps can be run to build the project.
 
 1. Run the build steps 
@@ -76,49 +79,137 @@ cmake ..
 cmake ..
 make
 ```
- 
-2. Run the`moni` help command
+
+> [!WARNING]
+> Make sure to run the cmake command twice as specified.
+
+2. Set the LD_LIBRARY_PATH environment variable
 ```
 export LD_LIBRARY_PATH="${LD_LIBRARY_PATH}:$PWD/thirdparty/lib"
-./moni -h
 ```
 
 > [!IMPORTANT]
-> Make to run the export LD_LIBRARY_PATH command prior to running any `moni` commands if building the project from source.
+> Make sure to run the export LD_LIBRARY_PATH command prior to running any `moni` commands if building the project from source.
+
+3. Run the `moni` help command
+```
+./moni -h
+```
 
 # Example
 
-We provide test data located in the `data/mouse` directory to test the commands.
+We provide test data located in the `data/mouse` directory to test the commands. We use this test data to showcase how to perform some common operations.
 
-1. Building the index
+## Building the Moni index
+
+Prior to running the alignment step, the `moni` index of the references must first be created. The references can stored either in concatenated FASTA format or reference FASTA and VCF file. The only major difference between building with either option is that the alignment liftover step is currently only possible when the index is built with a reference FASTA and VCF file. If the index with a concatenated FASTA, the downstream alignments will be reported to the haplotype it aligned to instead. Here we show building the index with both type of input.
+
+1. Building the index with reference FASTA file + VCF file.
 ```
 ./moni build -r ../data/mouse/ref/mouse.chr19.fa.gz -v ../data/mouse/vcf/mouse.chr19.subset.vcf.gz -S ../data/mouse/vcf/mouse_samples.txt -H12 -o ../data/mouse/index/mouse 
 ```
-This should produce the following files in the `data/mouse/index` directory: `mouse.ldx`, `mouse.lidx`, `mouse.moni.log`, `mouse.plain.slp`, `mouse.slcp`, and `mouse.thrbv.full.lcp.ms`
 
-2. Aligning the reads
+Here we provide a brief summary of the options used in the above command.
+
+- -r : The location of the reference FASTA file. The reference FASTA is expected to have the .gz extension.
+
+- -v : The location of the corresponding VCF file. The file should be structured such that the reference alleles at all positions match the reference FASTA file.
+
+- -S : A file containing the names of the samples in the VCF to build the index from. This is optional to provide, however `moni` assumes to use all samples in the VCF if not provided.
+
+- -H : The haplotype information from the VCF file to include. Write -H1 to include only the information from haplotype 1, -H2 to include only the information from haplotype 2, or -H12 to include information from both haplotypes.
+
+- -o : The location of the output directory and the prefix of the output files. For the example, the files will be written to this location: `../data/mouse/index/` with the files having the `mouse` prefix. 
+
+
+2. Building the index with only a FASTA file.
+
+```
+./moni build -f ../data/mouse/ref/mouse.chr19.fa.gz -o ../data/mouse/index/mouse
+```
+
+Here we provide a brief summary of the options used in the above command.
+
+- -f : The location of the reference FASTA file. The reference FASTA is expected to have the .gz extension.
+
+- -o : The location of the output directory and the prefix of the output files. For example, in this example, the files will be written to this location: `../data/mouse/index/` with the files having the `mouse` prefix.
+
+Regardless of which method used to build the index, the following files should be produced in the `data/mouse/index` directory: `mouse.ldx`, `mouse.lidx`, `mouse.moni.log`, `mouse.plain.slp`, `mouse.slcp`, and `mouse.thrbv.full.lcp.ms`
+
+> [!NOTE]
+> To see the other build options available, type ./moni build -h 
+
+> [!IMPORTANT]
+> By default, there are two types of filters applied: A MEM occurance filter (-S) and MEM orientation (-D) filter. These filters were designed to speed up the alignment step, however both can potentially lead to a loss of sensitivity or specificity in the read alignments. To disable the MEM occurance filter, add the -s option. To disable the MEM orientation filter, add the -d option.
+
+## Aligning the reads
+
+After building the `moni` index, reads can be aligned to the pangenome. The align function accepts both single and paired-end reads in either FASTA or FASTQ format. Here we show how to run the alignment step with both paired-end and single-end reads.
+
+1. Aligning with paired-end reads.
 ```
 ./moni align -i ../data/mouse/index/mouse -1 ../data/mouse/reads/mouse.chr19.R1.fastq -2 ../data/mouse/reads/mouse.chr19.R2.fastq -o ../data/mouse/output/mouse.sam
 ```
 
-This should produce the `mouse.sam` file in the `data/mouse/output` directory.
+Here we provide a brief summary of the options used in the above command.
 
-# MEMs to SAM
+- -i : The path to where the previously created index files are located and the prefix of these files. For the example, the index files are located in this location: `../data/mouse/index/` with the `mouse` prefix.
 
-To report the MEMs in the SAM file rather than the read alignments, follow step 1 to build the index and then run this command.
+- -1 : The location of the mate 1 file.
+- -2 : The location of the mate 2 file.
 
+- -o : The location of where to write the output SAM file and the name of the SAM file. For the example, the SAM file will be written to  this location: `../data/mouse/index/` with the name: `mouse.sam`.
+
+2. Aligning with single-end reads.
+
+```
+./moni align -i ../data/mouse/index/mouse -p ../data/mouse/reads/mouse.chr19.R1.fastq -o ../data/mouse/output/mouse.sam
+```
+Here we provide a brief summary of the options used in the above command.
+
+- -i : The path to where the previously created index files are located and the prefix of these files. For the example, the index files are located in this location: `../data/mouse/index/` with the `mouse` prefix.
+
+- -p : The location of the single-end read file.
+
+- -o : The location of where to write the output SAM file and the name of the SAM file. For the example, the SAM file will be written to  this location: `../data/mouse/index/` with the name: `mouse.sam`.
+
+
+Either command should produce the `mouse.sam` file in the `data/mouse/output` directory.
+
+> [!NOTE]
+> To see the other build options available, type ./moni align -h
+
+
+
+## Writing MEMs to SAM
+
+If only the MEM occurances in the pangenome are desired, we provide an option to write the MEMs of the read to the SAM file instead of the full read alignments. This can be done with both single and paired-end reads in either FASTA or FASTQ format. Here we show how to do it with paired-end reads, but the command can easily be modified for single-end reads.  
+
+1. Writing the MEMs of length 25 or greater to the SAM file for all reads. 
 ```
 ./moni align -i ../data/mouse/index/mouse -1 ../data/mouse/reads/mouse.chr19.R1.fastq -2 ../data/mouse/reads/mouse.chr19.R2.fastq -o ../data/mouse/output/mouse.sam --report_mems -d -s -l 25
 ```
 
-- The --report_mems command will write the MEMs of mate1 and mate2 found in the forward and reverse direction in the SAM file rather than the read alignments. 
+Here we provide a brief summary of the options used in the above command.
 
-- The -d and -s disable the direction and seed occurance filter.
+- -i : The path to where the previously created index files are located and the prefix of these files. For the example, the index files are located in this location: `../data/mouse/index/` with the `mouse` prefix.
 
-- The -l command sets the MEM length cutoff filter.
+- -1 : The location of the mate 1 file.
+- -2 : The location of the mate 2 file.
 
-> [!IMPORTANT]
-> Aligning full reads or reporting MEMs from a single reference (i.e only FASTA) requires a bit of a hack due to the LevioSAM coupling in the align function. Easiest way is to create a dummy VCF file and build the index with that file. If reporting full alignments, then there should be no need to do any filtering in theory. If reporting MEMs, then can use SAMtools to filter the SAM file for MEMs that map to the reference.
+- -o : The location of where to write the output SAM file and the name of the SAM file. For the example, the SAM file will be written to  this location: `../data/mouse/index/` with the name: `mouse.sam`.
+
+
+- --report_mems: This option will cause `moni` write the MEMs of mate1 and mate2 found in the forward and reverse direction to the SAM file rather than the read alignments. 
+
+- -s : Disable the MEM occurance filter.
+
+- -d : Disable the MEM orientation filter.
+
+- -l : Set the MEM length cutoff filter. 
+
+Running this command will write all MEMs of length 25 or greater to the SAM file for all reads. This will likely cause the SAM file created to be much larger in size than if reporting the read alignments. This is because each read can have multiple entries in the SAM file depending on how many MEMs are found in the pangenome. The same MEM from the same read can have multiple entires if it is found in multiple of the genomes. 
+
 
 # External resources
 
