@@ -381,9 +381,17 @@ public:
     std::set<size_t> different_scores;
     size_t i = 0;
 
+    std::vector<std::pair<size_t, size_t >> left_mem_vec;
     while (i < al.chains.size() and different_scores.size() < check_k)
     {
         different_scores.insert(al.chains[i].score);
+
+        // Do pre-emptive check to see whether lifted left MEM pos of chain i match a previous chain, if so skip chain
+        if (check_left_MEM(left_mem_vec, al, i)){
+          ++i;
+          continue;
+        }
+
         if (different_scores.size() < check_k)
         {
           // Align the chain
@@ -473,6 +481,54 @@ public:
   
   }
 
+  // Check whether the left most MEM lifted over REF position is within certain distance of previous left most MEM lifted over REF positions.
+  // Pre-emptive check to see whether the chain we are going to fully align will liftover to the position of a previous chain. 
+  // If this is the case, then do not spend time to do the full alignment if its likely going to be discarded anyways.
+  bool check_left_MEM(
+    std::vector<std::pair<size_t, size_t >>& left_mem_vec,
+    alignment_t& al,
+    size_t i)
+  {
+    // Get the chain
+    auto& chain = al.chains[i];
+    // Reverse the chain order [Have to undo this afterwards]
+    chain.reverse();
+
+    // Extract the ref position of the leftmost anchor of the current chain
+    size_t left_mem_pos, left_mem_ref_pos;
+    
+    // Extract the leftmost MEM of the chain
+    for(size_t j = 0; j < chain.anchors.size(); ++j)
+    {
+      size_t anchor_id = chain.anchors[j];
+      left_mem_pos = al.mems[al.anchors[anchor_id].first].occs[al.anchors[anchor_id].second];
+      const auto lift = idx.lift(left_mem_pos);
+      const auto lft_ref = idx.index(lift);
+      left_mem_ref_pos = lft_ref.second + 1;
+      break;
+    }
+
+    // Check to see if the leftmost MEM of the chain has lifted over position corresponding to previously seen chain
+    bool discovered = false;
+    for (size_t j = 0; j < left_mem_vec.size(); ++j){
+      if (dist(left_mem_vec[j].first, left_mem_ref_pos) < region_dist){
+        if (left_mem_vec[j].second == al.chains[i].score){
+          discovered = true;
+        }
+      }
+    }
+
+    // If discovered then likely current chain is the same as another previously seen chain
+    if (discovered){
+      chain.reset(); // Get original chain order
+      return true;
+    }
+    else{
+      chain.reset(); // Get the original chain order
+      left_mem_vec.push_back(std::make_pair(left_mem_ref_pos, al.chains[i].score));
+      return false;
+    }
+  }
 
   typedef struct orphan_paired_score_t{
     int32_t tot = 0;
@@ -1164,9 +1220,19 @@ public:
     // get the occurrences of the top 4 best scores
     std::set<size_t> different_scores;
     size_t i = 0;
+    std::vector<std::pair<size_t, size_t >> mate1_left_mem_vec;
+    std::vector<std::pair<size_t, size_t >> mate2_left_mem_vec;
+
     while (i < al.chains.size() and different_scores.size() < k)
     {
         different_scores.insert(al.chains[i].score);
+
+        // Do pre-emptive check to see whether lifted left MEM pos of mate1 and mate2 chain i match a previous chain, if so skip chain
+        if (check_paired_left_MEM(mate1_left_mem_vec, mate2_left_mem_vec, al, i)){
+          ++i;
+          continue;
+        }
+
         if (different_scores.size() < k)
         {
           // Align the chain
@@ -1260,7 +1326,72 @@ public:
   }
 
 
+  // Check whether the left most MEM lifted over REF position is within certain distance of previous left most MEM lifted over REF positions.
+  // Pre-emptive check to see whether the chain we are going to fully align will liftover to the position of a previous chain. 
+  // If this is the case, then do not spend time to do the full alignment if its likely going to be discarded anyways.
+  bool check_paired_left_MEM(
+    std::vector<std::pair<size_t, size_t >>& mate1_left_mem_vec,
+    std::vector<std::pair<size_t, size_t >>& mate2_left_mem_vec,
+    paired_alignment_t& al,
+    size_t i)
+  {
+    // Get the chain
+    auto& chain = al.chains[i];
+    // Reverse the chain order [Have to undo this afterwards]
+    chain.reverse();
 
+    // Extract the ref position of the leftmost anchor of the current chain for each mate
+    size_t mate1_left_mem_pos, mate1_left_mem_ref_pos, mate2_left_mem_pos, mate2_left_mem_ref_pos;
+    
+    // Extract the leftmost MEM of the chain from mate 1 
+    for(size_t j = 0; j < chain.anchors.size(); ++j)
+    {
+      size_t anchor_id = chain.anchors[j];
+      if ((al.mems[al.anchors[anchor_id].first].mate & MATE_2) == 0){
+        mate1_left_mem_pos = al.mems[al.anchors[anchor_id].first].occs[al.anchors[anchor_id].second];
+        const auto lift = idx.lift(mate1_left_mem_pos);
+        const auto lft_ref = idx.index(lift);
+        mate1_left_mem_ref_pos = lft_ref.second + 1;
+        break;
+      }
+    }
+
+    // Extract the leftmost MEM of the chain from mate 2
+    for(size_t j = 0; j < chain.anchors.size(); ++j)
+    {
+      size_t anchor_id = chain.anchors[j];
+      if ((al.mems[al.anchors[anchor_id].first].mate & MATE_2) != 0){
+        mate2_left_mem_pos = al.mems[al.anchors[anchor_id].first].occs[al.anchors[anchor_id].second];
+        const auto lift = idx.lift(mate2_left_mem_pos);
+        const auto lft_ref = idx.index(lift);
+        mate2_left_mem_ref_pos = lft_ref.second + 1;
+        break;
+      }
+    }
+
+    // Check to see if the leftmost MEM of each chain has lifted over position corresponding to previously seen chain
+    bool discovered = false;
+    for (size_t j = 0; j < mate1_left_mem_vec.size(); ++j){
+      if ((dist(mate1_left_mem_vec[j].first, mate1_left_mem_ref_pos) < region_dist) 
+      and (dist(mate2_left_mem_vec[j].first, mate2_left_mem_ref_pos) < region_dist)){
+        if (mate1_left_mem_vec[j].second == al.chains[i].score){
+          discovered = true;
+        }
+      }
+    }
+
+    // If discovered then likely current chain is the same as another previously seen chain
+    if (discovered){
+      chain.reset(); // Get original chain order
+      return true;
+    }
+    else{
+      chain.reset(); // Get the original chain order
+      mate1_left_mem_vec.push_back(std::make_pair(mate1_left_mem_ref_pos, al.chains[i].score));
+      mate2_left_mem_vec.push_back(std::make_pair(mate2_left_mem_ref_pos, al.chains[i].score));
+      return false;
+    }
+  }
 
 
   bool orphan_recovery(
