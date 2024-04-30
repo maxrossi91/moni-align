@@ -2677,8 +2677,12 @@ orphan_paired_score_t paired_chain_orphan_score(
     // Compute starting position in reference
     size_t mem_pos = mems[anchors[0].first].occs[anchors[0].second];
     size_t mem_len = mems[anchors.back().first].occs[anchors.back().second] + mems[anchors.back().first].len - mem_pos; // from the strart of the first MEM to the end of the last MEM.
-
-    size_t ref_pos = mem_pos - (lcs_len > 0 ? ez_lc.mqe_t + 1 : 0);
+    size_t ref_pos;
+    // If the condidition is true, it results in the read going unmapped from my testing. Acceptable, but ideally clip the left end of the read.
+    if ((lcs_len > 0 ? ez_lc.mqe_t + 1 : 0) > mem_pos)
+      ref_pos = 0;
+    else
+      ref_pos = mem_pos - (lcs_len > 0 ? ez_lc.mqe_t + 1 : 0);
     size_t ref_len = (lcs_len > 0 ? ez_lc.mqe_t + 1 : 0) + mem_len + (rcs_len > 0 ? ez_rc.mqe_t + 1: 0);
     char *ref = (char *)malloc(ref_len);
     assert(ref_len > 0);
