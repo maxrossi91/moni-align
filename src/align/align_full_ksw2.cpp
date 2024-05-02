@@ -48,8 +48,8 @@ struct Args
   size_t w = 10; // sliding window size and its default
   bool store = false; // store the data structure in the file
   bool memo  = false; // print the memory usage
-  bool csv   = false; // print stats on stderr in csv format
   bool report_mems = false; //report the MEMs in the SAM file
+  bool csv = false; //report MEM statistics in CSV file
   bool rle   = false; // outpt RLBWT
   bool no_lcp = false;       // use index without LCP entries
   std::string patterns = ""; // path to patterns file
@@ -99,13 +99,14 @@ void parseArgs(int argc, char *const argv[], Args &arg)
   extern char *optarg;
   extern int optind;
 
-  std::string usage("usage: " + std::string(argv[0]) + " infile [-p patterns] [-1 mate1] [-2 mate2] [-o output] [-m report_mems] [-t threads] [-b batch] [-l len] [-q shaped_slp]  [-L ext_l] [-A smatch] [-B smismatc] [-O gapo] [-E gape] [-d dir_en] [-s seeds_en] [-f freq_en] [-D dir_thr] [-S seeds_thr] [-F freq_thr] [-n no_lcp] [-c max_iter] [-d max_pred] [-x max_dist_x] [-y max_dist_y] [-Z secondary_chains]\n\n" +
+  std::string usage("usage: " + std::string(argv[0]) + " infile [-p patterns] [-1 mate1] [-2 mate2] [-o output] [-m report_mems] [-c csv] [-t threads] [-b batch] [-l len] [-q shaped_slp]  [-L ext_l] [-A smatch] [-B smismatc] [-O gapo] [-E gape] [-d dir_en] [-s seeds_en] [-f freq_en] [-D dir_thr] [-S seeds_thr] [-F freq_thr] [-n no_lcp] [-c max_iter] [-d max_pred] [-x max_dist_x] [-y max_dist_y] [-Z secondary_chains]\n\n" +
                     "Align the reads in the pattern against the reference index in infile.\n" +
                     "   pattens: [string]  - path to patterns file.\n" +
                     "     mate1: [string]  - path to file with #1 mates paired with mate2.\n" +
                     "     mate2: [string]  - path to file with #2 mates paired with mate1.\n" +
                     "    output: [string]  - output file prefix.\n" +
                     "report_mems: [boolean] - output MEMs rather than read alignments.\n" +
+                    "       csv: [boolean] - output MEM statistics to CSV file.\n" +
                     "   threads: [integer] - number of threads (def. " + std::to_string(arg.th) + ")\n" +
                     "     batch: [integer] - number of batches per therad pool (def. " + std::to_string(arg.b) + ")\n" + 
                     "       len: [integer] - minimum MEM length (def. " + std::to_string(arg.l) + ")\n" +
@@ -130,7 +131,7 @@ void parseArgs(int argc, char *const argv[], Args &arg)
 
   std::string sarg;
   char* s;
-  while ((c = getopt(argc, argv, "ql:hp:o:t:1:2:b:A:B:O:E:L:dsfnD:S:F:w:v:x:y:Zm")) != -1)
+  while ((c = getopt(argc, argv, "ql:hp:o:t:1:2:b:A:B:O:E:L:dsfnD:S:F:w:v:x:y:Zmc")) != -1)
   {
     switch (c)
     {
@@ -227,6 +228,9 @@ void parseArgs(int argc, char *const argv[], Args &arg)
     case 'm':
       arg.report_mems = true;
       break;
+    case 'c':
+      arg.csv = true;
+      break;
     case 'h':
       error(usage);
     case '?':
@@ -281,6 +285,7 @@ typename aligner_t::config_t configurer(Args &args){
   config.secondary_chains = args.secondary_chains; // Attempt to find secondary chains in paired-end setting
 
   config.report_mems = args.report_mems; //report the MEMs in the SAM file
+  config.csv = args.csv; //report MEM statistics in CSV file
 
   return config;
 }
@@ -322,6 +327,13 @@ void dispatcher(Args &args){
       stats = st_align<aligner_t>(&aligner, args.patterns, sam_filename, args.b);
     else
       stats = mt_align<aligner_t>(&aligner, args.patterns, sam_filename, args.th, args.b);
+
+    // Delete CSV file if not requested by user
+    if (!args.csv){
+      std::string csv_filename = std::string(sam_filename) + ".csv";
+      if (std::remove(csv_filename.c_str()) != 0)
+        error("remove() file " + csv_filename + " failed");
+    }
   }
   else
   {
@@ -346,6 +358,13 @@ void dispatcher(Args &args){
       stats = st_align<aligner_t>(&aligner, args.mate1, sam_filename, args.b, args.mate2 );
     else
       stats = mt_align<aligner_t>(&aligner, args.mate1, sam_filename, args.th, args.b, args.mate2);
+
+    // Delete CSV file if not requested by user
+    if (!args.csv){
+      std::string csv_filename = std::string(sam_filename) + ".csv";
+      if (std::remove(csv_filename.c_str()) != 0)
+        error("remove() file " + csv_filename + " failed");
+    }
   }
 
   stats.print();
