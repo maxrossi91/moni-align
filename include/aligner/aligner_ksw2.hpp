@@ -109,6 +109,7 @@ public:
         int zdrop = -1;         // Zdrop enable
 
         bool forward_only = true;      // Align only
+        bool report_mems = false;      // Report MEMs instead of read alignment
 
         // Chaining parameters
         ll max_dist_x = 500;    // Max distance for two anchors to be chained
@@ -221,6 +222,7 @@ public:
                 zdrop(config.zdrop),            // Zdrop enable
                 max_penalty(std::max(smatch + smismatch, gapo + gape)), // Maximum penalty score
                 forward_only(config.forward_only),
+                report_mems(config.report_mems), // Report MEMs instead of read alignment
                 mem_finder(filename, config.min_len, config.filter_seeds, config.n_seeds_thr),
                 ra(mem_finder.ra)
   {
@@ -283,9 +285,10 @@ public:
   {
     // std::vector<mem_t> mems;
     alignment_t alignment(read);
-    if(not align(alignment))
+    if(not align(alignment, hdr))
       alignment.set_sam_not_aligned();
-    alignment.write(out, hdr);
+    if (!report_mems)
+      alignment.write(out, hdr);
     return alignment.aligned;
   }
 
@@ -293,14 +296,15 @@ public:
   {
     // std::vector<mem_t> mems;
     alignment_t alignment(read);
-    if(not align(alignment))
+    if(not align(alignment, out))
       alignment.set_sam_not_aligned();
-    alignment.write(out);
+    if (!report_mems)
+      alignment.write(out);
     return alignment.aligned;
   }
 
   // Aligning unpaired sequences
-  bool align(alignment_t &al)
+  bool align(alignment_t &al, FILE* out = nullptr)
   {    
     MTIME_INIT(10);
     MTIME_START(0); // Timing helper
@@ -309,8 +313,38 @@ public:
     mem_finder.find_mems(&al.read_rev,al.mems, 0, MATE_1 | MATE_RC);
     MTIME_END(8);
     MTIME_START(9);
-    mem_finder.populate_seeds(al.mems);
+    mem_finder.populate_seeds(al.mems, report_mems);
     MTIME_END(9);
+
+    // If reporting just the MEMs, at this point can directly write to the SAM file and skip the rest.
+    if (report_mems)
+    {
+      MTIME_END(0); // Timing helper
+      kseq_t read;
+      nullptr_kseq_t(&read); // For FASTA reads to ensure nullptr for qual
+      for (int i = 0; i < al.mems.size(); ++i){
+        if (al.mems[i].mate & MATE_RC)
+          copy_partial_kseq_t(&read, &al.read_rev, al.mems[i].idx, al.mems[i].len);
+        else
+          copy_partial_kseq_t(&read, al.read, al.mems[i].idx, al.mems[i].len);
+        for (int j = 0; j < al.mems[i].occs.size(); ++j) {
+            sam_t read_sam = sam_t(&read);
+            read_sam.cigar = std::to_string(al.mems[i].len) + "M";
+            const auto ref = idx.index(al.mems[i].occs[j]);
+            read_sam.pos = ref.second + 1;
+            read_sam.rname = ref.first;
+            if (al.mems[i].mate & MATE_RC)
+              read_sam.flag = SAM_SECONDARY_ALIGNMENT | SAM_REVERSED; 
+            else
+              read_sam.flag = SAM_SECONDARY_ALIGNMENT;
+            write_sam(out, read_sam);
+        }
+        free_kseq_t(&read);
+      }
+      MTIME_TSAFE_MERGE;
+      al.aligned = true;
+      return al.aligned;
+    }
 
     // Compute fraction of repetitive seeds
     al.frac_rep = compute_frac_rep(al.mems, al.read->seq.l, MATE_1);
@@ -722,14 +756,16 @@ public:
       paired_alignment_t alignment(&batch->mate1->buf[i], &batch->mate2->buf[i]);
       alignment.mean = ins_mean;
       alignment.std_dev = ins_std_dev;
-      if(not align(alignment) and alignment.chained)
+      if(not align(alignment, true, out) and alignment.chained)
       {
         ++ stats.orphan_reads;
         orphan_recovery(alignment, ins_mean, ins_std_dev);
         if (alignment.aligned) ++stats.orphan_recovered_reads;
       }
       // Write alignment to file
-      alignment.write(out);
+      if (!report_mems){
+        alignment.write(out);
+      }
       if(alignment.aligned) ++stats.aligned_reads;
     }
     
@@ -802,14 +838,16 @@ public:
   bool align(kseq_t *mate1, kseq_t *mate2, FILE *out)
   {
     paired_alignment_t alignment(mate1, mate2);
-    if(not align(alignment))
+    if(not align(alignment, true, out))
       alignment.set_sam_not_aligned();
-    alignment.write(out);
+    if (!report_mems){
+      alignment.write(out);
+    }
     return alignment.aligned;
   }
 
   // Aligning pair-ended sequences
-  bool align(paired_alignment_t &al, bool finalize = true)
+  bool align(paired_alignment_t &al, bool finalize = true, FILE* out = nullptr)
   { 
     MTIME_INIT(10);   
     MTIME_START(0); // Timing helper
@@ -870,7 +908,7 @@ public:
       MTIME_END(8); //Timing helper
       MTIME_START(9); //Timing helper
       
-      mem_finder.populate_seeds(al.mems);
+      mem_finder.populate_seeds(al.mems, report_mems);
       al.n_seeds_dir1 = 0;
       al.n_seeds_dir2 = 0;
       for (size_t i = 0; i < al.mems.size(); ++i)
@@ -903,13 +941,70 @@ public:
       mem_finder.find_mems(&al.mate2_rev, al.mems, al.mate1->seq.l, MATE_2 | MATE_RC);
       MTIME_END(8);
       MTIME_START(9);
-      mem_finder.populate_seeds(al.mems);
+      mem_finder.populate_seeds(al.mems, report_mems);
       MTIME_END(9);
     }
     // find_mems(al.mate1, al.mems, 0, MATE_1 | MATE_F);
     // find_mems(&al.mate1_rev, al.mems, al.mate2->seq.l, MATE_1 | MATE_RC );
     // find_mems(al.mate2, al.mems, 0, MATE_2 | MATE_F);
     // find_mems(&al.mate2_rev, al.mems, al.mate1->seq.l, MATE_2 | MATE_RC);
+
+    // If reporting just the MEMs, at this point can directly write to the SAM file and skip the rest.
+    if (report_mems && out != nullptr)
+    {
+      MTIME_END(0); //Timing helper
+      // Cannot modify mate 1 and mate 2 directly. Instead have to create new kseq_t variables to do this. 
+      kseq_t mem_m1_read;
+      kseq_t mem_m2_read;
+      nullptr_kseq_t(&mem_m1_read); // For FASTA reads to ensure nullptr for qual
+      nullptr_kseq_t(&mem_m2_read); // For FASTA reads to ensure nullptr for qual
+
+      // Loop throught the MEMs of the paired-end read and write to the SAM file
+      for (int i = 0; i < al.mems.size(); ++i){
+        if (al.mems[i].mate == (MATE_1 | MATE_F) || al.mems[i].mate == (MATE_1 | MATE_RC)){
+          if (al.mems[i].mate & MATE_RC)
+            copy_partial_kseq_t(&mem_m1_read, &al.mate1_rev, al.mems[i].idx, al.mems[i].len);
+          else
+            copy_partial_kseq_t(&mem_m1_read, al.mate1, al.mems[i].idx, al.mems[i].len);
+          for (int j = 0; j < al.mems[i].occs.size(); ++j){
+            sam_t m1_sam = sam_t(&mem_m1_read);
+            m1_sam.cigar = std::to_string(al.mems[i].len) + "M";
+            const auto ref = idx.index(al.mems[i].occs[j]);
+            m1_sam.pos = ref.second + 1;
+            m1_sam.rname = ref.first;
+            if (al.mems[i].mate & MATE_RC)
+              m1_sam.flag = SAM_SECONDARY_ALIGNMENT | SAM_REVERSED;
+            else
+              m1_sam.flag = SAM_SECONDARY_ALIGNMENT;
+            write_sam(out, m1_sam);
+          }
+          free_kseq_t(&mem_m1_read);
+        }
+        else{
+          if (al.mems[i].mate & MATE_RC)
+            copy_partial_kseq_t(&mem_m2_read, &al.mate2_rev, al.mems[i].idx, al.mems[i].len);
+          else
+            copy_partial_kseq_t(&mem_m2_read, al.mate2, al.mems[i].idx, al.mems[i].len);
+          for (int j = 0; j < al.mems[i].occs.size(); ++j) {
+            sam_t m2_sam = sam_t(&mem_m2_read);
+            m2_sam.cigar = std::to_string(al.mems[i].len) + "M";
+            const auto ref = idx.index(al.mems[i].occs[j]);
+            m2_sam.pos = ref.second + 1;
+            m2_sam.rname = ref.first;
+            if (al.mems[i].mate & MATE_RC)
+              m2_sam.flag = SAM_SECONDARY_ALIGNMENT | SAM_REVERSED;
+            else
+              m2_sam.flag = SAM_SECONDARY_ALIGNMENT;
+            write_sam(out, m2_sam);
+          }
+          free_kseq_t(&mem_m2_read);
+        }
+      }
+
+      MTIME_TSAFE_MERGE;
+      al.aligned = true;
+      return al.aligned;
+    }
 
     // Compute fraction of repetitive seeds
     al.frac_rep_m1 = compute_frac_rep(al.mems, al.mate1->seq.l, MATE_1);
@@ -2821,6 +2916,7 @@ protected:
     ll max_dist_x = 500;    // Max distance for two anchors to be chained
     ll max_dist_y = 100;    // Max distance for two anchors from the same read to be chained
     bool secondary_chains = false; // Find secondary chains in paired-end setting
+    bool report_mems = false; // Report MEMs instead of read alignment
 
     chain_config_t chain_config;
 };

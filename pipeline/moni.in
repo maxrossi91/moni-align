@@ -523,6 +523,8 @@ def query_helper(args, exe, exe_name):
       command += " -s"
     if args.secondary_chains:
       command += " -Z"
+    if args.report_mems:
+      command += " -m"
     command += " -D {} -S {} ".format(args.dir_thr,args.seed_thr)
 
   if exe_name != "SPUMONI" and args.grammar == "shaped":
@@ -740,6 +742,7 @@ def main():
   align_parser.add_argument('-1', '--mate1',      help='path to the input left end of the reads', type=str)
   align_parser.add_argument('-2', '--mate2',      help='path to the input right end of the reads', type=str)
   align_parser.add_argument('-o', '--output',     help='output directory path', type=str, default='.')
+  align_parser.add_argument('-m', '--report_mems', help='output MEMs rather than read alignments', action='store_true')
   align_parser.add_argument('-t', '--threads',    help='number of helper threads', default=1, type=int)
   align_parser.add_argument('-b', '--batch',      help='number of reads per thread batch', default=512, type=int)
   align_parser.add_argument('-g', '--grammar',    help='select the grammar (only for moni and phoni) [plain, shaped]', type=str, default='plain')

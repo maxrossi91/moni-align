@@ -167,6 +167,14 @@ inline static void rc_copy_kseq_t(kseq_t *l, kseq_t *r)
     l->last_char = r->last_char;
 }
 
+inline static void nullptr_kseq_t(kseq_t *s)
+{
+    s->name.s = nullptr;
+    s->comment.s = nullptr;
+    s->seq.s = nullptr;
+    s->qual.s = nullptr;
+}
+
 inline static void free_kseq_t(kseq_t *s)
 {
     free_kstring_t(s->name);
@@ -174,6 +182,29 @@ inline static void free_kseq_t(kseq_t *s)
     free_kstring_t(s->seq);
     free_kstring_t(s->qual);
 }
+
+inline static void copy_partial_kstring_t(kstring_t &l, kstring_t &r, size_t start_pos, size_t len)
+{
+    l.l = len;
+    l.m = r.m;
+    l.s = (char *)malloc(l.m);
+    for (size_t i = 0; i < len; ++i)
+        l.s[i] = r.s[start_pos + i];
+    if (l.m > l.l)
+      l.s[l.l] = 0;
+}
+
+inline static void copy_partial_kseq_t(kseq_t *l, kseq_t *r, size_t start_pos, size_t len)
+{
+    copy_kstring_t(l->name, r->name);
+    copy_kstring_t(l->comment, r->comment);
+    copy_partial_kstring_t(l->seq, r->seq, start_pos, len);
+    if (r->qual.s != nullptr)
+        copy_partial_kstring_t(l->qual, r->qual, start_pos, len);
+    //l->last_char = r->last_char;
+}
+
+
 ////////////////////////////////////////////////////////////////////////////////
 
 ////////////////////////////////////////////////////////////////////////////////

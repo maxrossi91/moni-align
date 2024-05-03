@@ -49,6 +49,7 @@ struct Args
   bool store = false; // store the data structure in the file
   bool memo  = false; // print the memory usage
   bool csv   = false; // print stats on stderr in csv format
+  bool report_mems = false; //report the MEMs in the SAM file
   bool rle   = false; // outpt RLBWT
   bool no_lcp = false;       // use index without LCP entries
   std::string patterns = ""; // path to patterns file
@@ -96,12 +97,13 @@ void parseArgs(int argc, char *const argv[], Args &arg)
   extern char *optarg;
   extern int optind;
 
-  std::string usage("usage: " + std::string(argv[0]) + " infile [-p patterns] [-1 mate1] [-2 mate2] [-o output] [-t threads] [-b batch] [-l len] [-q shaped_slp]  [-L ext_l] [-A smatch] [-B smismatc] [-O gapo] [-E gape] [-d dir_en] [-s seeds_en] [-D dir_thr] [-S seeds_thr] [-n no_lcp] [-c max_iter] [-d max_pred] [-x max_dist_x] [-y max_dist_y] [-Z secondary_chains]\n\n" +
+  std::string usage("usage: " + std::string(argv[0]) + " infile [-p patterns] [-1 mate1] [-2 mate2] [-o output] [-m report_mems] [-t threads] [-b batch] [-l len] [-q shaped_slp]  [-L ext_l] [-A smatch] [-B smismatc] [-O gapo] [-E gape] [-d dir_en] [-s seeds_en] [-D dir_thr] [-S seeds_thr] [-n no_lcp] [-c max_iter] [-d max_pred] [-x max_dist_x] [-y max_dist_y] [-Z secondary_chains]\n\n" +
                     "Align the reads in the pattern against the reference index in infile.\n" +
                     "   pattens: [string]  - path to patterns file.\n" +
                     "     mate1: [string]  - path to file with #1 mates paired with mate2.\n" +
                     "     mate2: [string]  - path to file with #2 mates paired with mate1.\n" +
                     "    output: [string]  - output file prefix.\n" +
+                    "report_mems: [boolean] - output MEMs rather than read alignments.\n" +
                     "   threads: [integer] - number of threads (def. " + std::to_string(arg.th) + ")\n" +
                     "     batch: [integer] - number of batches per therad pool (def. " + std::to_string(arg.b) + ")\n" + 
                     "       len: [integer] - minimum MEM length (def. " + std::to_string(arg.l) + ")\n" +
@@ -124,7 +126,7 @@ void parseArgs(int argc, char *const argv[], Args &arg)
 
   std::string sarg;
   char* s;
-  while ((c = getopt(argc, argv, "ql:hp:o:t:1:2:b:A:B:O:E:L:dsnD:S:w:v:x:y:Z")) != -1)
+  while ((c = getopt(argc, argv, "ql:hp:o:t:1:2:b:A:B:O:E:L:dsnD:S:w:v:x:y:Zm")) != -1)
   {
     switch (c)
     {
@@ -211,6 +213,9 @@ void parseArgs(int argc, char *const argv[], Args &arg)
     case 'Z':
       arg.secondary_chains = true;
       break;
+    case 'm':
+      arg.report_mems = true;
+      break;
     case 'h':
       error(usage);
     case '?':
@@ -260,6 +265,8 @@ typename aligner_t::config_t configurer(Args &args){
   config.max_dist_x = args.max_dist_x;   // Max distance for two anchors to be chained
   config.max_dist_y = args.max_dist_y;   // Max distance for two anchors from the same read to be chained
   config.secondary_chains = args.secondary_chains; // Attempt to find secondary chains in paired-end setting
+
+  config.report_mems = args.report_mems; //report the MEMs in the SAM file
 
   return config;
 }
