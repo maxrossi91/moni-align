@@ -1786,8 +1786,9 @@ public:
     // MEM frequency per pangenome and highest and lowest occurance of MEM on any one genome
     for ( size_t i = 0; i < mems.size(); ++i)
     {
-      csv.max_mem_freq = (csv.max_mem_freq > (static_cast<double> (mems[i].occs.size() + 1) / csv.total_mem_occ) ? csv.max_mem_freq : (static_cast<double> (mems[i].occs.size() + 1) / csv.total_mem_occ));
-      csv.min_mem_freq = (csv.min_mem_freq > (static_cast<double> (mems[i].occs.size() + 1) / csv.total_mem_occ) ? (static_cast<double> (mems[i].occs.size() + 1) / csv.total_mem_occ) : csv.min_mem_freq);
+      double mem_freq = ((mems[i].occs.size() + 1) / (static_cast<double> (csv.total_mem_occ)));
+      csv.max_mem_freq = (csv.max_mem_freq > mem_freq ? csv.max_mem_freq : mem_freq);
+      csv.min_mem_freq = (csv.min_mem_freq > mem_freq ? mem_freq : csv.min_mem_freq);
       std::map<std::string, size_t> count_dict;
       for (size_t j = 0; j < mems[i].occs.size(); ++j)
       {
@@ -1832,7 +1833,8 @@ public:
     // Find the indices of MEMs that have occurance freq greater than threshold freq
     for ( size_t i = 0; i < mems.size(); ++i)
     {
-      if ( (static_cast<double> (mems[i].occs.size() + 1) / total_mem_occ) > freq)
+      double mem_freq = (static_cast<double> (mems[i].occs.size() + 1) / total_mem_occ);
+      if ( (mem_freq / total_mem_occ) > freq)
       {
         delete_ind.push_back(i);
         csv.num_mems_filter += (mems[i].occs.size() + 1);
