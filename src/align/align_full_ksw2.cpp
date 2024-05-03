@@ -70,7 +70,7 @@ struct Args
   size_t n_seeds_thr = 5000;   // Filter seed if occurs more than threshold
   
   bool filter_freq = true; // Filter seed if it occurs with frequency greater than threshold
-  double freq_thr = 0.02; // Filter seed if it occurs with frequency greater than threshold
+  double freq_thr = 0.30; // Filter seed if it occurs with frequency greater than threshold
 
   // ksw2 parameters
   int8_t smatch = 2;      // Match score default
