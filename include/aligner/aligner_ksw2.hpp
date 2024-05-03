@@ -32,6 +32,7 @@
 
 #include <moni.hpp>
 #include <sam.hpp>
+#include <csv.hpp>
 #include <mapq.hpp>
 
 #include <malloc_count.h>
@@ -113,6 +114,7 @@ public:
 
         bool forward_only = true;      // Align only
         bool report_mems = false;      // Report MEMs instead of read alignment
+        bool csv = false;             // Report MEM statistics in CSV file
 
         // Chaining parameters
         ll max_dist_x = 500;    // Max distance for two anchors to be chained
@@ -147,6 +149,7 @@ public:
       kseq_t read_rev;
 
       sam_t sam;
+      csv_t csv;
       // bam1_t bam;
 
       const size_t min_score;
@@ -164,6 +167,7 @@ public:
       alignment_t(kseq_t *read_):
           read(read_),
           sam(read),
+          csv(read),
           min_score(20 + 8 * log(read->seq.l))
       {
         rc_copy_kseq_t(&read_rev, read);
@@ -177,6 +181,11 @@ public:
       void write(FILE* out)
       {
         write_sam(out, sam);
+      }
+
+      void record_csv(FILE* out)
+      {
+        write_csv(out, csv);
       }
 
       void set_sam_not_aligned()
@@ -228,6 +237,7 @@ public:
                 max_penalty(std::max(smatch + smismatch, gapo + gape)), // Maximum penalty score
                 forward_only(config.forward_only),
                 report_mems(config.report_mems), // Report MEMs instead of read alignment
+                csv(config.csv),                // Report MEM statistics in CSV file
                 mem_finder(filename, config.min_len, config.filter_seeds, config.n_seeds_thr),
                 ra(mem_finder.ra)
   {
@@ -297,7 +307,7 @@ public:
     return alignment.aligned;
   }
 
-  bool align(kseq_t *read, FILE* out)
+  bool align(kseq_t *read, FILE* out, FILE* csv_out)
   {
     // std::vector<mem_t> mems;
     alignment_t alignment(read);
@@ -305,6 +315,8 @@ public:
       alignment.set_sam_not_aligned();
     if (!report_mems)
       alignment.write(out);
+    if (csv)
+      alignment.record_csv(csv_out);
     return alignment.aligned;
   }
 
@@ -321,10 +333,12 @@ public:
     mem_finder.populate_seeds(al.mems, report_mems);
     MTIME_END(9);
 
+    if (csv)
+      calculate_MEM_stats(al.mems, al.csv);
     if (filter_freq)
-      seed_freq_filter(al.mems, freq_thr);
+      seed_freq_filter(al.mems, freq_thr, al.csv);
     if (filter_seeds)
-      seed_occ_filter(al.mems, n_seeds_thr);
+      seed_occ_filter(al.mems, n_seeds_thr, al.csv);
 
     // If reporting just the MEMs, at this point can directly write to the SAM file and skip the rest.
     if (report_mems)
@@ -391,6 +405,7 @@ public:
         // Do pre-emptive check to see whether lifted left MEM pos of chain i match a previous chain, if so skip chain
         if (check_left_MEM(left_mem_vec, al, i)){
           ++i;
+          al.csv.num_chains_skipped++;
           continue;
         }
 
@@ -605,6 +620,9 @@ public:
     sam_t sam_m1;
     sam_t sam_m2;
 
+    csv_t csv_m1;
+    csv_t csv_m2;
+
     // TODO: precompute the nt4 version of the mates
 
     int32_t min_score_m1 = 0;
@@ -646,6 +664,8 @@ public:
       mate2(mate2_),
       sam_m1(mate1),
       sam_m2(mate2),
+      csv_m1(mate1),
+      csv_m2(mate2),
       min_score_m1(20 + 8 * log(mate1->seq.l)),
       min_score_m2(20 + 8 * log(mate2->seq.l)),
       min_score(min_score_m1 + min_score_m2),
@@ -713,6 +733,12 @@ public:
     {
       write_sam(out, sam_m1);
       write_sam(out, sam_m2);
+    }
+
+    // MEMs within mate pair are stored together, therefore do not need csv_m2
+    void record_csv(FILE* out)
+    {
+      write_csv(out, csv_m1);
     }
 
     void set_sam_not_aligned()
@@ -810,7 +836,7 @@ public:
   }
 
   // Aligning pair-ended batched sequences
-  statistics_t align(kpbseq_t *batch, FILE *out)
+  statistics_t align(kpbseq_t *batch, FILE *out, FILE *csv_out)
   {
     statistics_t stats;
 
@@ -832,6 +858,11 @@ public:
       if (!report_mems){
         alignment.write(out);
       }
+      // Write MEM stats to CSV file
+      if (csv){
+        alignment.record_csv(csv_out);
+      }
+
       if(alignment.aligned) ++stats.aligned_reads;
     }
     
@@ -901,13 +932,16 @@ public:
   // }
 
   // Aligning pair-ended sequences
-  bool align(kseq_t *mate1, kseq_t *mate2, FILE *out)
+  bool align(kseq_t *mate1, kseq_t *mate2, FILE *out, FILE *csv_out)
   {
     paired_alignment_t alignment(mate1, mate2);
     if(not align(alignment, true, out))
       alignment.set_sam_not_aligned();
     if (!report_mems){
       alignment.write(out);
+    }
+    if (csv){
+      alignment.record_csv(csv_out);
     }
     return alignment.aligned;
   }
@@ -975,6 +1009,9 @@ public:
       MTIME_START(9); //Timing helper
       
       mem_finder.populate_seeds(al.mems, report_mems);
+      if (csv)
+        calculate_MEM_stats(al.mems, al.csv_m1);
+
       al.n_seeds_dir1 = 0;
       al.n_seeds_dir2 = 0;
       for (size_t i = 0; i < al.mems.size(); ++i)
@@ -998,9 +1035,9 @@ public:
       MTIME_END(9); //Timing helper
 
       if (filter_freq)
-        seed_freq_filter(al.mems, freq_thr);
+        seed_freq_filter(al.mems, freq_thr, al.csv_m1);
       if (filter_seeds)
-        seed_occ_filter(al.mems, n_seeds_thr);
+        seed_occ_filter(al.mems, n_seeds_thr, al.csv_m1);
     }
     else
     {
@@ -1013,10 +1050,13 @@ public:
       MTIME_START(9);
       mem_finder.populate_seeds(al.mems, report_mems);
       MTIME_END(9);
+
+      if (csv)
+        calculate_MEM_stats(al.mems, al.csv_m1);
       if (filter_freq)
-        seed_freq_filter(al.mems, freq_thr);
+        seed_freq_filter(al.mems, freq_thr, al.csv_m1);
       if (filter_seeds)
-        seed_occ_filter(al.mems, n_seeds_thr);
+        seed_occ_filter(al.mems, n_seeds_thr, al.csv_m1);
     }
     // find_mems(al.mate1, al.mems, 0, MATE_1 | MATE_F);
     // find_mems(&al.mate1_rev, al.mems, al.mate2->seq.l, MATE_1 | MATE_RC );
@@ -1236,6 +1276,7 @@ public:
         // Do pre-emptive check to see whether lifted left MEM pos of mate1 and mate2 chain i match a previous chain, if so skip chain
         if (check_paired_left_MEM(mate1_left_mem_vec, mate2_left_mem_vec, al, i)){
           ++i;
+          al.csv_m1.num_chains_skipped++;
           continue;
         }
 
@@ -1731,55 +1772,109 @@ public:
 
   // }
 
+  // Calculate fields for csv MEM stats file
+  inline void calculate_MEM_stats(
+    const std::vector<mem_t>& mems,
+    csv_t& csv
+  )
+  {
+    // Number of unique MEMs
+    csv.num_uniq_mems = mems.size();
+    // Total number of MEM occurances
+    for ( size_t i = 0; i < mems.size(); ++i)
+      csv.total_mem_occ += (mems[i].occs.size()+1); //+1 to account for the initial occ found in the ref with r-index
+    // MEM frequency per pangenome and highest and lowest occurance of MEM on any one genome
+    for ( size_t i = 0; i < mems.size(); ++i)
+    {
+      double mem_freq = ((mems[i].occs.size() + 1) / (static_cast<double> (csv.total_mem_occ)));
+      csv.max_mem_freq = (csv.max_mem_freq > mem_freq ? csv.max_mem_freq : mem_freq);
+      csv.min_mem_freq = (csv.min_mem_freq > mem_freq ? mem_freq : csv.min_mem_freq);
+      std::map<std::string, size_t> count_dict;
+      for (size_t j = 0; j < mems[i].occs.size(); ++j)
+      {
+        std::string ref = idx[mems[i].occs[j]];
+        auto it = count_dict.find(ref);
+        if (it != count_dict.end()) 
+          count_dict[ref]++;
+        else
+          count_dict[ref] = 1;
+      }
+      // Iterate through key value pairs and find the high and lowest occurance of a MEM on any particular genome
+      for (auto it = count_dict.begin(); it != count_dict.end(); ++it) 
+      {
+        if (csv.high_occ_mem == 0 && csv.low_occ_mem == 0)
+        {
+          csv.high_occ_mem = it->second;
+          csv.low_occ_mem = it->second;
+        }
+        else
+        {
+          csv.high_occ_mem = (csv.high_occ_mem > it->second ? csv.high_occ_mem : it->second);
+          csv.low_occ_mem = (csv.low_occ_mem > it->second ? it->second : csv.low_occ_mem);
+        }
+      }
+    }
+  }
+
   // Filter seeds by frequency of occurance
   inline void seed_freq_filter(
     std::vector<mem_t>& mems,
-    const double freq
+    const double freq,
+    csv_t& csv
   )
   {
-    size_t total_occ = 1; // Set to 1 to avoid any potential divide by 0 operations
-    std::vector<size_t> remove_indices;
+    size_t total_mem_occ = 1; // Set to 1 to avoid any potential divide by 0 operations
+    std::vector<size_t> delete_ind;
 
     // Calculate the total number of occurance of MEMs
     for ( size_t i = 0; i < mems.size(); ++i)
-      total_occ += mems[i].occs.size();
+      total_mem_occ += mems[i].occs.size() + 1; //+1 to account for the initial occ found in the ref with r-index
 
     // Find the indices of MEMs that have occurance freq greater than threshold freq
     for ( size_t i = 0; i < mems.size(); ++i)
     {
-      if ( (static_cast<double> (mems[i].occs.size()) / total_occ) > freq)
-        remove_indices.push_back(i);
+      double mem_freq = (static_cast<double> (mems[i].occs.size() + 1) / total_mem_occ);
+      if ( (mem_freq / total_mem_occ) > freq)
+      {
+        delete_ind.push_back(i);
+        csv.num_mems_filter += (mems[i].occs.size() + 1);
+      }
     }
 
-    // Sort the delete indices in descending order so indices to be removed will always be valid.
-    std::reverse(remove_indices.begin(), remove_indices.end());
-
-    // Remove the indices from MEMs vector
-    for (size_t idx: remove_indices)
+    // Reverse the delete indices to safely delete
+    std::reverse(delete_ind.begin(), delete_ind.end());
+    for (size_t idx: delete_ind)
       mems.erase(mems.begin() + idx);
   }
 
   // Filter seeds by number of occurances per ref
   inline void seed_occ_filter(
     std::vector<mem_t>& mems,
-    const size_t n_seeds_thr
+    const size_t n_seeds_thr,
+    csv_t& csv
   )
   {
-    for(size_t i = 0; i < mems.size(); ++i){
+    for(size_t i = 0; i < mems.size(); ++i)
+    {
       std::map<std::string, size_t> count_dict;
       std::vector<size_t> delete_ind;
       // Keep count of MEMs for each ref, keep track of indices of MEMs > threshold
-      for (size_t j = 0; j < mems[i].occs.size(); ++j){
+      for (size_t j = 0; j < mems[i].occs.size(); ++j)
+      {
         std::string ref = idx[mems[i].occs[j]];
         auto it = count_dict.find(ref);
-        if (it != count_dict.end()) {
+        if (it != count_dict.end()) 
+        {
           if (count_dict[ref] > n_seeds_thr)
+          {
             delete_ind.push_back(j);
+            csv.num_mems_filter += 1;
+          }
           else
             count_dict[ref]++;
         }
         else
-          count_dict[ref] = 0;
+          count_dict[ref] = 1;
       }
       // Reverse the delete indices to safely delete
       std::reverse(delete_ind.begin(), delete_ind.end());
@@ -2678,7 +2773,8 @@ orphan_paired_score_t paired_chain_orphan_score(
     size_t mem_pos = mems[anchors[0].first].occs[anchors[0].second];
     size_t mem_len = mems[anchors.back().first].occs[anchors.back().second] + mems[anchors.back().first].len - mem_pos; // from the strart of the first MEM to the end of the last MEM.
     size_t ref_pos;
-    // If the condidition is true, it results in the read going unmapped from my testing. Acceptable, but ideally clip the left end of the read.
+    // If the condidition is true, it results in the read going unmapped from my testing. 
+    // Acceptable, but ideally clip the left end of the read.
     if ((lcs_len > 0 ? ez_lc.mqe_t + 1 : 0) > mem_pos)
       ref_pos = 0;
     else
@@ -3043,6 +3139,12 @@ orphan_paired_score_t paired_chain_orphan_score(
     sam_hdr_add_line(h, "PG", "ID", "moni", "VN", "0.1.0", NULL);
   }
 
+  std::string to_csv()
+  {
+    std::string header = "Read_Name,Num_Unique_MEMs,Total_Num_MEMs,Max_Freq_MEM,Min_Freq_MEM,Highest_Occ_MEM,Lowest_Occ_MEM,Num_Filtered_MEM,Num_Chains_Skipped\n";
+    return header;
+  }
+
 protected:
     seed_finder_t mem_finder;
     typename seed_finder_t::slp_type& ra;
@@ -3129,6 +3231,7 @@ protected:
     ll max_dist_y = 100;    // Max distance for two anchors from the same read to be chained
     bool secondary_chains = false; // Find secondary chains in paired-end setting
     bool report_mems = false; // Report MEMs instead of read alignment
+    bool csv = false;         // Report MEM statistics in CSV file
 
     chain_config_t chain_config;
 };
