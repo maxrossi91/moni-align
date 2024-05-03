@@ -323,6 +323,8 @@ public:
 
     if (filter_freq)
       seed_freq_filter(al.mems, freq_thr);
+    if (filter_seeds)
+      seed_occ_filter(al.mems, n_seeds_thr);
 
     // If reporting just the MEMs, at this point can directly write to the SAM file and skip the rest.
     if (report_mems)
@@ -997,6 +999,8 @@ public:
 
       if (filter_freq)
         seed_freq_filter(al.mems, freq_thr);
+      if (filter_seeds)
+        seed_occ_filter(al.mems, n_seeds_thr);
     }
     else
     {
@@ -1011,6 +1015,8 @@ public:
       MTIME_END(9);
       if (filter_freq)
         seed_freq_filter(al.mems, freq_thr);
+      if (filter_seeds)
+        seed_occ_filter(al.mems, n_seeds_thr);
     }
     // find_mems(al.mate1, al.mems, 0, MATE_1 | MATE_F);
     // find_mems(&al.mate1_rev, al.mems, al.mate2->seq.l, MATE_1 | MATE_RC );
@@ -1746,11 +1752,40 @@ public:
     }
 
     // Sort the delete indices in descending order so indices to be removed will always be valid.
-    std::sort(remove_indices.begin(), remove_indices.end(), std::greater<size_t>());
+    std::reverse(remove_indices.begin(), remove_indices.end());
 
     // Remove the indices from MEMs vector
     for (size_t idx: remove_indices)
       mems.erase(mems.begin() + idx);
+  }
+
+  // Filter seeds by number of occurances per ref
+  inline void seed_occ_filter(
+    std::vector<mem_t>& mems,
+    const size_t n_seeds_thr
+  )
+  {
+    for(size_t i = 0; i < mems.size(); ++i){
+      std::map<std::string, size_t> count_dict;
+      std::vector<size_t> delete_ind;
+      // Keep count of MEMs for each ref, keep track of indices of MEMs > threshold
+      for (size_t j = 0; j < mems[i].occs.size(); ++j){
+        std::string ref = idx[mems[i].occs[j]];
+        auto it = count_dict.find(ref);
+        if (it != count_dict.end()) {
+          if (count_dict[ref] > n_seeds_thr)
+            delete_ind.push_back(j);
+          else
+            count_dict[ref]++;
+        }
+        else
+          count_dict[ref] = 0;
+      }
+      // Reverse the delete indices to safely delete
+      std::reverse(delete_ind.begin(), delete_ind.end());
+      for (size_t idx: delete_ind)
+        mems[i].occs.erase(mems[i].occs.begin() + idx);
+    }
   }
 
   // Compute the fraction of repetitive seeds

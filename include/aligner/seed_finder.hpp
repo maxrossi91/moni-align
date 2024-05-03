@@ -156,8 +156,8 @@ public:
             occs.push_back(prev);
             std::tie(prev,lcp) = get_prev_occ_with_lcp(prev, len);
 
-            if (filter_seeds and (occs.size() > n_seeds_thr) )
-                return false;
+            // if (filter_seeds and (occs.size() > n_seeds_thr) )
+            //     return false;
         }
 
         return true;
@@ -175,8 +175,8 @@ public:
             occs.push_back(next);
             std::tie(next,lcp) = get_next_occ_with_lcp(next, len);
 
-            if (filter_seeds and (occs.size() > n_seeds_thr) )
-                return false;
+            // if (filter_seeds and (occs.size() > n_seeds_thr) )
+            //     return false;
         }
 
         return true;
