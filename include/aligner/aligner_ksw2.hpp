@@ -638,7 +638,7 @@ public:
   // Aligning pair-ended batched sequences
   // Return true if the fragment model has been learned.
   // Assumes alignment to be allocated with the exact number of elements
-  bool learn_fragment_model(kpbseq_t *batch, std::vector<paired_alignment_t>& alignments)
+  bool learn_fragment_model(kpbseq_t *batch)
   {
     size_t n_aligned = 0;
 
@@ -651,7 +651,7 @@ public:
     for (size_t i = 0; i < l; ++i)
     {
       // paired_alignment_t alignment(&batch->mate1->buf[i], &batch->mate2->buf[i]);
-      paired_alignment_t& alignment = alignments[i];
+      paired_alignment_t alignment;
       alignment.init(&batch->mate1->buf[i], &batch->mate2->buf[i]);
       if(align(alignment, false) and ((not alignment.second_best_score) or ((alignment.best_scores[0].tot - alignment.best_scores[1].tot) > ins_learning_score_gap_threshold)))
       {
@@ -707,46 +707,6 @@ public:
     __ins_mtx.unlock();
 
     return ins_learning_complete;
-  }
-
-  statistics_t finalize_learning(std::vector<paired_alignment_t> &alignments, FILE *out)
-  {
-    statistics_t stats;
-
-    for (size_t i = 0; i < alignments.size(); ++i)
-    {
-      ++stats.processed_reads;
-      // paired_alignment_t alignment(&batch->mate1->buf[i], &batch->mate2->buf[i]);
-      paired_alignment_t &alignment = alignments[i];
-      alignment.mean = ins_mean;
-      alignment.std_dev = ins_std_dev;
-
-      if (alignment.best_scores.size() == 0)
-      {
-        alignment.write(out);
-        continue;
-      }
-
-      update_best_scores(alignment);
-
-      if (alignment.best_scores[0].tot >= alignment.min_score)
-      {
-        size_t j = alignment.best_scores[0].chain_i;
-        alignment.score = paired_chain_score(alignment, j, false);
-        alignment.aligned = (alignment.score.tot >= alignment.min_score);
-      }
-      else if (alignment.chained)
-      {
-        ++ stats.orphan_reads;
-        orphan_recovery(alignment, ins_mean, ins_std_dev);
-        if (alignment.aligned) ++stats.orphan_recovered_reads;
-      }
-      
-      alignment.write(out);
-
-      if (alignment.aligned) ++stats.aligned_reads;
-    }
-    return stats;
   }
 
   // Aligning pair-ended batched sequences
