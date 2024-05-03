@@ -333,7 +333,8 @@ public:
     mem_finder.populate_seeds(al.mems, report_mems);
     MTIME_END(9);
 
-    calculate_MEM_stats(al.mems, al.csv);
+    if (csv)
+      calculate_MEM_stats(al.mems, al.csv);
     if (filter_freq)
       seed_freq_filter(al.mems, freq_thr, al.csv);
     if (filter_seeds)
@@ -1008,7 +1009,8 @@ public:
       MTIME_START(9); //Timing helper
       
       mem_finder.populate_seeds(al.mems, report_mems);
-      calculate_MEM_stats(al.mems, al.csv_m1);
+      if (csv)
+        calculate_MEM_stats(al.mems, al.csv_m1);
 
       al.n_seeds_dir1 = 0;
       al.n_seeds_dir2 = 0;
@@ -1048,7 +1050,9 @@ public:
       MTIME_START(9);
       mem_finder.populate_seeds(al.mems, report_mems);
       MTIME_END(9);
-      calculate_MEM_stats(al.mems, al.csv_m1);
+
+      if (csv)
+        calculate_MEM_stats(al.mems, al.csv_m1);
       if (filter_freq)
         seed_freq_filter(al.mems, freq_thr, al.csv_m1);
       if (filter_seeds)
@@ -2767,7 +2771,8 @@ orphan_paired_score_t paired_chain_orphan_score(
     size_t mem_pos = mems[anchors[0].first].occs[anchors[0].second];
     size_t mem_len = mems[anchors.back().first].occs[anchors.back().second] + mems[anchors.back().first].len - mem_pos; // from the strart of the first MEM to the end of the last MEM.
     size_t ref_pos;
-    // If the condidition is true, it results in the read going unmapped from my testing. Acceptable, but ideally clip the left end of the read.
+    // If the condidition is true, it results in the read going unmapped from my testing. 
+    // Acceptable, but ideally clip the left end of the read.
     if ((lcs_len > 0 ? ez_lc.mqe_t + 1 : 0) > mem_pos)
       ref_pos = 0;
     else
