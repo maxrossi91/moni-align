@@ -242,6 +242,11 @@ public:
         return  ".idx";
     }
 
+    size_t get_w() const
+    {
+        return w;
+    }
+
 protected:
     size_t u; // Total length
     size_t w; // length of the trailing dollars

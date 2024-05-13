@@ -2527,6 +2527,8 @@ orphan_paired_score_t paired_chain_orphan_score(
       ksw_extz2_sse(km, seq_len, (uint8_t *)seq, ref_len_, (uint8_t*)ref_, m, mat, gapo, gape,  w, zdrop, end_bonus, flag, &ez);
 
       score.score= ez.score;
+      if (start > n - idx.get_w())
+        start = n - idx.get_w();
       score.pos = start;
 
       bool is_valid = idx.valid(start, end-start+1);
