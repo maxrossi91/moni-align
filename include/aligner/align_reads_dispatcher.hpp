@@ -171,8 +171,10 @@ void *mt_align_worker(void *param)
         if (p->aligner->learn_fragment_model(memo))
         {
           learning = false;
+          kpbseq_destroy(memo);
           break;
         }
+        kpbseq_destroy(memo);
       }
     }
 
@@ -369,8 +371,10 @@ statistics_t st_align(aligner_t *aligner, std::string pattern_filename, std::str
         if (aligner->learn_fragment_model(memo))
         {
           learning = false;
+          kpbseq_destroy(memo);
           break;
         }
+        kpbseq_destroy(memo);
       }
     }
     
