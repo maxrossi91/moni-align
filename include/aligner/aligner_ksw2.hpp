@@ -2616,6 +2616,7 @@ orphan_paired_score_t paired_chain_orphan_score(
           score.unmapped_lft = true;
         }
         // free(tmp);
+        free(ez.cigar);
         bam_destroy1(bam);
     }
 
