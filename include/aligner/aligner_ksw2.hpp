@@ -2311,7 +2311,8 @@ orphan_paired_score_t paired_chain_orphan_score(
         start = rm_pos + (ll)std::floor(mean - 4*std_dev);
         end = rm_pos + (ll)std::ceil(mean + 4*std_dev);
         maxl(start,(ll)0);
-        minl(end,(ll)n);
+        minl(start,(ll)(n - idx.get_w()));
+        minl(end,(ll)(n - idx.get_w()));
         
         if (start < end)
           score.m2 = fill_orphan(start,end,mate2);  
@@ -2323,7 +2324,8 @@ orphan_paired_score_t paired_chain_orphan_score(
         start = lm_pos + (ll)std::floor(-mean - 4*std_dev);
         end = lm_pos + (ll)std::ceil(-mean + 4*std_dev);
         maxl(start,(ll)0);
-        minl(end,(ll)n);
+        minl(start,(ll)(n - idx.get_w()));
+        minl(end,(ll)(n - idx.get_w()));
 
         if (start < end)
           score.m1 = fill_orphan(start,end,mate1);  
@@ -2488,7 +2490,7 @@ orphan_paired_score_t paired_chain_orphan_score(
     score_t score = {0,0};
     // Extract reference
     size_t ref_occ = start;
-    size_t ref_len = end - start + 1;
+    ll ref_len = end - start + 1;
     char *ref = (char *)malloc(ref_len);
     if(ref_len <= 0)
       assert(ref_len > 0);
@@ -2527,8 +2529,6 @@ orphan_paired_score_t paired_chain_orphan_score(
       ksw_extz2_sse(km, seq_len, (uint8_t *)seq, ref_len_, (uint8_t*)ref_, m, mat, gapo, gape,  w, zdrop, end_bonus, flag, &ez);
 
       score.score= ez.score;
-      if (start > n - idx.get_w())
-        start = n - idx.get_w();
       score.pos = start;
 
       bool is_valid = idx.valid(start, end-start+1);
@@ -2616,6 +2616,7 @@ orphan_paired_score_t paired_chain_orphan_score(
           score.unmapped_lft = true;
         }
         // free(tmp);
+        free(ez.cigar);
         bam_destroy1(bam);
     }
 
