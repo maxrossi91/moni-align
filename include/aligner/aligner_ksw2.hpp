@@ -337,8 +337,6 @@ public:
       calculate_MEM_stats(al.mems, al.csv);
     if (filter_freq)
       seed_freq_filter(al.mems, freq_thr, al.csv);
-    if (filter_seeds)
-      seed_occ_filter(al.mems, n_seeds_thr, al.csv);
 
     // If reporting just the MEMs, at this point can directly write to the SAM file and skip the rest.
     if (report_mems)
@@ -1036,8 +1034,6 @@ public:
 
       if (filter_freq)
         seed_freq_filter(al.mems, freq_thr, al.csv_m1);
-      if (filter_seeds)
-        seed_occ_filter(al.mems, n_seeds_thr, al.csv_m1);
     }
     else
     {
@@ -1055,8 +1051,6 @@ public:
         calculate_MEM_stats(al.mems, al.csv_m1);
       if (filter_freq)
         seed_freq_filter(al.mems, freq_thr, al.csv_m1);
-      if (filter_seeds)
-        seed_occ_filter(al.mems, n_seeds_thr, al.csv_m1);
     }
     // find_mems(al.mate1, al.mems, 0, MATE_1 | MATE_F);
     // find_mems(&al.mate1_rev, al.mems, al.mate2->seq.l, MATE_1 | MATE_RC );
@@ -1781,26 +1775,19 @@ public:
     // Number of unique MEMs
     csv.num_uniq_mems = mems.size();
     // Total number of MEM occurances
-    for ( size_t i = 0; i < mems.size(); ++i)
-      csv.total_mem_occ += (mems[i].occs.size()+1); //+1 to account for the initial occ found in the ref with r-index
-    // MEM frequency per pangenome and highest and lowest occurance of MEM on any one genome
+    for ( size_t i = 0; i < mems.size(); ++i){
+      csv.total_mem_occ += mems[i].total_occ;
+      csv.num_mems_filter += mems[i].num_filtered;
+    } 
+    // MEM frequency per pangenome and highest and lowest occurance of MEM on any one genome (after seed filter)
     for ( size_t i = 0; i < mems.size(); ++i)
     {
-      double mem_freq = ((mems[i].occs.size() + 1) / (static_cast<double> (csv.total_mem_occ)));
+      double mem_freq = (mems[i].occs.size() / (static_cast<double> (csv.total_mem_occ)));
       csv.max_mem_freq = (csv.max_mem_freq > mem_freq ? csv.max_mem_freq : mem_freq);
       csv.min_mem_freq = (csv.min_mem_freq > mem_freq ? mem_freq : csv.min_mem_freq);
-      std::map<std::string, size_t> count_dict;
-      for (size_t j = 0; j < mems[i].occs.size(); ++j)
-      {
-        std::string ref = idx[mems[i].occs[j]];
-        auto it = count_dict.find(ref);
-        if (it != count_dict.end()) 
-          count_dict[ref]++;
-        else
-          count_dict[ref] = 1;
-      }
+      
       // Iterate through key value pairs and find the high and lowest occurance of a MEM on any particular genome
-      for (auto it = count_dict.begin(); it != count_dict.end(); ++it) 
+      for (auto it = mems[i].count_dict.begin(); it != mems[i].count_dict.end(); ++it) 
       {
         if (csv.high_occ_mem == 0 && csv.low_occ_mem == 0)
         {
@@ -1828,16 +1815,16 @@ public:
 
     // Calculate the total number of occurance of MEMs
     for ( size_t i = 0; i < mems.size(); ++i)
-      total_mem_occ += mems[i].occs.size() + 1; //+1 to account for the initial occ found in the ref with r-index
+      total_mem_occ += mems[i].occs.size(); 
 
     // Find the indices of MEMs that have occurance freq greater than threshold freq
     for ( size_t i = 0; i < mems.size(); ++i)
     {
-      double mem_freq = (static_cast<double> (mems[i].occs.size() + 1) / total_mem_occ);
+      double mem_freq = (static_cast<double> (mems[i].occs.size()) / total_mem_occ);
       if ( (mem_freq / total_mem_occ) > freq)
       {
         delete_ind.push_back(i);
-        csv.num_mems_filter += (mems[i].occs.size() + 1);
+        csv.num_mems_filter += (mems[i].occs.size());
       }
     }
 
@@ -1847,41 +1834,41 @@ public:
       mems.erase(mems.begin() + idx);
   }
 
-  // Filter seeds by number of occurances per ref
-  inline void seed_occ_filter(
-    std::vector<mem_t>& mems,
-    const size_t n_seeds_thr,
-    csv_t& csv
-  )
-  {
-    for(size_t i = 0; i < mems.size(); ++i)
-    {
-      std::map<std::string, size_t> count_dict;
-      std::vector<size_t> delete_ind;
-      // Keep count of MEMs for each ref, keep track of indices of MEMs > threshold
-      for (size_t j = 0; j < mems[i].occs.size(); ++j)
-      {
-        std::string ref = idx[mems[i].occs[j]];
-        auto it = count_dict.find(ref);
-        if (it != count_dict.end()) 
-        {
-          if (count_dict[ref] > n_seeds_thr)
-          {
-            delete_ind.push_back(j);
-            csv.num_mems_filter += 1;
-          }
-          else
-            count_dict[ref]++;
-        }
-        else
-          count_dict[ref] = 1;
-      }
-      // Reverse the delete indices to safely delete
-      std::reverse(delete_ind.begin(), delete_ind.end());
-      for (size_t idx: delete_ind)
-        mems[i].occs.erase(mems[i].occs.begin() + idx);
-    }
-  }
+  //// Filter seeds by number of occurances per ref
+  // inline void seed_occ_filter(
+  //   std::vector<mem_t>& mems,
+  //   const size_t n_seeds_thr,
+  //   csv_t& csv
+  // )
+  // {
+  //   for(size_t i = 0; i < mems.size(); ++i)
+  //   {
+  //     std::map<std::string, size_t> count_dict;
+  //     std::vector<size_t> delete_ind;
+  //     // Keep count of MEMs for each ref, keep track of indices of MEMs > threshold
+  //     for (size_t j = 0; j < mems[i].occs.size(); ++j)
+  //     {
+  //       std::string ref = idx[mems[i].occs[j]];
+  //       auto it = count_dict.find(ref);
+  //       if (it != count_dict.end()) 
+  //       {
+  //         if (count_dict[ref] > n_seeds_thr)
+  //         {
+  //           delete_ind.push_back(j);
+  //           csv.num_mems_filter += 1;
+  //         }
+  //         else
+  //           count_dict[ref]++;
+  //       }
+  //       else
+  //         count_dict[ref] = 1;
+  //     }
+  //     // Reverse the delete indices to safely delete
+  //     std::reverse(delete_ind.begin(), delete_ind.end());
+  //     for (size_t idx: delete_ind)
+  //       mems[i].occs.erase(mems[i].occs.begin() + idx);
+  //   }
+  // }
 
   // Compute the fraction of repetitive seeds
   // Inpired from https://github.com/lh3/bwa/blob/0747fcc09d96ff44ce555f0c258d0f9762c20611/bwamem.c#L291

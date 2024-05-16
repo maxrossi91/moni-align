@@ -39,6 +39,10 @@ typedef struct mem_t{
                         // If the mem is in the REV strand it is the position of the first character in the read
     std::vector<size_t> occs; // List of occurrences of the MEM
 
+    size_t total_occ = 0; // Total number of mem occurances unfiltered
+    size_t num_filtered = 0; // Total number of mem occurances filtered
+    std::map<std::string, size_t> count_dict; // Dictionary containing the counts of the MEM in each ref
+    
     mem_t(size_t p, size_t l, size_t i)
     {
         pos = p;  // Position in the reference
