@@ -103,6 +103,8 @@ public:
         verbose("Memory peak: ", malloc_count_peak());
         verbose("Elapsed time (s): ", std::chrono::duration<double, std::ratio<1>>(t_insert_end - t_insert_start).count());
 
+        t_insert_start = std::chrono::high_resolution_clock::now();
+        
         std::string filename_idx = filename + idx.get_file_extension();
         verbose("Loading fasta index file: " + filename_idx);
 
