@@ -104,7 +104,7 @@ void parseArgs(int argc, char *const argv[], Args &arg)
   extern char *optarg;
   extern int optind;
 
-  std::string usage("usage: " + std::string(argv[0]) + " infile [-p patterns] [-1 mate1] [-2 mate2] [-o output] [-m report_mems] [-c csv] [-t threads] [-b batch] [-l len] [-q shaped_slp]  [-L ext_l] [-A smatch] [-B smismatc] [-O gapo] [-E gape] [-d dir_en] [-s seeds_en] [-f freq_en] [-D dir_thr] [-S seeds_thr] [-F freq_thr] [-n no_lcp] [-c max_iter] [-d max_pred] [-x max_dist_x] [-y max_dist_y] [-k min_chain_mem] [-j min_chain_score] [-Z secondary_chains] [-a left_dis] [-u orphan_dis]\n\n" +
+  std::string usage("usage: " + std::string(argv[0]) + " infile [-p patterns] [-1 mate1] [-2 mate2] [-o output] [-m report_mems] [-c csv] [-t threads] [-b batch] [-l len] [-q shaped_slp]  [-L ext_l] [-A smatch] [-B smismatc] [-O gapo] [-E gape] [-d dir_dis] [-s seeds_dis] [-f freq_dis] [-D dir_thr] [-S seeds_thr] [-F freq_thr] [-n no_lcp] [-c max_iter] [-d max_pred] [-x max_dist_x] [-y max_dist_y] [-k min_chain_mem] [-j min_chain_score] [-Z secondary_chains] [-a left_dis] [-u orphan_dis]\n\n" +
                     "Align the reads in the pattern against the reference index in infile.\n" +
                     "   pattens: [string]  - path to patterns file.\n" +
                     "     mate1: [string]  - path to file with #1 mates paired with mate2.\n" +
@@ -118,11 +118,11 @@ void parseArgs(int argc, char *const argv[], Args &arg)
                     "shaped_slp: [boolean] - use shaped slp. (def. " + std::to_string(arg.shaped_slp) + ")\n" +
                     "    no-lcp: [boolean] - use the index without the LCP entries. (def. false)\n" +
                     "     ext_l: [integer] - length of reference substring for extension (def. " + std::to_string(arg.ext_len) + ")\n" +
-                    "   dir_dis: [boolean] - enable direction filtering (def. " + std::to_string(arg.filter_dir) + ")\n" +
+                    "   dir_dis: [boolean] - disable direction filtering (def. " + std::to_string(!arg.filter_dir) + ")\n" +
                     "   dir_thr: [float]   - direction filtering threshold (def. " + std::to_string(arg.dir_thr) + ")\n" +
-                    " seeds_dis: [boolean] - enable seed filtering (def. " + std::to_string(arg.filter_dir) + ")\n" +
+                    " seeds_dis: [boolean] - disable seed filtering (def. " + std::to_string(!arg.filter_dir) + ")\n" +
                     " seeds_thr: [float]   - seed filtering threshold (def. " + std::to_string(arg.n_seeds_thr) + ")\n" +
-                    "  freq_dis: [boolean] - enable frequency filtering (def. " + std::to_string(arg.filter_freq) + ")\n" +
+                    "  freq_dis: [boolean] - disable frequency filtering (def. " + std::to_string(!arg.filter_freq) + ")\n" +
                     "  freq_thr: [float]   - frequency filtering threshold (def. " + std::to_string(arg.freq_thr) + ")\n" +
                     "  max_iter: [integer] - max number of iterations of the chaining algorithm (def. " + std::to_string(arg.max_iter) + ")\n" +
                     "  max_pred: [integer] - max number of predecessors to be considered in chaining algorithm (def. " + std::to_string(arg.max_pred) + ")\n" +
@@ -130,9 +130,9 @@ void parseArgs(int argc, char *const argv[], Args &arg)
                     "max_dist_y: [integer] - max distance for two anchors from the same read to be chained (def. " + std::to_string(arg.max_dist_y) + ")\n" +
                  "min_chain_mem: [integer] - minimum number of MEMs that have to belong to a chain (def. " + std::to_string(arg.min_chain_mem) + ")\n" +
                "min_chain_score: [integer] - minimum chain score (def. " + std::to_string(arg.min_chain_score) + ")\n" +
-              "secondary_chains: [boolean] - attempt to find secondary chains for paired-end reads (def. " + std::to_string(arg.secondary_chains) + ")\n" +
-                    "  left_dis: [boolean] - enable chain left mem lift check heuristic (def. " + std::to_string(arg.left_mem_check) + ")\n" +
-                    "orphan_dis: [boolean] - enable orphan recovery for paired-end alignment (def. " + std::to_string(arg.find_orphan) + ")\n" +
+              "secondary_chains: [boolean] - enable finding secondary chains for paired-end reads (def. " + std::to_string(arg.secondary_chains) + ")\n" +
+                    "  left_dis: [boolean] - disable chain left mem lift check heuristic (def. " + std::to_string(!arg.left_mem_check) + ")\n" +
+                    "orphan_dis: [boolean] - disable orphan recovery for paired-end alignment (def. " + std::to_string(!arg.find_orphan) + ")\n" +
                     "    smatch: [integer] - match score value (def. " + std::to_string(arg.smatch) + ")\n" +
                     " smismatch: [integer] - mismatch penalty value (def. " + std::to_string(arg.smismatch) + ")\n" +
                     "      gapo: [integer] - gap open penalty value (def. " + std::to_string(arg.gapo) + "," + std::to_string(arg.gapo2) + ")\n" +
