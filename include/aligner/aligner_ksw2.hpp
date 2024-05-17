@@ -124,6 +124,8 @@ public:
         ll min_chain_score = 40;// Minimum chain score
         ll min_chain_length = 1;// Minimum chain length
         bool secondary_chains = false; // Find secondary chains in paired-end setting
+        bool left_mem_check = true; // Chain left MEM lift check heuristic
+        bool find_orphan = true; // Perform orphan recovery 
 
     } config_t;
 
@@ -225,6 +227,8 @@ public:
                 max_dist_x(config.max_dist_x),  // Max distance for two anchors to be chained
                 max_dist_y(config.max_dist_y),  // Max distance for two anchors from the same read to be chained
                 secondary_chains(config.secondary_chains), // Attempt to find secondary chains in paired-end setting
+                left_mem_check(config.left_mem_check), // Chain left MEM lift check heuristic
+                find_orphan(config.find_orphan), // Perform orphan recovery
                 smatch(config.smatch),          // Match score default
                 smismatch(config.smismatch),    // Mismatch score default
                 gapo(config.gapo),              // Gap open penalty
@@ -401,10 +405,12 @@ public:
         different_scores.insert(al.chains[i].score);
 
         // Do pre-emptive check to see whether lifted left MEM pos of chain i match a previous chain, if so skip chain
-        if (check_left_MEM(left_mem_vec, al, i)){
-          ++i;
-          al.csv.num_chains_skipped++;
-          continue;
+        if (left_mem_check){
+          if (check_left_MEM(left_mem_vec, al, i)){
+            ++i;
+            al.csv.num_chains_skipped++;
+            continue;
+          }
         }
 
         if (different_scores.size() < check_k)
@@ -849,7 +855,8 @@ public:
       if(not align(alignment, true, out) and alignment.chained)
       {
         ++ stats.orphan_reads;
-        orphan_recovery(alignment, ins_mean, ins_std_dev);
+        if (find_orphan)
+          orphan_recovery(alignment, ins_mean, ins_std_dev);
         if (alignment.aligned) ++stats.orphan_recovered_reads;
       }
       // Write alignment to file
@@ -1268,10 +1275,12 @@ public:
         different_scores.insert(al.chains[i].score);
 
         // Do pre-emptive check to see whether lifted left MEM pos of mate1 and mate2 chain i match a previous chain, if so skip chain
-        if (check_paired_left_MEM(mate1_left_mem_vec, mate2_left_mem_vec, al, i)){
-          ++i;
-          al.csv_m1.num_chains_skipped++;
-          continue;
+        if (left_mem_check){
+          if (check_paired_left_MEM(mate1_left_mem_vec, mate2_left_mem_vec, al, i)){
+            ++i;
+            al.csv_m1.num_chains_skipped++;
+            continue;
+          }
         }
 
         if (different_scores.size() < k)
@@ -3214,6 +3223,9 @@ protected:
 
     bool filter_freq = true;  // Filter seed if it occurs with frequency greater than threshold
     double freq_thr = 0.30;   // Filter seed if it occurs with frequency greater than threshold
+
+    bool left_mem_check = true; // Chain left MEM lift check heuristic
+    bool find_orphan = true; // Perform orphan recovery  
 
     ll max_iter = 50;       // Max number of iterations of the chaining algorithhm
     ll max_pred = 50;       // Max number of predecessor to be considered
