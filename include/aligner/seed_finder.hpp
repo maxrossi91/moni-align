@@ -42,6 +42,7 @@
 #include <FixedBitLenCode.hpp>
 
 #include <slp_definitions.hpp>
+#include <liftidx.hpp>
 
 template <typename slp_t,
           typename ms_t>
@@ -56,6 +57,7 @@ protected:
 public:
     ms_t ms;
     slp_t ra;
+    liftidx idx;
 
     typedef slp_t slp_type;
 
@@ -98,6 +100,24 @@ public:
         t_insert_end = std::chrono::high_resolution_clock::now();
 
         verbose("Random access loading complete");
+        verbose("Memory peak: ", malloc_count_peak());
+        verbose("Elapsed time (s): ", std::chrono::duration<double, std::ratio<1>>(t_insert_end - t_insert_start).count());
+
+        t_insert_start = std::chrono::high_resolution_clock::now();
+        
+        std::string filename_idx = filename + idx.get_file_extension();
+        verbose("Loading fasta index file: " + filename_idx);
+
+        if (not file_exists(filename_idx))
+            error("File not found: ", filename_idx);
+
+        ifstream fs_idx(filename_idx);
+        idx.load(fs_idx);
+        fs_idx.close();
+
+        t_insert_end = std::chrono::high_resolution_clock::now();
+
+        verbose("Fasta index loading complete");
         verbose("Memory peak: ", malloc_count_peak());
         verbose("Elapsed time (s): ", std::chrono::duration<double, std::ratio<1>>(t_insert_end - t_insert_start).count());
 
@@ -146,7 +166,13 @@ public:
     }
 
     // Fill the vector of occs with the matches above curr with LCP <= len
-    bool find_MEM_above(size_t curr, size_t len, std::vector<size_t>& occs)
+    bool find_MEM_above(
+        size_t curr, 
+        size_t len, 
+        std::vector<size_t>& occs, 
+        std::map<std::string, size_t>& count_dict,
+        size_t& total_occ,
+        size_t& num_filtered)
     {
         assert (len > 0);
         auto [prev, lcp] = get_prev_occ_with_lcp(curr, len);
@@ -154,6 +180,26 @@ public:
         while( lcp >= len )
         {
             occs.push_back(prev);
+            total_occ++;
+
+            if (filter_seeds)
+            {
+                std::string ref = idx[prev];
+                auto it = count_dict.find(ref);
+                if (it != count_dict.end()) 
+                {
+                    if (count_dict[ref] > n_seeds_thr)
+                    {
+                        occs.pop_back();
+                        num_filtered++;
+                    }
+                    else
+                        count_dict[ref]++;
+                }
+                else
+                    count_dict[ref] = 1;
+            }
+
             std::tie(prev,lcp) = get_prev_occ_with_lcp(prev, len);
 
             // if (filter_seeds and (occs.size() > n_seeds_thr) )
@@ -165,7 +211,13 @@ public:
 
 
     // Fill the vector of occs with the matches below curr with LCP <= len
-    bool find_MEM_below(size_t curr, size_t len, std::vector<size_t>& occs)
+    bool find_MEM_below(
+        size_t curr, 
+        size_t len, 
+        std::vector<size_t>& occs, 
+        std::map<std::string, size_t>& count_dict,
+        size_t& total_occ,
+        size_t& num_filtered)
     {
         assert(len > 0);
         auto [next, lcp] = get_next_occ_with_lcp(curr, len);
@@ -173,6 +225,26 @@ public:
         while( lcp >= len )
         {
             occs.push_back(next);
+            total_occ++;
+
+            if (filter_seeds)
+            {
+                std::string ref = idx[next];
+                auto it = count_dict.find(ref);
+                if (it != count_dict.end()) 
+                {
+                    if (count_dict[ref] > n_seeds_thr)
+                    {
+                        occs.pop_back();
+                        num_filtered++;
+                    }
+                    else
+                        count_dict[ref]++;
+                }
+                else
+                    count_dict[ref] = 1;
+            }
+
             std::tie(next,lcp) = get_next_occ_with_lcp(next, len);
 
             // if (filter_seeds and (occs.size() > n_seeds_thr) )
@@ -189,8 +261,8 @@ public:
     {
         mem.occs.push_back(mem.pos);
 
-        if (!find_MEM_above(mem.pos, mem.len, mem.occs)) return false;
-        if (!find_MEM_below(mem.pos, mem.len, mem.occs)) return false;
+        if (!find_MEM_above(mem.pos, mem.len, mem.occs, mem.count_dict, mem.total_occ, mem.num_filtered)) return false;
+        if (!find_MEM_below(mem.pos, mem.len, mem.occs, mem.count_dict, mem.total_occ, mem.num_filtered)) return false;
 
         return true;
     }
@@ -209,10 +281,11 @@ public:
         // size_t r = r_offset + (i + l - 1); // compatible with minimap2 chaining algorithm
 
         mem.occs.push_back(mem.pos);
+        mem.total_occ++;
 
-        find_MEM_above(mem.pos, mem.len, mem.occs);
+        find_MEM_above(mem.pos, mem.len, mem.occs, mem.count_dict, mem.total_occ, mem.num_filtered);
         size_t upper_suffix = mem.occs.back();
-        find_MEM_below(mem.pos, mem.len, mem.occs);
+        find_MEM_below(mem.pos, mem.len, mem.occs, mem.count_dict, mem.total_occ, mem.num_filtered);
         size_t lower_suffix = mem.occs.back();
 
         // Take two halves of the MEM
@@ -223,8 +296,8 @@ public:
             mems.push_back(mem_t(upper_suffix, ll, i, mate, rl));
 
             mem_t &mem = mems.back();
-            if ((not find_MEM_above(upper_suffix, mem.len, mem.occs)) or
-                (not find_MEM_below(lower_suffix, mem.len, mem.occs)))
+            if ((not find_MEM_above(upper_suffix, mem.len, mem.occs, mem.count_dict, mem.total_occ, mem.num_filtered)) or
+                (not find_MEM_below(lower_suffix, mem.len, mem.occs, mem.count_dict, mem.total_occ, mem.num_filtered)))
             {
                 mems.pop_back();
                 return false;
