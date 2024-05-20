@@ -3140,7 +3140,7 @@ orphan_paired_score_t paired_chain_orphan_score(
 
   std::string to_csv()
   {
-    std::string header = "Read_Name,Num_Unique_MEMs,Total_Num_MEMs,Max_Freq_MEM,Min_Freq_MEM,Highest_Occ_MEM,Lowest_Occ_MEM,Num_Filtered_MEM,Num_Chains_Skipped\n";
+    std::string header = "Read,Unique,Total,Max_Freq,Min_Freq,Highest_Occ,Lowest_Occ,Filtered,Chains_Skipped\n";
     return header;
   }
 
