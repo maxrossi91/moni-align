@@ -260,6 +260,7 @@ public:
     bool find_MEM_occs(mem_t &mem)
     {
         mem.occs.push_back(mem.pos);
+        mem.total_occ++;
 
         if (!find_MEM_above(mem.pos, mem.len, mem.occs, mem.count_dict, mem.total_occ, mem.num_filtered)) return false;
         if (!find_MEM_below(mem.pos, mem.len, mem.occs, mem.count_dict, mem.total_occ, mem.num_filtered)) return false;
@@ -296,6 +297,8 @@ public:
             mems.push_back(mem_t(upper_suffix, ll, i, mate, rl));
 
             mem_t &mem = mems.back();
+            mem.occs.push_back(upper_suffix);
+            mem.total_occ++;
             if ((not find_MEM_above(upper_suffix, mem.len, mem.occs, mem.count_dict, mem.total_occ, mem.num_filtered)) or
                 (not find_MEM_below(lower_suffix, mem.len, mem.occs, mem.count_dict, mem.total_occ, mem.num_filtered)))
             {
