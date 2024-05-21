@@ -962,14 +962,28 @@ public:
     {
       MTIME_START(8); // Timing helper
       // Direction 1
-      // find_seeds(al.mate1, al.mems, 0, MATE_1 | MATE_F);
-      // find_seeds(&al.mate2_rev, al.mems, al.mate1->seq.l, MATE_2 | MATE_RC);
       mem_finder.find_mems(al.mate1, al.mems, 0, MATE_1 | MATE_F);
       mem_finder.find_mems(&al.mate2_rev, al.mems, al.mate1->seq.l, MATE_2 | MATE_RC);
       
       al.n_mems_dir1 = al.mems.size();
       al.n_seeds_dir1 = 0;
-      for ( size_t i = 0; i < al.mems.size(); ++i )
+
+      // Direction 2
+      mem_finder.find_mems(al.mate2, al.mems, 0, MATE_2 | MATE_F);
+      mem_finder.find_mems(&al.mate1_rev, al.mems, al.mate2->seq.l, MATE_1 | MATE_RC );
+
+      al.n_mems_dir2 = al.mems.size() - al.n_mems_dir1;
+      al.n_seeds_dir2 = 0;
+
+      MTIME_END(8); //Timing helper
+      MTIME_START(9); //Timing helper
+
+      mem_finder.populate_seeds(al.mems, report_mems);
+
+      MTIME_END(9); //Timing helper
+
+      // Direction 1
+      for ( size_t i = 0; i < al.n_mems_dir1; ++i )
       {
         al.n_seeds_dir1 += al.mems[i].occs.size();
         al.avg_seed_length_dir1 += al.mems[i].len;
@@ -982,20 +996,14 @@ public:
         al.avg_w_seed_length_dir1 /= al.n_seeds_dir1;
         al.armonic_avg_seed_length_dir1 = (double)al.n_mems_dir1 / al.armonic_avg_seed_length_dir1;
       }
-      // Direction 2
-      // find_seeds(al.mate2, al.mems, 0, MATE_2 | MATE_F);
-      // find_seeds(&al.mate1_rev, al.mems, al.mate2->seq.l, MATE_1 | MATE_RC );
-      mem_finder.find_mems(al.mate2, al.mems, 0, MATE_2 | MATE_F);
-      mem_finder.find_mems(&al.mate1_rev, al.mems, al.mate2->seq.l, MATE_1 | MATE_RC );
 
-      al.n_mems_dir2 = al.mems.size() - al.n_mems_dir1;
-      al.n_seeds_dir2 = 0;
+      // Direction 2
       for ( size_t i = al.n_mems_dir1; i < al.mems.size(); ++i )
       {
         al.n_seeds_dir2 += al.mems[i].occs.size();
         al.avg_seed_length_dir2 += al.mems[i].len;
         al.avg_w_seed_length_dir2 += al.mems[i].len * al.mems[i].occs.size();
-        al.armonic_avg_seed_length_dir2 += (double)al.mate1->seq.l / (double)al.mems[i].len;
+        al.armonic_avg_seed_length_dir2 += (double)al.mate2->seq.l / (double)al.mems[i].len;
       }
       if (al.n_mems_dir2 > 0) 
       {
@@ -1006,16 +1014,19 @@ public:
 
       // Make a decision based on the MEMs
       if ((al.avg_seed_length_dir1 > al.avg_seed_length_dir2) and ((al.avg_seed_length_dir1 - al.avg_seed_length_dir2) > dir_thr))
+      {
+        for (size_t i = al.n_mems_dir1; i < al.mems.size(); ++i){
+          al.csv_m1.num_mems_filter += al.mems[i].occs.size();
+        }
         al.mems.erase(al.mems.begin() + al.n_mems_dir1, al.mems.end());
+      }
       if ((al.avg_seed_length_dir2 > al.avg_seed_length_dir1) and ((al.avg_seed_length_dir2 - al.avg_seed_length_dir1) > dir_thr))
+      {
+        for (size_t i = 0; i < al.n_mems_dir1; ++i){
+          al.csv_m1.num_mems_filter += al.mems[i].occs.size();
+        }
         al.mems.erase(al.mems.begin(), al.mems.begin()  + al.n_mems_dir1);
-
-      MTIME_END(8); //Timing helper
-      MTIME_START(9); //Timing helper
-      
-      mem_finder.populate_seeds(al.mems, report_mems);
-      if (csv)
-        calculate_MEM_stats(al.mems, al.csv_m1);
+      }
 
       al.n_seeds_dir1 = 0;
       al.n_seeds_dir2 = 0;
@@ -1037,8 +1048,9 @@ public:
       {
         al.avg_w_seed_length_dir2 /= al.n_seeds_dir2;
       }
-      MTIME_END(9); //Timing helper
 
+      if (csv)
+        calculate_MEM_stats(al.mems, al.csv_m1);
       if (filter_freq)
         seed_freq_filter(al.mems, freq_thr, al.csv_m1);
     }
