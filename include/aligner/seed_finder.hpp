@@ -172,19 +172,36 @@ public:
         std::vector<size_t>& occs, 
         std::map<std::string, size_t>& count_dict,
         size_t& total_occ,
-        size_t& num_filtered)
+        size_t& num_filtered,
+        bool lift_mem)
     {
         assert (len > 0);
         auto [prev, lcp] = get_prev_occ_with_lcp(curr, len);
         
         while( lcp >= len )
         {
-            occs.push_back(prev);
-            total_occ++;
+            bool unique = true;
+            if (lift_mem){
+                const auto lift = idx.lift(prev);
+                const auto lft_ref = idx.index(lift);
+                size_t lft_pos = lft_ref.second + 1;
+                // Probably better way to do this
+                // Maybe use bit vector to mark previously seen position for faster lookup
+                if (std::find(occs.begin(), occs.end(), lft_pos) == occs.end()){
+                    occs.push_back(lft_pos);
+                    total_occ++;
+                }
+                else
+                    unique = false;
+            }
+            else{
+                occs.push_back(prev);
+                total_occ++;
+            }
 
-            if (filter_seeds)
+            if (filter_seeds && unique)
             {
-                std::string ref = idx[prev];
+                std::string ref = idx[occs.back()];
                 auto it = count_dict.find(ref);
                 if (it != count_dict.end()) 
                 {
@@ -201,9 +218,6 @@ public:
             }
 
             std::tie(prev,lcp) = get_prev_occ_with_lcp(prev, len);
-
-            // if (filter_seeds and (occs.size() > n_seeds_thr) )
-            //     return false;
         }
 
         return true;
@@ -217,19 +231,36 @@ public:
         std::vector<size_t>& occs, 
         std::map<std::string, size_t>& count_dict,
         size_t& total_occ,
-        size_t& num_filtered)
+        size_t& num_filtered,
+        bool lift_mem)
     {
         assert(len > 0);
         auto [next, lcp] = get_next_occ_with_lcp(curr, len);
         
         while( lcp >= len )
         {
-            occs.push_back(next);
-            total_occ++;
+            bool unique = true;
+            if (lift_mem){
+                const auto lift = idx.lift(next);
+                const auto lft_ref = idx.index(lift);
+                size_t lft_pos = lft_ref.second + 1;
+                // Probably better way to do this
+                // Maybe use bit vector to mark previously seen position for faster lookup
+                if (std::find(occs.begin(), occs.end(), lft_pos) == occs.end()){
+                    occs.push_back(lft_pos);
+                    total_occ++;
+                }
+                else
+                    unique = false;
+            }
+            else{
+                occs.push_back(next);
+                total_occ++;
+            }
 
-            if (filter_seeds)
+            if (filter_seeds && unique)
             {
-                std::string ref = idx[next];
+                std::string ref = idx[occs.back()];
                 auto it = count_dict.find(ref);
                 if (it != count_dict.end()) 
                 {
@@ -246,9 +277,6 @@ public:
             }
 
             std::tie(next,lcp) = get_next_occ_with_lcp(next, len);
-
-            // if (filter_seeds and (occs.size() > n_seeds_thr) )
-            //     return false;
         }
 
         return true;
@@ -257,13 +285,26 @@ public:
 
 
     // Fill the vector of occurrences of the mem_t data structure
-    bool find_MEM_occs(mem_t &mem)
+    bool find_MEM_occs(mem_t &mem, bool lift_mem)
     {
-        mem.occs.push_back(mem.pos);
-        mem.total_occ++;
+        if (lift_mem){
+            const auto lift = idx.lift(mem.pos);
+            const auto lft_ref = idx.index(lift);
+            size_t lft_pos = lft_ref.second + 1;
+            // Probably better way to do this
+            // Maybe use bit vector to mark previously seen position for faster lookup
+            if (std::find(mem.occs.begin(), mem.occs.end(), lft_pos) == mem.occs.end()){
+                mem.occs.push_back(lft_pos);
+                mem.total_occ++;
+            }
+        }
+        else{
+            mem.occs.push_back(mem.pos);
+            mem.total_occ++;
+        }
 
-        if (!find_MEM_above(mem.pos, mem.len, mem.occs, mem.count_dict, mem.total_occ, mem.num_filtered)) return false;
-        if (!find_MEM_below(mem.pos, mem.len, mem.occs, mem.count_dict, mem.total_occ, mem.num_filtered)) return false;
+        if (!find_MEM_above(mem.pos, mem.len, mem.occs, mem.count_dict, mem.total_occ, mem.num_filtered, lift_mem)) return false;
+        if (!find_MEM_below(mem.pos, mem.len, mem.occs, mem.count_dict, mem.total_occ, mem.num_filtered, lift_mem)) return false;
 
         return true;
     }
@@ -271,7 +312,7 @@ public:
 
     // Populate the seeds given a list of MEMs
     bool populate_seed(
-        mem_t &mem, std::vector<mem_t> &mems, bool report_mems = false)
+        mem_t &mem, std::vector<mem_t> &mems, bool report_mems = false, bool lift_mem = false)
     {
         size_t l = mem.len;
         size_t i = mem.idx;
@@ -281,12 +322,25 @@ public:
 
         // size_t r = r_offset + (i + l - 1); // compatible with minimap2 chaining algorithm
 
-        mem.occs.push_back(mem.pos);
-        mem.total_occ++;
+        if (lift_mem){
+            const auto lift = idx.lift(mem.pos);
+            const auto lft_ref = idx.index(lift);
+            size_t lft_pos = lft_ref.second + 1;
+            // Probably better way to do this
+            // Maybe use bit vector to mark previously seen position for faster lookup
+            if (std::find(mem.occs.begin(), mem.occs.end(), lft_pos) == mem.occs.end()){
+                mem.occs.push_back(lft_pos);
+                mem.total_occ++;
+            }
+        }
+        else{
+            mem.occs.push_back(mem.pos);
+            mem.total_occ++;
+        }
 
-        find_MEM_above(mem.pos, mem.len, mem.occs, mem.count_dict, mem.total_occ, mem.num_filtered);
+        find_MEM_above(mem.pos, mem.len, mem.occs, mem.count_dict, mem.total_occ, mem.num_filtered, lift_mem);
         size_t upper_suffix = mem.occs.back();
-        find_MEM_below(mem.pos, mem.len, mem.occs, mem.count_dict, mem.total_occ, mem.num_filtered);
+        find_MEM_below(mem.pos, mem.len, mem.occs, mem.count_dict, mem.total_occ, mem.num_filtered, lift_mem);
         size_t lower_suffix = mem.occs.back();
 
         // Take two halves of the MEM
@@ -297,10 +351,24 @@ public:
             mems.push_back(mem_t(upper_suffix, ll, i, mate, rl));
 
             mem_t &mem = mems.back();
-            mem.occs.push_back(upper_suffix);
-            mem.total_occ++;
-            if ((not find_MEM_above(upper_suffix, mem.len, mem.occs, mem.count_dict, mem.total_occ, mem.num_filtered)) or
-                (not find_MEM_below(lower_suffix, mem.len, mem.occs, mem.count_dict, mem.total_occ, mem.num_filtered)))
+            if (lift_mem){
+                const auto lift = idx.lift(upper_suffix);
+                const auto lft_ref = idx.index(lift);
+                size_t lft_pos = lft_ref.second + 1;
+                // Probably better way to do this
+                // Maybe use bit vector to mark previously seen position for faster lookup
+                if (std::find(mem.occs.begin(), mem.occs.end(), lft_pos) == mem.occs.end()){
+                    mem.occs.push_back(lft_pos);
+                    mem.total_occ++;
+                }
+            }
+            else{
+                mem.occs.push_back(upper_suffix);
+                mem.total_occ++;
+            }
+            
+            if ((not find_MEM_above(upper_suffix, mem.len, mem.occs, mem.count_dict, mem.total_occ, mem.num_filtered, lift_mem)) or
+                (not find_MEM_below(lower_suffix, mem.len, mem.occs, mem.count_dict, mem.total_occ, mem.num_filtered, lift_mem)))
             {
                 mems.pop_back();
                 return false;
@@ -310,7 +378,7 @@ public:
             size_t rr = r; // compatible with minimap2 chaining algorithm
             mems.push_back(mem_t(pos + ll, lr, i + ll, mate, rr));
             // find_MEM_occs(mems.back()); // TODO: Optimize this
-            if ((not find_MEM_occs(mems.back())))
+            if ((not find_MEM_occs(mems.back(), lift_mem)))
             {
                 mems.pop_back();
                 return false;
@@ -323,23 +391,24 @@ public:
     // // Populate the seeds given a list of MEMs
     void populate_seeds(
         std::vector<mem_t> &mems,
-        bool report_mems = false)
+        bool report_mems = false,
+        bool lift_mem = false)
     {
         size_t n_MEMs = mems.size();
         for (size_t j = 0; j < n_MEMs; ++j)
-            populate_seed(mems[j], mems, report_mems);
+            populate_seed(mems[j], mems, report_mems, lift_mem);
     }
 
 
-    void find_seeds(
-        const kseq_t *read,
-        std::vector<mem_t> &mems,
-        size_t r_offset = 0,
-        size_t mate = 0)
-    {
-        find_mems(read, mems, r_offset, mate);
-        populate_seeds(mems);
-    }
+    // void find_seeds(
+    //     const kseq_t *read,
+    //     std::vector<mem_t> &mems,
+    //     size_t r_offset = 0,
+    //     size_t mate = 0)
+    // {
+    //     find_mems(read, mems, r_offset, mate);
+    //     populate_seeds(mems);
+    // }
 
 protected:
     inline std::pair<size_t, size_t> get_next_occ_with_lcp(size_t curr, size_t len) 

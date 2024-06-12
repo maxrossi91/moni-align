@@ -125,7 +125,8 @@ public:
         ll min_chain_length = 1;// Minimum chain length
         bool secondary_chains = false; // Find secondary chains in paired-end setting
         bool left_mem_check = true; // Chain left MEM lift check heuristic
-        bool find_orphan = true; // Perform orphan recovery 
+        bool find_orphan = true; // Perform orphan recovery
+        bool mem_lift = false; // Lift MEM to REF prior to chaining 
 
     } config_t;
 
@@ -229,6 +230,7 @@ public:
                 secondary_chains(config.secondary_chains), // Attempt to find secondary chains in paired-end setting
                 left_mem_check(config.left_mem_check), // Chain left MEM lift check heuristic
                 find_orphan(config.find_orphan), // Perform orphan recovery
+                mem_lift(config.mem_lift),      // Lift MEM to REF prior to chaining 
                 smatch(config.smatch),          // Match score default
                 smismatch(config.smismatch),    // Mismatch score default
                 gapo(config.gapo),              // Gap open penalty
@@ -334,7 +336,7 @@ public:
     mem_finder.find_mems(&al.read_rev,al.mems, 0, MATE_1 | MATE_RC);
     MTIME_END(8);
     MTIME_START(9);
-    mem_finder.populate_seeds(al.mems, report_mems);
+    mem_finder.populate_seeds(al.mems, report_mems, mem_lift);
     MTIME_END(9);
 
     if (csv)
@@ -978,7 +980,7 @@ public:
       MTIME_END(8); //Timing helper
       MTIME_START(9); //Timing helper
 
-      mem_finder.populate_seeds(al.mems, report_mems);
+      mem_finder.populate_seeds(al.mems, report_mems, mem_lift);
 
       MTIME_END(9); //Timing helper
 
@@ -1063,7 +1065,7 @@ public:
       mem_finder.find_mems(&al.mate2_rev, al.mems, al.mate1->seq.l, MATE_2 | MATE_RC);
       MTIME_END(8);
       MTIME_START(9);
-      mem_finder.populate_seeds(al.mems, report_mems);
+      mem_finder.populate_seeds(al.mems, report_mems, mem_lift);
       MTIME_END(9);
 
       if (csv)
@@ -3244,6 +3246,7 @@ protected:
     ll max_dist_x = 500;    // Max distance for two anchors to be chained
     ll max_dist_y = 100;    // Max distance for two anchors from the same read to be chained
     bool secondary_chains = false; // Find secondary chains in paired-end setting
+    bool mem_lift = false; // Lift MEM to REF prior to chaining
     bool report_mems = false; // Report MEMs instead of read alignment
     bool csv = false;         // Report MEM statistics in CSV file
 

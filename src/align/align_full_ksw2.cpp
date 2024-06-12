@@ -75,6 +75,8 @@ struct Args
   bool left_mem_check = true; // Chain left MEM lift check heuristic
   bool find_orphan = true; // Perform orphan recovery 
 
+  bool mem_lift = false; // Lift MEM to REF prior to chaining
+
   // ksw2 parameters
   int8_t smatch = 2;      // Match score default
   int8_t smismatch = 4;   // Mismatch score default
@@ -104,7 +106,7 @@ void parseArgs(int argc, char *const argv[], Args &arg)
   extern char *optarg;
   extern int optind;
 
-  std::string usage("usage: " + std::string(argv[0]) + " infile [-p patterns] [-1 mate1] [-2 mate2] [-o output] [-m report_mems] [-c csv] [-t threads] [-b batch] [-l len] [-q shaped_slp]  [-L ext_l] [-A smatch] [-B smismatc] [-O gapo] [-E gape] [-d dir_dis] [-s seeds_dis] [-f freq_dis] [-D dir_thr] [-S seeds_thr] [-F freq_thr] [-n no_lcp] [-c max_iter] [-d max_pred] [-x max_dist_x] [-y max_dist_y] [-k min_chain_mem] [-j min_chain_score] [-Z secondary_chains] [-a left_dis] [-u orphan_dis]\n\n" +
+  std::string usage("usage: " + std::string(argv[0]) + " infile [-p patterns] [-1 mate1] [-2 mate2] [-o output] [-m report_mems] [-c csv] [-t threads] [-b batch] [-l len] [-q shaped_slp]  [-L ext_l] [-A smatch] [-B smismatc] [-O gapo] [-E gape] [-d dir_dis] [-s seeds_dis] [-f freq_dis] [-D dir_thr] [-S seeds_thr] [-F freq_thr] [-n no_lcp] [-c max_iter] [-d max_pred] [-x max_dist_x] [-y max_dist_y] [-k min_chain_mem] [-j min_chain_score] [-Z secondary_chains] [-a left_dis] [-u orphan_dis] [-z mem_lift]\n\n" +
                     "Align the reads in the pattern against the reference index in infile.\n" +
                     "   pattens: [string]  - path to patterns file.\n" +
                     "     mate1: [string]  - path to file with #1 mates paired with mate2.\n" +
@@ -133,6 +135,7 @@ void parseArgs(int argc, char *const argv[], Args &arg)
               "secondary_chains: [boolean] - enable finding secondary chains for paired-end reads (def. " + std::to_string(arg.secondary_chains) + ")\n" +
                     "  left_dis: [boolean] - disable chain left mem lift check heuristic (def. " + std::to_string(!arg.left_mem_check) + ")\n" +
                     "orphan_dis: [boolean] - disable orphan recovery for paired-end alignment (def. " + std::to_string(!arg.find_orphan) + ")\n" +
+                    "  mem_lift: [boolean] - lift the MEMs to the reference prior to chaining (def. " + std::to_string(!arg.mem_lift) + ")\n" +
                     "    smatch: [integer] - match score value (def. " + std::to_string(arg.smatch) + ")\n" +
                     " smismatch: [integer] - mismatch penalty value (def. " + std::to_string(arg.smismatch) + ")\n" +
                     "      gapo: [integer] - gap open penalty value (def. " + std::to_string(arg.gapo) + "," + std::to_string(arg.gapo2) + ")\n" +
@@ -140,7 +143,7 @@ void parseArgs(int argc, char *const argv[], Args &arg)
 
   std::string sarg;
   char* s;
-  while ((c = getopt(argc, argv, "ql:hp:o:t:1:2:b:A:B:O:E:L:dsfnD:S:F:w:v:x:y:k:j:Zaumc")) != -1)
+  while ((c = getopt(argc, argv, "ql:hp:o:t:1:2:b:A:B:O:E:L:dsfnD:S:F:w:v:x:y:k:j:Zauzmc")) != -1)
   {
     switch (c)
     {
@@ -248,6 +251,9 @@ void parseArgs(int argc, char *const argv[], Args &arg)
     case 'u':
       arg.find_orphan = false;
       break;
+    case 'z':
+      arg.mem_lift = true;
+      break;
     case 'm':
       arg.report_mems = true;
       break;
@@ -309,7 +315,8 @@ typename aligner_t::config_t configurer(Args &args){
   config.min_chain_score = args.min_chain_score; // Minimum chain score
   config.secondary_chains = args.secondary_chains; // Attempt to find secondary chains in paired-end setting
   config.left_mem_check = args.left_mem_check; // Chain left MEM lift check heuristic
-  config.find_orphan = args.find_orphan; // Perform orphan recovery 
+  config.find_orphan = args.find_orphan; // Perform orphan recovery
+  config.mem_lift = args.mem_lift; // Lift MEM to REF prior to chaining
 
   config.report_mems = args.report_mems; //report the MEMs in the SAM file
   config.csv = args.csv; //report MEM statistics in CSV file
