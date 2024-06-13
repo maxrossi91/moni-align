@@ -982,6 +982,9 @@ public:
 
       MTIME_END(9); //Timing helper
 
+      if (csv)
+        calculate_MEM_stats(al.mems, al.csv_m1);
+
       // Direction 1
       for ( size_t i = 0; i < al.n_mems_dir1; ++i )
       {
@@ -1049,8 +1052,6 @@ public:
         al.avg_w_seed_length_dir2 /= al.n_seeds_dir2;
       }
 
-      if (csv)
-        calculate_MEM_stats(al.mems, al.csv_m1);
       if (filter_freq)
         seed_freq_filter(al.mems, freq_thr, al.csv_m1);
     }
@@ -1831,7 +1832,7 @@ public:
     csv_t& csv
   )
   {
-    size_t total_mem_occ = 1; // Set to 1 to avoid any potential divide by 0 operations
+    size_t total_mem_occ = 0;
     std::vector<size_t> delete_ind;
 
     // Calculate the total number of occurance of MEMs
@@ -1842,7 +1843,7 @@ public:
     for ( size_t i = 0; i < mems.size(); ++i)
     {
       double mem_freq = (static_cast<double> (mems[i].occs.size()) / total_mem_occ);
-      if ( (mem_freq / total_mem_occ) > freq)
+      if (mem_freq > freq)
       {
         delete_ind.push_back(i);
         csv.num_mems_filter += (mems[i].occs.size());
