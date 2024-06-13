@@ -179,25 +179,17 @@ public:
         
         while( lcp >= len )
         {
+            size_t ref_count = populate_dict(prev, count_dict);
             occs.push_back(prev);
             total_occ++;
 
             if (filter_seeds)
             {
-                std::string ref = idx[prev];
-                auto it = count_dict.find(ref);
-                if (it != count_dict.end()) 
+                if (ref_count > n_seeds_thr)
                 {
-                    if (count_dict[ref] > n_seeds_thr)
-                    {
-                        occs.pop_back();
-                        num_filtered++;
-                    }
-                    else
-                        count_dict[ref]++;
-                }
-                else
-                    count_dict[ref] = 1;
+                    occs.pop_back();
+                    num_filtered++;
+                }      
             }
 
             std::tie(prev,lcp) = get_prev_occ_with_lcp(prev, len);
@@ -224,25 +216,17 @@ public:
         
         while( lcp >= len )
         {
+            size_t ref_count = populate_dict(next, count_dict);
             occs.push_back(next);
             total_occ++;
 
             if (filter_seeds)
-            {
-                std::string ref = idx[next];
-                auto it = count_dict.find(ref);
-                if (it != count_dict.end()) 
+            {  
+                if (ref_count > n_seeds_thr)
                 {
-                    if (count_dict[ref] > n_seeds_thr)
-                    {
-                        occs.pop_back();
-                        num_filtered++;
-                    }
-                    else
-                        count_dict[ref]++;
+                    occs.pop_back();
+                    num_filtered++;
                 }
-                else
-                    count_dict[ref] = 1;
             }
 
             std::tie(next,lcp) = get_next_occ_with_lcp(next, len);
@@ -259,6 +243,7 @@ public:
     // Fill the vector of occurrences of the mem_t data structure
     bool find_MEM_occs(mem_t &mem)
     {
+        populate_dict(mem.pos, mem.count_dict);
         mem.occs.push_back(mem.pos);
         mem.total_occ++;
 
@@ -281,6 +266,7 @@ public:
 
         // size_t r = r_offset + (i + l - 1); // compatible with minimap2 chaining algorithm
 
+        populate_dict(mem.pos, mem.count_dict);
         mem.occs.push_back(mem.pos);
         mem.total_occ++;
 
@@ -297,6 +283,7 @@ public:
             mems.push_back(mem_t(upper_suffix, ll, i, mate, rl));
 
             mem_t &mem = mems.back();
+            populate_dict(mem.pos, mem.count_dict);
             mem.occs.push_back(upper_suffix);
             mem.total_occ++;
             if ((not find_MEM_above(upper_suffix, mem.len, mem.occs, mem.count_dict, mem.total_occ, mem.num_filtered)) or
@@ -339,6 +326,20 @@ public:
     {
         find_mems(read, mems, r_offset, mate);
         populate_seeds(mems);
+    }
+
+    size_t populate_dict(
+        size_t pos,
+        std::map<std::string, size_t>& count_dict)
+    {
+        std::string ref = idx[pos];
+        auto it = count_dict.find(ref);
+        if (it != count_dict.end())             
+            count_dict[ref]++;
+        else
+            count_dict[ref] = 1;
+
+        return count_dict[ref];
     }
 
 protected:
