@@ -32,6 +32,7 @@
 
 #include <moni.hpp>
 #include <sam.hpp>
+#include <csv.hpp>
 #include <mapq.hpp>
 
 #include <malloc_count.h>
@@ -95,6 +96,9 @@ public:
 
         bool filter_seeds = true; // Filter seed if occurs more than threshold
         size_t n_seeds_thr = 5000;   // Filter seed if occurs more than threshold
+
+        bool filter_freq = true;  // Filter seed if it occurs with frequency greater than threshold
+        double freq_thr = 0.30;   // Filter seed if it occurs with frequency greater than threshold
         
         // ksw2 parameters
         int8_t smatch = 2;      // Match score default
@@ -109,6 +113,8 @@ public:
         int zdrop = -1;         // Zdrop enable
 
         bool forward_only = true;      // Align only
+        bool report_mems = false;      // Report MEMs instead of read alignment
+        bool csv = false;             // Report MEM statistics in CSV file
 
         // Chaining parameters
         ll max_dist_x = 500;    // Max distance for two anchors to be chained
@@ -118,6 +124,8 @@ public:
         ll min_chain_score = 40;// Minimum chain score
         ll min_chain_length = 1;// Minimum chain length
         bool secondary_chains = false; // Find secondary chains in paired-end setting
+        bool left_mem_check = true; // Chain left MEM lift check heuristic
+        bool find_orphan = true; // Perform orphan recovery 
 
     } config_t;
 
@@ -143,6 +151,7 @@ public:
       kseq_t read_rev;
 
       sam_t sam;
+      csv_t csv;
       // bam1_t bam;
 
       const size_t min_score;
@@ -160,6 +169,7 @@ public:
       alignment_t(kseq_t *read_):
           read(read_),
           sam(read),
+          csv(read),
           min_score(20 + 8 * log(read->seq.l))
       {
         rc_copy_kseq_t(&read_rev, read);
@@ -173,6 +183,11 @@ public:
       void write(FILE* out)
       {
         write_sam(out, sam);
+      }
+
+      void record_csv(FILE* out)
+      {
+        write_csv(out, csv);
       }
 
       void set_sam_not_aligned()
@@ -205,11 +220,15 @@ public:
                 dir_thr(config.dir_thr),        // Use MEMs average length distance to filter the orientation of the reads
                 filter_seeds(config.filter_seeds),// Filter seed if occurs more than threshold
                 n_seeds_thr(config.n_seeds_thr),// Filter seed if occurs more than threshold
+                filter_freq(config.filter_freq),// Filter seed if it occurs with frequency greater than threshold
+                freq_thr(config.freq_thr),      // Filter seed if it occurs with frequency greater than threshold
                 max_iter(config.max_iter),      // Max number of iterations of the chaining algorithhm
                 max_pred(config.max_pred),      // Max number of predecessor to be considered
                 max_dist_x(config.max_dist_x),  // Max distance for two anchors to be chained
                 max_dist_y(config.max_dist_y),  // Max distance for two anchors from the same read to be chained
                 secondary_chains(config.secondary_chains), // Attempt to find secondary chains in paired-end setting
+                left_mem_check(config.left_mem_check), // Chain left MEM lift check heuristic
+                find_orphan(config.find_orphan), // Perform orphan recovery
                 smatch(config.smatch),          // Match score default
                 smismatch(config.smismatch),    // Mismatch score default
                 gapo(config.gapo),              // Gap open penalty
@@ -221,6 +240,8 @@ public:
                 zdrop(config.zdrop),            // Zdrop enable
                 max_penalty(std::max(smatch + smismatch, gapo + gape)), // Maximum penalty score
                 forward_only(config.forward_only),
+                report_mems(config.report_mems), // Report MEMs instead of read alignment
+                csv(config.csv),                // Report MEM statistics in CSV file
                 mem_finder(filename, config.min_len, config.filter_seeds, config.n_seeds_thr),
                 ra(mem_finder.ra)
   {
@@ -283,30 +304,73 @@ public:
   {
     // std::vector<mem_t> mems;
     alignment_t alignment(read);
-    if(not align(alignment))
+    if(not align(alignment, hdr))
       alignment.set_sam_not_aligned();
-    alignment.write(out, hdr);
+    if (!report_mems)
+      alignment.write(out, hdr);
     return alignment.aligned;
   }
 
-  bool align(kseq_t *read, FILE* out)
+  bool align(kseq_t *read, FILE* out, FILE* csv_out)
   {
     // std::vector<mem_t> mems;
     alignment_t alignment(read);
-    if(not align(alignment))
+    if(not align(alignment, out))
       alignment.set_sam_not_aligned();
-    alignment.write(out);
+    if (!report_mems)
+      alignment.write(out);
+    if (csv)
+      alignment.record_csv(csv_out);
     return alignment.aligned;
   }
 
   // Aligning unpaired sequences
-  bool align(alignment_t &al)
+  bool align(alignment_t &al, FILE* out = nullptr)
   {    
-    MTIME_INIT(3);
+    MTIME_INIT(10);
     MTIME_START(0); // Timing helper
+    MTIME_START(8);
+    mem_finder.find_mems(al.read,al.mems, 0, MATE_1 | MATE_F);
+    mem_finder.find_mems(&al.read_rev,al.mems, 0, MATE_1 | MATE_RC);
+    MTIME_END(8);
+    MTIME_START(9);
+    mem_finder.populate_seeds(al.mems, report_mems);
+    MTIME_END(9);
 
-    mem_finder.find_seeds(al.read,al.mems, 0, MATE_1 | MATE_F);
-    mem_finder.find_seeds(&al.read_rev,al.mems, 0, MATE_1 | MATE_RC);
+    if (csv)
+      calculate_MEM_stats(al.mems, al.csv);
+    if (filter_freq)
+      seed_freq_filter(al.mems, freq_thr, al.csv);
+
+    // If reporting just the MEMs, at this point can directly write to the SAM file and skip the rest.
+    if (report_mems)
+    {
+      MTIME_END(0); // Timing helper
+      kseq_t read;
+      nullptr_kseq_t(&read); // For FASTA reads to ensure nullptr for qual
+      for (int i = 0; i < al.mems.size(); ++i){
+        if (al.mems[i].mate & MATE_RC)
+          copy_partial_kseq_t(&read, &al.read_rev, al.mems[i].idx, al.mems[i].len);
+        else
+          copy_partial_kseq_t(&read, al.read, al.mems[i].idx, al.mems[i].len);
+        for (int j = 0; j < al.mems[i].occs.size(); ++j) {
+            sam_t read_sam = sam_t(&read);
+            read_sam.cigar = std::to_string(al.mems[i].len) + "M";
+            const auto ref = idx.index(al.mems[i].occs[j]);
+            read_sam.pos = ref.second + 1;
+            read_sam.rname = ref.first;
+            if (al.mems[i].mate & MATE_RC)
+              read_sam.flag = SAM_SECONDARY_ALIGNMENT | SAM_REVERSED; 
+            else
+              read_sam.flag = SAM_SECONDARY_ALIGNMENT;
+            write_sam(out, read_sam);
+        }
+        free_kseq_t(&read);
+      }
+      MTIME_TSAFE_MERGE;
+      al.aligned = true;
+      return al.aligned;
+    }
 
     // Compute fraction of repetitive seeds
     al.frac_rep = compute_frac_rep(al.mems, al.read->seq.l, MATE_1);
@@ -335,9 +399,20 @@ public:
     std::set<size_t> different_scores;
     size_t i = 0;
 
+    std::vector<std::pair<size_t, size_t >> left_mem_vec;
     while (i < al.chains.size() and different_scores.size() < check_k)
     {
         different_scores.insert(al.chains[i].score);
+
+        // Do pre-emptive check to see whether lifted left MEM pos of chain i match a previous chain, if so skip chain
+        if (left_mem_check){
+          if (check_left_MEM(left_mem_vec, al, i)){
+            ++i;
+            al.csv.num_chains_skipped++;
+            continue;
+          }
+        }
+
         if (different_scores.size() < check_k)
         {
           // Align the chain
@@ -427,6 +502,54 @@ public:
   
   }
 
+  // Check whether the left most MEM lifted over REF position is within certain distance of previous left most MEM lifted over REF positions.
+  // Pre-emptive check to see whether the chain we are going to fully align will liftover to the position of a previous chain. 
+  // If this is the case, then do not spend time to do the full alignment if its likely going to be discarded anyways.
+  bool check_left_MEM(
+    std::vector<std::pair<size_t, size_t >>& left_mem_vec,
+    alignment_t& al,
+    size_t i)
+  {
+    // Get the chain
+    auto& chain = al.chains[i];
+    // Reverse the chain order [Have to undo this afterwards]
+    chain.reverse();
+
+    // Extract the ref position of the leftmost anchor of the current chain
+    size_t left_mem_pos, left_mem_ref_pos;
+    
+    // Extract the leftmost MEM of the chain
+    for(size_t j = 0; j < chain.anchors.size(); ++j)
+    {
+      size_t anchor_id = chain.anchors[j];
+      left_mem_pos = al.mems[al.anchors[anchor_id].first].occs[al.anchors[anchor_id].second];
+      const auto lift = idx.lift(left_mem_pos);
+      const auto lft_ref = idx.index(lift);
+      left_mem_ref_pos = lft_ref.second + 1;
+      break;
+    }
+
+    // Check to see if the leftmost MEM of the chain has lifted over position corresponding to previously seen chain
+    bool discovered = false;
+    for (size_t j = 0; j < left_mem_vec.size(); ++j){
+      if (dist(left_mem_vec[j].first, left_mem_ref_pos) < region_dist){
+        if (left_mem_vec[j].second == al.chains[i].score){
+          discovered = true;
+        }
+      }
+    }
+
+    // If discovered then likely current chain is the same as another previously seen chain
+    if (discovered){
+      chain.reset(); // Get original chain order
+      return true;
+    }
+    else{
+      chain.reset(); // Get the original chain order
+      left_mem_vec.push_back(std::make_pair(left_mem_ref_pos, al.chains[i].score));
+      return false;
+    }
+  }
 
   typedef struct orphan_paired_score_t{
     int32_t tot = 0;
@@ -501,6 +624,9 @@ public:
     sam_t sam_m1;
     sam_t sam_m2;
 
+    csv_t csv_m1;
+    csv_t csv_m2;
+
     // TODO: precompute the nt4 version of the mates
 
     int32_t min_score_m1 = 0;
@@ -542,6 +668,8 @@ public:
       mate2(mate2_),
       sam_m1(mate1),
       sam_m2(mate2),
+      csv_m1(mate1),
+      csv_m2(mate2),
       min_score_m1(20 + 8 * log(mate1->seq.l)),
       min_score_m2(20 + 8 * log(mate2->seq.l)),
       min_score(min_score_m1 + min_score_m2),
@@ -611,6 +739,12 @@ public:
       write_sam(out, sam_m2);
     }
 
+    // MEMs within mate pair are stored together, therefore do not need csv_m2
+    void record_csv(FILE* out)
+    {
+      write_csv(out, csv_m1);
+    }
+
     void set_sam_not_aligned()
     {
       sam_m1.flag = sam_m2.flag = SAM_PAIRED | SAM_UNMAPPED | SAM_MATE_UNMAPPED;
@@ -634,7 +768,7 @@ public:
   // Aligning pair-ended batched sequences
   // Return true if the fragment model has been learned.
   // Assumes alignment to be allocated with the exact number of elements
-  bool learn_fragment_model(kpbseq_t *batch, std::vector<paired_alignment_t>& alignments)
+  bool learn_fragment_model(kpbseq_t *batch)
   {
     size_t n_aligned = 0;
 
@@ -647,7 +781,7 @@ public:
     for (size_t i = 0; i < l; ++i)
     {
       // paired_alignment_t alignment(&batch->mate1->buf[i], &batch->mate2->buf[i]);
-      paired_alignment_t& alignment = alignments[i];
+      paired_alignment_t alignment;
       alignment.init(&batch->mate1->buf[i], &batch->mate2->buf[i]);
       if(align(alignment, false) and ((not alignment.second_best_score) or ((alignment.best_scores[0].tot - alignment.best_scores[1].tot) > ins_learning_score_gap_threshold)))
       {
@@ -705,48 +839,8 @@ public:
     return ins_learning_complete;
   }
 
-  statistics_t finalize_learning(std::vector<paired_alignment_t> &alignments, FILE *out)
-  {
-    statistics_t stats;
-
-    for (size_t i = 0; i < alignments.size(); ++i)
-    {
-      ++stats.processed_reads;
-      // paired_alignment_t alignment(&batch->mate1->buf[i], &batch->mate2->buf[i]);
-      paired_alignment_t &alignment = alignments[i];
-      alignment.mean = ins_mean;
-      alignment.std_dev = ins_std_dev;
-
-      if (alignment.best_scores.size() == 0)
-      {
-        alignment.write(out);
-        continue;
-      }
-
-      update_best_scores(alignment);
-
-      if (alignment.best_scores[0].tot >= alignment.min_score)
-      {
-        size_t j = alignment.best_scores[0].chain_i;
-        alignment.score = paired_chain_score(alignment, j, false);
-        alignment.aligned = (alignment.score.tot >= alignment.min_score);
-      }
-      else if (alignment.chained)
-      {
-        ++ stats.orphan_reads;
-        orphan_recovery(alignment, ins_mean, ins_std_dev);
-        if (alignment.aligned) ++stats.orphan_recovered_reads;
-      }
-      
-      alignment.write(out);
-
-      if (alignment.aligned) ++stats.aligned_reads;
-    }
-    return stats;
-  }
-
   // Aligning pair-ended batched sequences
-  statistics_t align(kpbseq_t *batch, FILE *out)
+  statistics_t align(kpbseq_t *batch, FILE *out, FILE *csv_out)
   {
     statistics_t stats;
 
@@ -758,14 +852,22 @@ public:
       paired_alignment_t alignment(&batch->mate1->buf[i], &batch->mate2->buf[i]);
       alignment.mean = ins_mean;
       alignment.std_dev = ins_std_dev;
-      if(not align(alignment) and alignment.chained)
+      if(not align(alignment, true, out) and alignment.chained)
       {
         ++ stats.orphan_reads;
-        orphan_recovery(alignment, ins_mean, ins_std_dev);
+        if (find_orphan)
+          orphan_recovery(alignment, ins_mean, ins_std_dev);
         if (alignment.aligned) ++stats.orphan_recovered_reads;
       }
       // Write alignment to file
-      alignment.write(out);
+      if (!report_mems){
+        alignment.write(out);
+      }
+      // Write MEM stats to CSV file
+      if (csv){
+        alignment.record_csv(csv_out);
+      }
+
       if(alignment.aligned) ++stats.aligned_reads;
     }
     
@@ -835,17 +937,22 @@ public:
   // }
 
   // Aligning pair-ended sequences
-  bool align(kseq_t *mate1, kseq_t *mate2, FILE *out)
+  bool align(kseq_t *mate1, kseq_t *mate2, FILE *out, FILE *csv_out)
   {
     paired_alignment_t alignment(mate1, mate2);
-    if(not align(alignment))
+    if(not align(alignment, true, out))
       alignment.set_sam_not_aligned();
-    alignment.write(out);
+    if (!report_mems){
+      alignment.write(out);
+    }
+    if (csv){
+      alignment.record_csv(csv_out);
+    }
     return alignment.aligned;
   }
 
   // Aligning pair-ended sequences
-  bool align(paired_alignment_t &al, bool finalize = true)
+  bool align(paired_alignment_t &al, bool finalize = true, FILE* out = nullptr)
   { 
     MTIME_INIT(10);   
     MTIME_START(0); // Timing helper
@@ -855,14 +962,31 @@ public:
     {
       MTIME_START(8); // Timing helper
       // Direction 1
-      // find_seeds(al.mate1, al.mems, 0, MATE_1 | MATE_F);
-      // find_seeds(&al.mate2_rev, al.mems, al.mate1->seq.l, MATE_2 | MATE_RC);
       mem_finder.find_mems(al.mate1, al.mems, 0, MATE_1 | MATE_F);
       mem_finder.find_mems(&al.mate2_rev, al.mems, al.mate1->seq.l, MATE_2 | MATE_RC);
       
       al.n_mems_dir1 = al.mems.size();
       al.n_seeds_dir1 = 0;
-      for ( size_t i = 0; i < al.mems.size(); ++i )
+
+      // Direction 2
+      mem_finder.find_mems(al.mate2, al.mems, 0, MATE_2 | MATE_F);
+      mem_finder.find_mems(&al.mate1_rev, al.mems, al.mate2->seq.l, MATE_1 | MATE_RC );
+
+      al.n_mems_dir2 = al.mems.size() - al.n_mems_dir1;
+      al.n_seeds_dir2 = 0;
+
+      MTIME_END(8); //Timing helper
+      MTIME_START(9); //Timing helper
+
+      mem_finder.populate_seeds(al.mems, report_mems);
+
+      MTIME_END(9); //Timing helper
+
+      if (csv)
+        calculate_MEM_stats(al.mems, al.csv_m1);
+
+      // Direction 1
+      for ( size_t i = 0; i < al.n_mems_dir1; ++i )
       {
         al.n_seeds_dir1 += al.mems[i].occs.size();
         al.avg_seed_length_dir1 += al.mems[i].len;
@@ -875,20 +999,14 @@ public:
         al.avg_w_seed_length_dir1 /= al.n_seeds_dir1;
         al.armonic_avg_seed_length_dir1 = (double)al.n_mems_dir1 / al.armonic_avg_seed_length_dir1;
       }
-      // Direction 2
-      // find_seeds(al.mate2, al.mems, 0, MATE_2 | MATE_F);
-      // find_seeds(&al.mate1_rev, al.mems, al.mate2->seq.l, MATE_1 | MATE_RC );
-      mem_finder.find_mems(al.mate2, al.mems, 0, MATE_2 | MATE_F);
-      mem_finder.find_mems(&al.mate1_rev, al.mems, al.mate2->seq.l, MATE_1 | MATE_RC );
 
-      al.n_mems_dir2 = al.mems.size() - al.n_mems_dir1;
-      al.n_seeds_dir2 = 0;
+      // Direction 2
       for ( size_t i = al.n_mems_dir1; i < al.mems.size(); ++i )
       {
         al.n_seeds_dir2 += al.mems[i].occs.size();
         al.avg_seed_length_dir2 += al.mems[i].len;
         al.avg_w_seed_length_dir2 += al.mems[i].len * al.mems[i].occs.size();
-        al.armonic_avg_seed_length_dir2 += (double)al.mate1->seq.l / (double)al.mems[i].len;
+        al.armonic_avg_seed_length_dir2 += (double)al.mate2->seq.l / (double)al.mems[i].len;
       }
       if (al.n_mems_dir2 > 0) 
       {
@@ -899,14 +1017,20 @@ public:
 
       // Make a decision based on the MEMs
       if ((al.avg_seed_length_dir1 > al.avg_seed_length_dir2) and ((al.avg_seed_length_dir1 - al.avg_seed_length_dir2) > dir_thr))
+      {
+        for (size_t i = al.n_mems_dir1; i < al.mems.size(); ++i){
+          al.csv_m1.num_mems_filter += al.mems[i].occs.size();
+        }
         al.mems.erase(al.mems.begin() + al.n_mems_dir1, al.mems.end());
+      }
       if ((al.avg_seed_length_dir2 > al.avg_seed_length_dir1) and ((al.avg_seed_length_dir2 - al.avg_seed_length_dir1) > dir_thr))
+      {
+        for (size_t i = 0; i < al.n_mems_dir1; ++i){
+          al.csv_m1.num_mems_filter += al.mems[i].occs.size();
+        }
         al.mems.erase(al.mems.begin(), al.mems.begin()  + al.n_mems_dir1);
+      }
 
-      MTIME_END(8); //Timing helper
-      MTIME_START(9); //Timing helper
-      
-      mem_finder.populate_seeds(al.mems);
       al.n_seeds_dir1 = 0;
       al.n_seeds_dir2 = 0;
       for (size_t i = 0; i < al.mems.size(); ++i)
@@ -927,20 +1051,88 @@ public:
       {
         al.avg_w_seed_length_dir2 /= al.n_seeds_dir2;
       }
-      MTIME_END(9); //Timing helper
 
+      if (filter_freq)
+        seed_freq_filter(al.mems, freq_thr, al.csv_m1);
     }
     else
     {
-      mem_finder.find_seeds(al.mate1, al.mems, 0, MATE_1 | MATE_F);
-      mem_finder.find_seeds(&al.mate1_rev, al.mems, al.mate2->seq.l, MATE_1 | MATE_RC);
-      mem_finder.find_seeds(al.mate2, al.mems, 0, MATE_2 | MATE_F);
-      mem_finder.find_seeds(&al.mate2_rev, al.mems, al.mate1->seq.l, MATE_2 | MATE_RC);
+      MTIME_START(8);
+      mem_finder.find_mems(al.mate1, al.mems, 0, MATE_1 | MATE_F);
+      mem_finder.find_mems(&al.mate1_rev, al.mems, al.mate2->seq.l, MATE_1 | MATE_RC);
+      mem_finder.find_mems(al.mate2, al.mems, 0, MATE_2 | MATE_F);
+      mem_finder.find_mems(&al.mate2_rev, al.mems, al.mate1->seq.l, MATE_2 | MATE_RC);
+      MTIME_END(8);
+      MTIME_START(9);
+      mem_finder.populate_seeds(al.mems, report_mems);
+      MTIME_END(9);
+
+      if (csv)
+        calculate_MEM_stats(al.mems, al.csv_m1);
+      if (filter_freq)
+        seed_freq_filter(al.mems, freq_thr, al.csv_m1);
     }
     // find_mems(al.mate1, al.mems, 0, MATE_1 | MATE_F);
     // find_mems(&al.mate1_rev, al.mems, al.mate2->seq.l, MATE_1 | MATE_RC );
     // find_mems(al.mate2, al.mems, 0, MATE_2 | MATE_F);
     // find_mems(&al.mate2_rev, al.mems, al.mate1->seq.l, MATE_2 | MATE_RC);
+
+    // If reporting just the MEMs, at this point can directly write to the SAM file and skip the rest.
+    if (report_mems && out != nullptr)
+    {
+      MTIME_END(0); //Timing helper
+      // Cannot modify mate 1 and mate 2 directly. Instead have to create new kseq_t variables to do this. 
+      kseq_t mem_m1_read;
+      kseq_t mem_m2_read;
+      nullptr_kseq_t(&mem_m1_read); // For FASTA reads to ensure nullptr for qual
+      nullptr_kseq_t(&mem_m2_read); // For FASTA reads to ensure nullptr for qual
+
+      // Loop throught the MEMs of the paired-end read and write to the SAM file
+      for (int i = 0; i < al.mems.size(); ++i){
+        if (al.mems[i].mate == (MATE_1 | MATE_F) || al.mems[i].mate == (MATE_1 | MATE_RC)){
+          if (al.mems[i].mate & MATE_RC)
+            copy_partial_kseq_t(&mem_m1_read, &al.mate1_rev, al.mems[i].idx, al.mems[i].len);
+          else
+            copy_partial_kseq_t(&mem_m1_read, al.mate1, al.mems[i].idx, al.mems[i].len);
+          for (int j = 0; j < al.mems[i].occs.size(); ++j){
+            sam_t m1_sam = sam_t(&mem_m1_read);
+            m1_sam.cigar = std::to_string(al.mems[i].len) + "M";
+            const auto ref = idx.index(al.mems[i].occs[j]);
+            m1_sam.pos = ref.second + 1;
+            m1_sam.rname = ref.first;
+            if (al.mems[i].mate & MATE_RC)
+              m1_sam.flag = SAM_SECONDARY_ALIGNMENT | SAM_REVERSED;
+            else
+              m1_sam.flag = SAM_SECONDARY_ALIGNMENT;
+            write_sam(out, m1_sam);
+          }
+          free_kseq_t(&mem_m1_read);
+        }
+        else{
+          if (al.mems[i].mate & MATE_RC)
+            copy_partial_kseq_t(&mem_m2_read, &al.mate2_rev, al.mems[i].idx, al.mems[i].len);
+          else
+            copy_partial_kseq_t(&mem_m2_read, al.mate2, al.mems[i].idx, al.mems[i].len);
+          for (int j = 0; j < al.mems[i].occs.size(); ++j) {
+            sam_t m2_sam = sam_t(&mem_m2_read);
+            m2_sam.cigar = std::to_string(al.mems[i].len) + "M";
+            const auto ref = idx.index(al.mems[i].occs[j]);
+            m2_sam.pos = ref.second + 1;
+            m2_sam.rname = ref.first;
+            if (al.mems[i].mate & MATE_RC)
+              m2_sam.flag = SAM_SECONDARY_ALIGNMENT | SAM_REVERSED;
+            else
+              m2_sam.flag = SAM_SECONDARY_ALIGNMENT;
+            write_sam(out, m2_sam);
+          }
+          free_kseq_t(&mem_m2_read);
+        }
+      }
+
+      MTIME_TSAFE_MERGE;
+      al.aligned = true;
+      return al.aligned;
+    }
 
     // Compute fraction of repetitive seeds
     al.frac_rep_m1 = compute_frac_rep(al.mems, al.mate1->seq.l, MATE_1);
@@ -1088,9 +1280,22 @@ public:
     // get the occurrences of the top 4 best scores
     std::set<size_t> different_scores;
     size_t i = 0;
+    std::vector<std::pair<size_t, size_t >> mate1_left_mem_vec;
+    std::vector<std::pair<size_t, size_t >> mate2_left_mem_vec;
+
     while (i < al.chains.size() and different_scores.size() < k)
     {
         different_scores.insert(al.chains[i].score);
+
+        // Do pre-emptive check to see whether lifted left MEM pos of mate1 and mate2 chain i match a previous chain, if so skip chain
+        if (left_mem_check){
+          if (check_paired_left_MEM(mate1_left_mem_vec, mate2_left_mem_vec, al, i)){
+            ++i;
+            al.csv_m1.num_chains_skipped++;
+            continue;
+          }
+        }
+
         if (different_scores.size() < k)
         {
           // Align the chain
@@ -1184,7 +1389,72 @@ public:
   }
 
 
+  // Check whether the left most MEM lifted over REF position is within certain distance of previous left most MEM lifted over REF positions.
+  // Pre-emptive check to see whether the chain we are going to fully align will liftover to the position of a previous chain. 
+  // If this is the case, then do not spend time to do the full alignment if its likely going to be discarded anyways.
+  bool check_paired_left_MEM(
+    std::vector<std::pair<size_t, size_t >>& mate1_left_mem_vec,
+    std::vector<std::pair<size_t, size_t >>& mate2_left_mem_vec,
+    paired_alignment_t& al,
+    size_t i)
+  {
+    // Get the chain
+    auto& chain = al.chains[i];
+    // Reverse the chain order [Have to undo this afterwards]
+    chain.reverse();
 
+    // Extract the ref position of the leftmost anchor of the current chain for each mate
+    size_t mate1_left_mem_pos, mate1_left_mem_ref_pos, mate2_left_mem_pos, mate2_left_mem_ref_pos;
+    
+    // Extract the leftmost MEM of the chain from mate 1 
+    for(size_t j = 0; j < chain.anchors.size(); ++j)
+    {
+      size_t anchor_id = chain.anchors[j];
+      if ((al.mems[al.anchors[anchor_id].first].mate & MATE_2) == 0){
+        mate1_left_mem_pos = al.mems[al.anchors[anchor_id].first].occs[al.anchors[anchor_id].second];
+        const auto lift = idx.lift(mate1_left_mem_pos);
+        const auto lft_ref = idx.index(lift);
+        mate1_left_mem_ref_pos = lft_ref.second + 1;
+        break;
+      }
+    }
+
+    // Extract the leftmost MEM of the chain from mate 2
+    for(size_t j = 0; j < chain.anchors.size(); ++j)
+    {
+      size_t anchor_id = chain.anchors[j];
+      if ((al.mems[al.anchors[anchor_id].first].mate & MATE_2) != 0){
+        mate2_left_mem_pos = al.mems[al.anchors[anchor_id].first].occs[al.anchors[anchor_id].second];
+        const auto lift = idx.lift(mate2_left_mem_pos);
+        const auto lft_ref = idx.index(lift);
+        mate2_left_mem_ref_pos = lft_ref.second + 1;
+        break;
+      }
+    }
+
+    // Check to see if the leftmost MEM of each chain has lifted over position corresponding to previously seen chain
+    bool discovered = false;
+    for (size_t j = 0; j < mate1_left_mem_vec.size(); ++j){
+      if ((dist(mate1_left_mem_vec[j].first, mate1_left_mem_ref_pos) < region_dist) 
+      and (dist(mate2_left_mem_vec[j].first, mate2_left_mem_ref_pos) < region_dist)){
+        if (mate1_left_mem_vec[j].second == al.chains[i].score){
+          discovered = true;
+        }
+      }
+    }
+
+    // If discovered then likely current chain is the same as another previously seen chain
+    if (discovered){
+      chain.reset(); // Get original chain order
+      return true;
+    }
+    else{
+      chain.reset(); // Get the original chain order
+      mate1_left_mem_vec.push_back(std::make_pair(mate1_left_mem_ref_pos, al.chains[i].score));
+      mate2_left_mem_vec.push_back(std::make_pair(mate2_left_mem_ref_pos, al.chains[i].score));
+      return false;
+    }
+  }
 
 
   bool orphan_recovery(
@@ -1518,6 +1788,109 @@ public:
 
   // }
 
+  // Calculate fields for csv MEM stats file
+  inline void calculate_MEM_stats(
+    const std::vector<mem_t>& mems,
+    csv_t& csv
+  )
+  {
+    // Number of unique MEMs
+    csv.num_uniq_mems = mems.size();
+    // Total number of MEM occurances
+    for ( size_t i = 0; i < mems.size(); ++i){
+      csv.total_mem_occ += mems[i].total_occ;
+      csv.num_mems_filter += mems[i].num_filtered;
+    } 
+    // MEM frequency per pangenome and highest and lowest occurance of MEM on any one genome (after seed filter)
+    for ( size_t i = 0; i < mems.size(); ++i)
+    {
+      double mem_freq = (mems[i].occs.size() / (static_cast<double> (csv.total_mem_occ)));
+      csv.max_mem_freq = (csv.max_mem_freq > mem_freq ? csv.max_mem_freq : mem_freq);
+      csv.min_mem_freq = (csv.min_mem_freq > mem_freq ? mem_freq : csv.min_mem_freq);
+      
+      // Iterate through key value pairs and find the high and lowest occurance of a MEM on any particular genome
+      for (auto it = mems[i].count_dict.begin(); it != mems[i].count_dict.end(); ++it) 
+      {
+        if (csv.high_occ_mem == 0 && csv.low_occ_mem == 0)
+        {
+          csv.high_occ_mem = it->second;
+          csv.low_occ_mem = it->second;
+        }
+        else
+        {
+          csv.high_occ_mem = (csv.high_occ_mem > it->second ? csv.high_occ_mem : it->second);
+          csv.low_occ_mem = (csv.low_occ_mem > it->second ? it->second : csv.low_occ_mem);
+        }
+      }
+    }
+  }
+
+  // Filter seeds by frequency of occurance
+  inline void seed_freq_filter(
+    std::vector<mem_t>& mems,
+    const double freq,
+    csv_t& csv
+  )
+  {
+    size_t total_mem_occ = 0;
+    std::vector<size_t> delete_ind;
+
+    // Calculate the total number of occurance of MEMs
+    for ( size_t i = 0; i < mems.size(); ++i)
+      total_mem_occ += mems[i].occs.size(); 
+
+    // Find the indices of MEMs that have occurance freq greater than threshold freq
+    for ( size_t i = 0; i < mems.size(); ++i)
+    {
+      double mem_freq = (static_cast<double> (mems[i].occs.size()) / total_mem_occ);
+      if (mem_freq > freq)
+      {
+        delete_ind.push_back(i);
+        csv.num_mems_filter += (mems[i].occs.size());
+      }
+    }
+
+    // Reverse the delete indices to safely delete
+    std::reverse(delete_ind.begin(), delete_ind.end());
+    for (size_t idx: delete_ind)
+      mems.erase(mems.begin() + idx);
+  }
+
+  //// Filter seeds by number of occurances per ref
+  // inline void seed_occ_filter(
+  //   std::vector<mem_t>& mems,
+  //   const size_t n_seeds_thr,
+  //   csv_t& csv
+  // )
+  // {
+  //   for(size_t i = 0; i < mems.size(); ++i)
+  //   {
+  //     std::map<std::string, size_t> count_dict;
+  //     std::vector<size_t> delete_ind;
+  //     // Keep count of MEMs for each ref, keep track of indices of MEMs > threshold
+  //     for (size_t j = 0; j < mems[i].occs.size(); ++j)
+  //     {
+  //       std::string ref = idx[mems[i].occs[j]];
+  //       auto it = count_dict.find(ref);
+  //       if (it != count_dict.end()) 
+  //       {
+  //         if (count_dict[ref] > n_seeds_thr)
+  //         {
+  //           delete_ind.push_back(j);
+  //           csv.num_mems_filter += 1;
+  //         }
+  //         else
+  //           count_dict[ref]++;
+  //       }
+  //       else
+  //         count_dict[ref] = 1;
+  //     }
+  //     // Reverse the delete indices to safely delete
+  //     std::reverse(delete_ind.begin(), delete_ind.end());
+  //     for (size_t idx: delete_ind)
+  //       mems[i].occs.erase(mems[i].occs.begin() + idx);
+  //   }
+  // }
 
   // Compute the fraction of repetitive seeds
   // Inpired from https://github.com/lh3/bwa/blob/0747fcc09d96ff44ce555f0c258d0f9762c20611/bwamem.c#L291
@@ -1947,7 +2320,8 @@ orphan_paired_score_t paired_chain_orphan_score(
         start = rm_pos + (ll)std::floor(mean - 4*std_dev);
         end = rm_pos + (ll)std::ceil(mean + 4*std_dev);
         maxl(start,(ll)0);
-        minl(end,(ll)n);
+        minl(start,(ll)(n - idx.get_w()));
+        minl(end,(ll)(n - idx.get_w()));
         
         if (start < end)
           score.m2 = fill_orphan(start,end,mate2);  
@@ -1959,7 +2333,8 @@ orphan_paired_score_t paired_chain_orphan_score(
         start = lm_pos + (ll)std::floor(-mean - 4*std_dev);
         end = lm_pos + (ll)std::ceil(-mean + 4*std_dev);
         maxl(start,(ll)0);
-        minl(end,(ll)n);
+        minl(start,(ll)(n - idx.get_w()));
+        minl(end,(ll)(n - idx.get_w()));
 
         if (start < end)
           score.m1 = fill_orphan(start,end,mate1);  
@@ -2124,7 +2499,7 @@ orphan_paired_score_t paired_chain_orphan_score(
     score_t score = {0,0};
     // Extract reference
     size_t ref_occ = start;
-    size_t ref_len = end - start + 1;
+    ll ref_len = end - start + 1;
     char *ref = (char *)malloc(ref_len);
     if(ref_len <= 0)
       assert(ref_len > 0);
@@ -2250,6 +2625,7 @@ orphan_paired_score_t paired_chain_orphan_score(
           score.unmapped_lft = true;
         }
         // free(tmp);
+        free(ez.cigar);
         bam_destroy1(bam);
     }
 
@@ -2408,8 +2784,13 @@ orphan_paired_score_t paired_chain_orphan_score(
     // Compute starting position in reference
     size_t mem_pos = mems[anchors[0].first].occs[anchors[0].second];
     size_t mem_len = mems[anchors.back().first].occs[anchors.back().second] + mems[anchors.back().first].len - mem_pos; // from the strart of the first MEM to the end of the last MEM.
-
-    size_t ref_pos = mem_pos - (lcs_len > 0 ? ez_lc.mqe_t + 1 : 0);
+    size_t ref_pos;
+    // If the condidition is true, it results in the read going unmapped from my testing. 
+    // Acceptable, but ideally clip the left end of the read.
+    if ((lcs_len > 0 ? ez_lc.mqe_t + 1 : 0) > mem_pos)
+      ref_pos = 0;
+    else
+      ref_pos = mem_pos - (lcs_len > 0 ? ez_lc.mqe_t + 1 : 0);
     size_t ref_len = (lcs_len > 0 ? ez_lc.mqe_t + 1 : 0) + mem_len + (rcs_len > 0 ? ez_rc.mqe_t + 1: 0);
     char *ref = (char *)malloc(ref_len);
     assert(ref_len > 0);
@@ -2770,6 +3151,12 @@ orphan_paired_score_t paired_chain_orphan_score(
     sam_hdr_add_line(h, "PG", "ID", "moni", "VN", "0.1.0", NULL);
   }
 
+  std::string to_csv()
+  {
+    std::string header = "Read,Unique,Total,Max_Freq,Min_Freq,Highest_Occ,Lowest_Occ,Filtered,Chains_Skipped\n";
+    return header;
+  }
+
 protected:
     seed_finder_t mem_finder;
     typename seed_finder_t::slp_type& ra;
@@ -2847,11 +3234,19 @@ protected:
     bool filter_seeds = true;
     size_t n_seeds_thr = 5000;
 
+    bool filter_freq = true;  // Filter seed if it occurs with frequency greater than threshold
+    double freq_thr = 0.30;   // Filter seed if it occurs with frequency greater than threshold
+
+    bool left_mem_check = true; // Chain left MEM lift check heuristic
+    bool find_orphan = true; // Perform orphan recovery  
+
     ll max_iter = 50;       // Max number of iterations of the chaining algorithhm
     ll max_pred = 50;       // Max number of predecessor to be considered
     ll max_dist_x = 500;    // Max distance for two anchors to be chained
     ll max_dist_y = 100;    // Max distance for two anchors from the same read to be chained
     bool secondary_chains = false; // Find secondary chains in paired-end setting
+    bool report_mems = false; // Report MEMs instead of read alignment
+    bool csv = false;         // Report MEM statistics in CSV file
 
     chain_config_t chain_config;
 };

@@ -64,6 +64,11 @@ if(NOT SDSL_LIB)
     set(SDSL_LIB ${CMAKE_CURRENT_BINARY_DIR}/lib/libsdsl.a)
     set(DIVSUFSORT_LIB ${CMAKE_CURRENT_BINARY_DIR}/lib/libdivsufsort.a)
     set(DIVSUFSORT64_LIB ${CMAKE_CURRENT_BINARY_DIR}/lib/libdivsufsort64.a)
+    set(SDSL_SRC ${CMAKE_CURRENT_BINARY_DIR}/include CACHE PATH "Path to include dir" FORCE)
+    set(DIVSUFSORT_SRC ${CMAKE_CURRENT_BINARY_DIR}/include CACHE PATH "Path to include dir" FORCE)
+    set(SDSL_LIB ${CMAKE_CURRENT_BINARY_DIR}/lib/libsdsl.a CACHE FILEPATH "Path to libsdsl.a" FORCE)
+    set(DIVSUFSORT_LIB ${CMAKE_CURRENT_BINARY_DIR}/lib/libdivsufsort.a CACHE FILEPATH "Path to libdivsufsort.a" FORCE)
+    set(DIVSUFSORT64_LIB ${CMAKE_CURRENT_BINARY_DIR}/lib/libdivsufsort64.a CACHE FILEPATH "Path to libdivsufsort64.a" FORCE)
 
 else()
     message(STATUS "sdsl library found at ${SDSL_LIB}.")
@@ -190,7 +195,9 @@ if(NOT HTS_LIB)
     endif()
 
     set(HTS_SRC ${CMAKE_CURRENT_BINARY_DIR}/include)
-    set(HTS_LIB ${CMAKE_CURRENT_BINARY_DIR}/lib/libsdsl.a)
+    set(HTS_LIB ${CMAKE_CURRENT_BINARY_DIR}/lib/libhts.so)
+    set(HTS_SRC ${CMAKE_CURRENT_BINARY_DIR}/include CACHE PATH "Path to include dir" FORCE)
+    set(HTS_LIB ${CMAKE_CURRENT_BINARY_DIR}/lib/libhts.so CACHE FILEPATH "Path to libhts.so" FORCE)
 
 else()
     message(STATUS "htslib library found at ${HTS_LIB}.")
@@ -213,7 +220,7 @@ find_program(PFP pfp++)
 if(NOT PFP)
     message(STATUS "pfp not found. Building as an external content.")
     FetchContent_Declare(pfp
-            GIT_REPOSITORY "https://github.com/maxrossi91/pfp"
+            GIT_REPOSITORY "https://github.com/rvarki/pfp"
             GIT_TAG leviosam_integration
     )
 
@@ -229,6 +236,8 @@ if(NOT PFP)
     endif()
     set(PFP ${CMAKE_CURRENT_BINARY_DIR}/bin/pfp++)
     set(PFP_CHECK ${CMAKE_CURRENT_BINARY_DIR}/bin/check)
+    set(PFP ${CMAKE_CURRENT_BINARY_DIR}/bin/pfp++ CACHE FILEPATH "Path to pfp++" FORCE)
+    set(PFP_CHECK ${CMAKE_CURRENT_BINARY_DIR}/bin/check CACHE FILEPATH "Path to check" FORCE)
 
 else()
     message(STATUS "pfp found at ${PFP}.")
@@ -261,7 +270,10 @@ if(NOT largerepair OR NOT preprocess OR NOT postproc)
 
     set(largerepair ${CMAKE_CURRENT_BINARY_DIR}/bin/largeb_irepair)
     set(preprocess ${CMAKE_CURRENT_BINARY_DIR}/bin/procdic)
-    set(postproc ${CMAKE_CURRENT_BINARY_DIR}/bin/irepair)
+    set(postproc ${CMAKE_CURRENT_BINARY_DIR}/bin/postproc)
+    set(largerepair ${CMAKE_CURRENT_BINARY_DIR}/bin/largeb_irepair CACHE FILEPATH "Path to largeb_irepair" FORCE)
+    set(preprocess ${CMAKE_CURRENT_BINARY_DIR}/bin/procdic CACHE FILEPATH "Path to procdic" FORCE)
+    set(postproc ${CMAKE_CURRENT_BINARY_DIR}/bin/postproc CACHE FILEPATH "Path to postproc" FORCE)
 
 
 else()
@@ -292,6 +304,7 @@ if(NOT pfp_thresholds)
     endif()
 
     set(pfp_thresholds ${CMAKE_CURRENT_BINARY_DIR}/bin/pfp_thresholds)
+    set(pfp_thresholds ${CMAKE_CURRENT_BINARY_DIR}/bin/pfp_thresholds CACHE FILEPATH "Path to pfp_thresholds" FORCE)
 
 else()
     message(STATUS "pfp_thresholds found at ${pfp_thresholds}.")

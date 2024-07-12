@@ -5,14 +5,16 @@
 import sys, time, argparse, subprocess, os.path, threading, tempfile
 
 Description = """
-                  __  __  ____  _   _ _____
-                |  \/  |/ __ \| \ | |_   _|
-                | \  / | |  | |  \| | | |
-                | |\/| | |  | | . ` | | |
-                | |  | | |__| | |\  |_| |_
-                |_|  |_|\____/|_| \_|_____|
-                                  ver 0.1.0
-MEM-finder with Multi-Genome references.
+___  ___            _         ___  _ _             
+|  \/  |           (_)       / _ \| (_)            
+| .  . | ___  _ __  _ ______/ /_\ \ |_  __ _ _ __  
+| |\/| |/ _ \| '_ \| |______|  _  | | |/ _` | '_ \ 
+| |  | | (_) | | | | |      | | | | | | (_| | | | |
+\_|  |_/\___/|_| |_|_|      \_| |_/_|_|\__, |_| |_|
+                                        __/ |      
+                                       |___/       
+                                            ver 0.1.0
+A Read Aligner with Multi-Genome References
 
 Build the index for highly repetive files using the approach
 described in
@@ -464,7 +466,7 @@ def build(args):
 
     # ---- Building final data structures
     if args.moni_ms:
-      build_moni_ms_thread = build_helper_thread(name="{}".format(args.output), args=args, counter=2, exe=rlebwt_ms_build)
+      build_moni_ms_thread = build_helper_thread(name="{}".format(args.output), args=args, counter=2, exe=rlebwt_ms_exe)
       build_moni_ms_thread.start()
       build_moni_ms_thread.join()
     if args.moni:
@@ -512,16 +514,26 @@ def query_helper(args, exe, exe_name):
     command += " -b {} -A {} -B {} -O {} -E {} -L {} -l {}".format(args.batch,args.smatch, args.smismatch, args.gapo, args.gape, args.extl, args.minl)
   
   if exe_name == "MONI":
-    command += " -w {} -v {} -x {} -y {}".format(args.max_iter, args.max_pred, args.max_dist_x, args.max_dist_y)
+    command += " -w {} -v {} -x {} -y {} -k {} -j {}".format(args.max_iter, args.max_pred, args.max_dist_x, args.max_dist_y, args.min_chain_mem, args.min_chain_score)
   
   if exe_name == "MONI":
     if args.dir_dis:
       command += " -d"
     if args.seed_dis:
       command += " -s"
+    if args.freq_dis:
+      command += " -f"
+    if args.left_dis:
+      command += " -a"
+    if args.orphan_dis:
+      command += " -u"
     if args.secondary_chains:
       command += " -Z"
-    command += " -D {} -S {} ".format(args.dir_thr,args.seed_thr)
+    if args.report_mems:
+      command += " -m"
+    if args.csv:
+      command += " -c"
+    command += " -D {} -S {} -F {} ".format(args.dir_thr,args.seed_thr,args.freq_thr)
 
   if exe_name != "SPUMONI" and args.grammar == "shaped":
     command += " -q"
@@ -738,6 +750,8 @@ def main():
   align_parser.add_argument('-1', '--mate1',      help='path to the input left end of the reads', type=str)
   align_parser.add_argument('-2', '--mate2',      help='path to the input right end of the reads', type=str)
   align_parser.add_argument('-o', '--output',     help='output directory path', type=str, default='.')
+  align_parser.add_argument('-m', '--report_mems', help='output MEMs rather than read alignments', action='store_true')
+  align_parser.add_argument('-c', '--csv',        help='output MEM statistics to CSV file', action='store_true')
   align_parser.add_argument('-t', '--threads',    help='number of helper threads', default=1, type=int)
   align_parser.add_argument('-b', '--batch',      help='number of reads per thread batch', default=512, type=int)
   align_parser.add_argument('-g', '--grammar',    help='select the grammar (only for moni and phoni) [plain, shaped]', type=str, default='plain')
@@ -747,6 +761,8 @@ def main():
   align_parser.add_argument('-v', '--max_pred',   help='max number of predecessors to be considered in chaining algorithm', type=int, default=50)
   align_parser.add_argument('-x', '--max_dist_x', help='max distance for two anchors to be chained', type=int, default=500)
   align_parser.add_argument('-y', '--max_dist_y', help='max distance for two anchors from the same read to be chained', type=int, default=100)
+  align_parser.add_argument('-k', '--min_chain_mem', help='minimum number of MEMs that have to belong to a chain', type=int, default=1)
+  align_parser.add_argument('-j', '--min_chain_score', help='minimum chain score', type=int, default=40)
   align_parser.add_argument('-Z', '--secondary_chains', help='Enable finding secondary chains for paired-end reads', action='store_true')
   align_parser.add_argument('-A', '--smatch',     help='match score value', type=int, default=2)
   align_parser.add_argument('-B', '--smismatch',  help='mismatch penalty value', type=int, default=4)
@@ -756,6 +772,10 @@ def main():
   align_parser.add_argument('-D', '--dir-thr',    help='direction filtering threshold.', type=float, default='50.0')
   align_parser.add_argument('-s', '--seed-dis',   help='disable seed filtering.', action='store_true')
   align_parser.add_argument('-S', '--seed-thr',   help='seed filtering threshold.', type=int, default=5000)
+  align_parser.add_argument('-f', '--freq-dis',   help='disable freq filtering.', action='store_true')
+  align_parser.add_argument('-F', '--freq-thr',   help='frequency filtering threshold.', type=float, default=0.30)
+  align_parser.add_argument('-a', '--left-dis',   help='disable chain left mem lift check heuristic', action='store_true')
+  align_parser.add_argument('-u', '--orphan-dis', help='disable orphan recovery for paired-end alignment', action='store_true')
   align_parser.add_argument('--no-lcp',           help='build the moni index without the lcp samples.',action='store_true')
   align_parser.add_argument('--moni',             help='run moni index',action='store_true')
   align_parser.add_argument('--phoni',            help='run phoni index', action='store_true')

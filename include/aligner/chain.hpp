@@ -39,6 +39,16 @@ typedef struct{
             reversed = true;
         }
     }
+
+    void reset()
+    {
+        if (reversed)
+        {
+            std::reverse(anchors.begin(), anchors.end());
+            reversed = false;
+        }
+    }
+
 } chain_t;
 
 // typedef struct{

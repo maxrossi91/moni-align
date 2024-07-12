@@ -48,7 +48,8 @@ struct Args
   size_t w = 10; // sliding window size and its default
   bool store = false; // store the data structure in the file
   bool memo  = false; // print the memory usage
-  bool csv   = false; // print stats on stderr in csv format
+  bool report_mems = false; //report the MEMs in the SAM file
+  bool csv = false; //report MEM statistics in CSV file
   bool rle   = false; // outpt RLBWT
   bool no_lcp = false;       // use index without LCP entries
   std::string patterns = ""; // path to patterns file
@@ -68,6 +69,11 @@ struct Args
   bool filter_seeds = true; // Filter seed if occurs more than threshold
   size_t n_seeds_thr = 5000;   // Filter seed if occurs more than threshold
   
+  bool filter_freq = true; // Filter seed if it occurs with frequency greater than threshold
+  double freq_thr = 0.30; // Filter seed if it occurs with frequency greater than threshold
+
+  bool left_mem_check = true; // Chain left MEM lift check heuristic
+  bool find_orphan = true; // Perform orphan recovery 
 
   // ksw2 parameters
   int8_t smatch = 2;      // Match score default
@@ -86,6 +92,8 @@ struct Args
   ll max_pred = 50;       // Max number of predecessor to be considered
   ll max_dist_x = 500;    // Max distance for two anchors to be chained
   ll max_dist_y = 100;    // Max distance for two anchors from the same read to be chained
+  ll min_chain_mem = 1;   // Minimum number of MEMs that must belong to a chain
+  ll min_chain_score = 40; // Minimum chain score 
   bool secondary_chains = false; // Attempt to find secondary chains in paired-end setting
 
 };
@@ -96,27 +104,35 @@ void parseArgs(int argc, char *const argv[], Args &arg)
   extern char *optarg;
   extern int optind;
 
-  std::string usage("usage: " + std::string(argv[0]) + " infile [-p patterns] [-1 mate1] [-2 mate2] [-o output] [-t threads] [-b batch] [-l len] [-q shaped_slp]  [-L ext_l] [-A smatch] [-B smismatc] [-O gapo] [-E gape] [-d dir_en] [-s seeds_en] [-D dir_thr] [-S seeds_thr] [-n no_lcp] [-c max_iter] [-d max_pred] [-x max_dist_x] [-y max_dist_y] [-Z secondary_chains]\n\n" +
+  std::string usage("usage: " + std::string(argv[0]) + " infile [-p patterns] [-1 mate1] [-2 mate2] [-o output] [-m report_mems] [-c csv] [-t threads] [-b batch] [-l len] [-q shaped_slp]  [-L ext_l] [-A smatch] [-B smismatc] [-O gapo] [-E gape] [-d dir_dis] [-s seeds_dis] [-f freq_dis] [-D dir_thr] [-S seeds_thr] [-F freq_thr] [-n no_lcp] [-c max_iter] [-d max_pred] [-x max_dist_x] [-y max_dist_y] [-k min_chain_mem] [-j min_chain_score] [-Z secondary_chains] [-a left_dis] [-u orphan_dis]\n\n" +
                     "Align the reads in the pattern against the reference index in infile.\n" +
                     "   pattens: [string]  - path to patterns file.\n" +
                     "     mate1: [string]  - path to file with #1 mates paired with mate2.\n" +
                     "     mate2: [string]  - path to file with #2 mates paired with mate1.\n" +
                     "    output: [string]  - output file prefix.\n" +
+                    "report_mems: [boolean] - output MEMs rather than read alignments.\n" +
+                    "       csv: [boolean] - output MEM statistics to CSV file.\n" +
                     "   threads: [integer] - number of threads (def. " + std::to_string(arg.th) + ")\n" +
                     "     batch: [integer] - number of batches per therad pool (def. " + std::to_string(arg.b) + ")\n" + 
                     "       len: [integer] - minimum MEM length (def. " + std::to_string(arg.l) + ")\n" +
                     "shaped_slp: [boolean] - use shaped slp. (def. " + std::to_string(arg.shaped_slp) + ")\n" +
                     "    no-lcp: [boolean] - use the index without the LCP entries. (def. false)\n" +
                     "     ext_l: [integer] - length of reference substring for extension (def. " + std::to_string(arg.ext_len) + ")\n" +
-                    "   dir_dis: [boolean] - enable direction filtering (def. " + std::to_string(arg.filter_dir) + ")\n" +
+                    "   dir_dis: [boolean] - disable direction filtering (def. " + std::to_string(!arg.filter_dir) + ")\n" +
                     "   dir_thr: [float]   - direction filtering threshold (def. " + std::to_string(arg.dir_thr) + ")\n" +
-                    " seeds_dis: [boolean] - enable seed filtering (def. " + std::to_string(arg.filter_dir) + ")\n" +
+                    " seeds_dis: [boolean] - disable seed filtering (def. " + std::to_string(!arg.filter_dir) + ")\n" +
                     " seeds_thr: [float]   - seed filtering threshold (def. " + std::to_string(arg.n_seeds_thr) + ")\n" +
+                    "  freq_dis: [boolean] - disable frequency filtering (def. " + std::to_string(!arg.filter_freq) + ")\n" +
+                    "  freq_thr: [float]   - frequency filtering threshold (def. " + std::to_string(arg.freq_thr) + ")\n" +
                     "  max_iter: [integer] - max number of iterations of the chaining algorithm (def. " + std::to_string(arg.max_iter) + ")\n" +
                     "  max_pred: [integer] - max number of predecessors to be considered in chaining algorithm (def. " + std::to_string(arg.max_pred) + ")\n" +
                     "max_dist_x: [integer] - max distance for two anchors to be chained (def. " + std::to_string(arg.max_dist_x) + ")\n" +
                     "max_dist_y: [integer] - max distance for two anchors from the same read to be chained (def. " + std::to_string(arg.max_dist_y) + ")\n" +
-              "secondary_chains: [boolean] - attempt to find secondary chains for paired-end reads (def. " + std::to_string(arg.secondary_chains) + ")\n" +
+                 "min_chain_mem: [integer] - minimum number of MEMs that have to belong to a chain (def. " + std::to_string(arg.min_chain_mem) + ")\n" +
+               "min_chain_score: [integer] - minimum chain score (def. " + std::to_string(arg.min_chain_score) + ")\n" +
+              "secondary_chains: [boolean] - enable finding secondary chains for paired-end reads (def. " + std::to_string(arg.secondary_chains) + ")\n" +
+                    "  left_dis: [boolean] - disable chain left mem lift check heuristic (def. " + std::to_string(!arg.left_mem_check) + ")\n" +
+                    "orphan_dis: [boolean] - disable orphan recovery for paired-end alignment (def. " + std::to_string(!arg.find_orphan) + ")\n" +
                     "    smatch: [integer] - match score value (def. " + std::to_string(arg.smatch) + ")\n" +
                     " smismatch: [integer] - mismatch penalty value (def. " + std::to_string(arg.smismatch) + ")\n" +
                     "      gapo: [integer] - gap open penalty value (def. " + std::to_string(arg.gapo) + "," + std::to_string(arg.gapo2) + ")\n" +
@@ -124,7 +140,7 @@ void parseArgs(int argc, char *const argv[], Args &arg)
 
   std::string sarg;
   char* s;
-  while ((c = getopt(argc, argv, "ql:hp:o:t:1:2:b:A:B:O:E:L:dsnD:S:w:v:x:y:Z")) != -1)
+  while ((c = getopt(argc, argv, "ql:hp:o:t:1:2:b:A:B:O:E:L:dsfnD:S:F:w:v:x:y:k:j:Zaumc")) != -1)
   {
     switch (c)
     {
@@ -170,6 +186,9 @@ void parseArgs(int argc, char *const argv[], Args &arg)
     case 's':
       arg.filter_seeds = false;
       break;
+    case 'f':
+      arg.filter_freq = false;
+      break;
     case 'n':
       arg.no_lcp = true;
       break;
@@ -180,6 +199,10 @@ void parseArgs(int argc, char *const argv[], Args &arg)
     case 'S':
       sarg.assign(optarg);
       arg.n_seeds_thr = stoi(sarg);
+      break;
+    case 'F':
+      sarg.assign(optarg);
+      arg.freq_thr = stod(sarg);
       break;
     case 'O':
       arg.gapo = arg.gapo2 = strtol(optarg, &s, 10);
@@ -208,8 +231,28 @@ void parseArgs(int argc, char *const argv[], Args &arg)
       sarg.assign(optarg);
       arg.max_dist_y = stoi(sarg);
       break;
+    case 'k':
+      sarg.assign(optarg);
+      arg.min_chain_mem = stoi(sarg);
+      break;
+    case 'j':
+      sarg.assign(optarg);
+      arg.min_chain_score = stoi(sarg);
+      break;
     case 'Z':
       arg.secondary_chains = true;
+      break;
+    case 'a':
+      arg.left_mem_check = false;
+      break;
+    case 'u':
+      arg.find_orphan = false;
+      break;
+    case 'm':
+      arg.report_mems = true;
+      break;
+    case 'c':
+      arg.csv = true;
       break;
     case 'h':
       error(usage);
@@ -245,6 +288,9 @@ typename aligner_t::config_t configurer(Args &args){
   
   config.filter_seeds = args.filter_seeds;  // Filter seed if occurs more than threshold
   config.n_seeds_thr = args.n_seeds_thr;    // Filter seed if occurs more than threshold
+
+  config.filter_freq = args.filter_freq;  // Filter seed if it occurs with frequency greater than threshold
+  config.freq_thr = args.freq_thr;     // Filter seed if it occurs with frequency greater than threshold
   
   // ksw2 parameters
   config.smatch     = args.smatch;      // Match score default
@@ -259,7 +305,14 @@ typename aligner_t::config_t configurer(Args &args){
   config.max_pred   = args.max_pred;    // Max number of predecessor to be considered
   config.max_dist_x = args.max_dist_x;   // Max distance for two anchors to be chained
   config.max_dist_y = args.max_dist_y;   // Max distance for two anchors from the same read to be chained
+  config.min_chain_length = args.min_chain_mem; // Minimum number of MEMs that must belong to a chain 
+  config.min_chain_score = args.min_chain_score; // Minimum chain score
   config.secondary_chains = args.secondary_chains; // Attempt to find secondary chains in paired-end setting
+  config.left_mem_check = args.left_mem_check; // Chain left MEM lift check heuristic
+  config.find_orphan = args.find_orphan; // Perform orphan recovery 
+
+  config.report_mems = args.report_mems; //report the MEMs in the SAM file
+  config.csv = args.csv; //report MEM statistics in CSV file
 
   return config;
 }
@@ -285,6 +338,12 @@ void dispatcher(Args &args){
 
   if(args.patterns != "")
   {
+    // Do check to see if single-end read file exists
+    gzFile fp;
+    if ((fp = gzopen(args.patterns.c_str(), "r")) == 0)
+      error("open() file " + args.patterns + " failed");
+    gzclose(fp);
+
     std::string sam_filename = args.patterns + "_" + base_name + "_" + std::to_string(args.l) + ".sam";
     if(args.output != "")
       sam_filename = args.output;
@@ -295,9 +354,27 @@ void dispatcher(Args &args){
       stats = st_align<aligner_t>(&aligner, args.patterns, sam_filename, args.b);
     else
       stats = mt_align<aligner_t>(&aligner, args.patterns, sam_filename, args.th, args.b);
+
+    // Delete CSV file if not requested by user
+    if (!args.csv){
+      std::string csv_filename = std::string(sam_filename) + ".csv";
+      if (std::remove(csv_filename.c_str()) != 0)
+        error("remove() file " + csv_filename + " failed");
+    }
   }
   else
   {
+    // Do check to see if mate1 and mate2 read file exists
+    gzFile mate1_fp;
+    if ((mate1_fp = gzopen(args.mate1.c_str(), "r")) == 0)
+      error("open() file " + args.mate1 + " failed");
+    gzclose(mate1_fp);
+
+    gzFile mate2_fp;
+    if ((mate2_fp = gzopen(args.mate2.c_str(), "r")) == 0)
+      error("open() file " + args.mate2 + " failed");
+    gzclose(mate2_fp);
+
     std::string sam_filename = args.mate1 + "_" + base_name + "_" + std::to_string(args.l) + ".sam";
     if(args.output != "")
       sam_filename = args.output;
@@ -308,6 +385,13 @@ void dispatcher(Args &args){
       stats = st_align<aligner_t>(&aligner, args.mate1, sam_filename, args.b, args.mate2 );
     else
       stats = mt_align<aligner_t>(&aligner, args.mate1, sam_filename, args.th, args.b, args.mate2);
+
+    // Delete CSV file if not requested by user
+    if (!args.csv){
+      std::string csv_filename = std::string(sam_filename) + ".csv";
+      if (std::remove(csv_filename.c_str()) != 0)
+        error("remove() file " + csv_filename + " failed");
+    }
   }
 
   stats.print();

@@ -102,6 +102,7 @@ struct mt_param_t
   aligner_t *aligner;
   std::string pattern_filename;
   std::string sam_filename;
+  std::string csv_filename;
   size_t start;
   size_t end;
   size_t wk_id;
@@ -120,10 +121,14 @@ void *mt_align_worker(void *param)
   statistics_t stats;
 
   FILE *sam_fd;
+  FILE *csv_fd;
   gzFile fp;
 
   if ((sam_fd = fopen(p->sam_filename.c_str(), "w")) == nullptr)
     error("open() file " + p->sam_filename + " failed");
+
+  if ((csv_fd = fopen(p->csv_filename.c_str(), "w")) == nullptr)
+    error("open() file " + p->csv_filename + " failed");
 
   size_t b_size = p->b_size;
   if (p->seq != nullptr)
@@ -135,7 +140,7 @@ void *mt_align_worker(void *param)
     {
       for (size_t i = 0; i < l; ++i)
       {
-        if (p->aligner->align(&b->buf[i], sam_fd))
+        if (p->aligner->align(&b->buf[i], sam_fd, csv_fd))
           stats.aligned_reads++;        
         stats.processed_reads++;
       }
@@ -151,52 +156,43 @@ void *mt_align_worker(void *param)
     kpbseq_t *b = kpbseq_init();
     int l = 0;
 
+    kpbseq_t *learn_b = kpbseq_init();
+
     bool learning = true;
-    std::vector<std::vector<typename aligner_t::paired_alignment_t>> alignments;
-    std::vector<kpbseq_t *> memo;
+    kpbseq_t *memo;
+
     while ((l = mt_kpbseq_read(b, mate1, mate2, b_size)) > 0)
     {
       if (learning)
       {
-        memo.push_back(kpbseq_init());
-        copy_kpbseq_t(memo.back(), b);
-        alignments.push_back(std::vector<typename aligner_t::paired_alignment_t>(l));
-        if (p->aligner->learn_fragment_model(memo.back(), alignments.back()))
+        kpbseq_append(learn_b, b);
+        memo = kpbseq_init();
+        copy_kpbseq_t(memo, b);
+        if (p->aligner->learn_fragment_model(memo))
         {
-          for (size_t i = 0; i < alignments.size(); ++i)
-          {
-            stats += p->aligner->finalize_learning(alignments[i], sam_fd);
-            kpbseq_destroy(memo[i]);
-            alignments[i].clear();alignments[i].shrink_to_fit();
-          }
-          memo.clear(); memo.shrink_to_fit();
-          alignments.clear(); alignments.shrink_to_fit();
           learning = false;
+          kpbseq_destroy(memo);
+          break;
         }
-      }
-      else
-      {
-        stats += p->aligner->align(b, sam_fd);
-        if(stats.processed_reads % 10000 == 0) std::cout << ".";
+        kpbseq_destroy(memo);
       }
     }
 
-    // Finalize the learned reads if there are no reads left.
-    for (size_t i = 0; i < alignments.size(); ++i)
-    {
-      stats += p->aligner->finalize_learning(alignments[i], sam_fd);
-      kpbseq_destroy(memo[i]);
-      alignments[i].clear();alignments[i].shrink_to_fit();
+    // Do the full alignment on the learning reads
+    stats += p->aligner->align(learn_b, sam_fd, csv_fd);
+    kpbseq_destroy(learn_b);
+    // Align the remaining reads available
+    while ((l = mt_kpbseq_read(b, mate1, mate2, b_size)) > 0){
+      stats += p->aligner->align(b, sam_fd, csv_fd);
+      if(stats.processed_reads % 10000 == 0) std::cout << ".";
     }
-    memo.clear(); memo.shrink_to_fit();
-    alignments.clear(); alignments.shrink_to_fit();
-
     kpbseq_destroy(b);
   }
 
   verbose("Number of aligned reads block ", p->wk_id, " : ", stats.aligned_reads, "/", stats.processed_reads);
   p->stats = stats;
   fclose(sam_fd);
+  fclose(csv_fd);
 
   return NULL;
 }
@@ -230,6 +226,7 @@ statistics_t mt_align(aligner_t *aligner, std::string pattern_filename, std::str
     params[i].aligner = aligner;
     params[i].pattern_filename = pattern_filename;
     params[i].sam_filename = sam_filename + "_" + std::to_string(i) + ".sam";
+    params[i].csv_filename = sam_filename + "_" + std::to_string(i) + ".csv";
     params[i].b_size = b_size;
     params[i].seq = seq;
     params[i].mate1 = mate1;
@@ -276,6 +273,20 @@ statistics_t mt_align(aligner_t *aligner, std::string pattern_filename, std::str
       error("remove() file " + params[i].sam_filename + " failed");
   }
 
+  FILE *csv_fd;
+  std::string csv_filename = std::string(sam_filename) + ".csv";
+  if ((csv_fd = fopen(std::string(csv_filename).c_str(), "w")) == nullptr)
+    error("open() file " + std::string(csv_filename) + " failed");
+  
+  fprintf(csv_fd, "%s", aligner->to_csv().c_str());
+
+  for (size_t i = 0; i < n_threads; ++i)
+  {
+    append_file(params[i].csv_filename, csv_fd);
+    if (std::remove(params[i].csv_filename.c_str()) != 0)
+      error("remove() file " + params[i].csv_filename + " failed");
+  }
+
   xpthread_mutex_destroy(&mutex_reads_dispatcher, __LINE__, __FILE__);
 
   verbose("Number of aligned reads: ", stats.aligned_reads, "/", stats.processed_reads);
@@ -288,6 +299,7 @@ statistics_t mt_align(aligner_t *aligner, std::string pattern_filename, std::str
 template <typename aligner_t>
 statistics_t st_align(aligner_t *aligner, std::string pattern_filename, std::string sam_filename, size_t b_size, std::string mate2_filename = "")
 {
+  std::string csv_filename = std::string(sam_filename) + ".csv";
   size_t pn_reads = 0;
   statistics_t stats;
 
@@ -310,6 +322,7 @@ statistics_t st_align(aligner_t *aligner, std::string pattern_filename, std::str
 
   int l;
   FILE *sam_fd;
+  FILE *csv_fd;
 
   // sam_filename += ".sam";
 
@@ -317,6 +330,11 @@ statistics_t st_align(aligner_t *aligner, std::string pattern_filename, std::str
     error("open() file " + sam_filename + " failed");
 
   fprintf(sam_fd, "%s", aligner->to_sam().c_str());
+
+  if ((csv_fd = fopen(csv_filename.c_str(), "w")) == nullptr)
+    error("open() file " + csv_filename + " failed");
+
+  fprintf(csv_fd, "%s", aligner->to_csv().c_str());
 
   if (seq != nullptr)
   {
@@ -326,7 +344,7 @@ statistics_t st_align(aligner_t *aligner, std::string pattern_filename, std::str
     {
       for (size_t i = 0; i < l; ++i)
       {
-        if (aligner->align(&b->buf[i], sam_fd))
+        if (aligner->align(&b->buf[i], sam_fd, csv_fd))
           stats.aligned_reads++;
         stats.processed_reads++;
         if(stats.processed_reads % 10000 == 0) std::cout << ".";
@@ -339,36 +357,34 @@ statistics_t st_align(aligner_t *aligner, std::string pattern_filename, std::str
     kpbseq_t *b = kpbseq_init();
     int l = 0;
     bool learning = true;
-    std::vector< std::vector<typename aligner_t::paired_alignment_t>> alignments;
-    std::vector<kpbseq_t *> memo;
+    kpbseq_t *memo;
+
+    kpbseq_t *learn_b = kpbseq_init();
+
     while ((l = kpbseq_read(b, mate1, mate2, b_size)) > 0)
     {
       if(learning)
       {
-        memo.push_back(kpbseq_init());
-        copy_kpbseq_t(memo.back(), b);
-        alignments.push_back(std::vector<typename aligner_t::paired_alignment_t>(l));
-        if (aligner->learn_fragment_model(memo.back(), alignments.back()))
+        kpbseq_append(learn_b, b);
+        memo = kpbseq_init();
+        copy_kpbseq_t(memo, b);
+        if (aligner->learn_fragment_model(memo))
         {
-          for( size_t i = 0; i < alignments.size(); ++i ){
-            stats += aligner->finalize_learning(alignments[i], sam_fd);
-            kpbseq_destroy(memo[i]);
-            alignments[i].clear(); alignments[i].shrink_to_fit();
-          } 
-          memo.clear(); memo.shrink_to_fit();
-          alignments.clear(); alignments.shrink_to_fit();
           learning = false;
+          kpbseq_destroy(memo);
+          break;
         }
-      }
-      else
-      {
-        stats += aligner->align(b,sam_fd);
-        if(stats.processed_reads % 10000 == 0) std::cout << ".";
+        kpbseq_destroy(memo);
       }
     }
-    if ((stats.processed_reads - pn_reads) > 1000000) {
-      verbose("Number of processed reads: ", stats.processed_reads);
-      pn_reads = stats.processed_reads;
+    
+    // Do the full alignment on the learning reads
+    stats += aligner->align(learn_b, sam_fd, csv_fd);
+    kpbseq_destroy(learn_b);
+    // Align the remaining reads available
+    while ((l = mt_kpbseq_read(b, mate1, mate2, b_size)) > 0){
+      stats += aligner->align(b, sam_fd, csv_fd);
+      if(stats.processed_reads % 10000 == 0) std::cout << ".";
     }
     kpbseq_destroy(b);
   }
@@ -385,6 +401,7 @@ statistics_t st_align(aligner_t *aligner, std::string pattern_filename, std::str
   }
   gzclose(fp);
   fclose(sam_fd);
+  fclose(csv_fd);
 
   return stats;
 }
