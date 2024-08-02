@@ -221,7 +221,7 @@ if(NOT PFP)
     message(STATUS "pfp not found. Building as an external content.")
     FetchContent_Declare(pfp
             GIT_REPOSITORY "https://github.com/rvarki/pfp"
-            GIT_TAG leviosam_integration
+            GIT_TAG leviosam_integration_gcc12_fix
     )
 
     if(NOT pfp_POPULATED)
