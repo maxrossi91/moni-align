@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.15)
+cmake_minimum_required(VERSION 3.5.0)
 include_guard(GLOBAL)
 set(CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/CMakeModules")
 
@@ -71,7 +71,7 @@ if (NOT HTS_LIB)
     SOURCE_DIR ${CMAKE_CURRENT_LIST_DIR}/thirdparty/htslib
     BINARY_DIR ${CMAKE_CURRENT_LIST_DIR}/thirdparty/htslib
     UPDATE_COMMAND autoreconf -i
-    CONFIGURE_COMMAND ./configure --prefix=${CMAKE_CURRENT_BINARY_DIR}
+    CONFIGURE_COMMAND ./configure --prefix=${CMAKE_CURRENT_BINARY_DIR} # Might have to modify
     BUILD_COMMAND $(MAKE)
     INSTALL_COMMAND $(MAKE) install)
   
@@ -86,6 +86,10 @@ endif()
 add_library(htslib STATIC IMPORTED GLOBAL)
 set_property(TARGET htslib PROPERTY IMPORTED_LOCATION ${HTS_LIB})
 target_include_directories(htslib INTERFACE ${HTS_SRC})    
+
+# Create HTSlib.cmake for PFP
+configure_file(${CMAKE_CURRENT_LIST_DIR}/pipeline/HTSlib.cmake.in ${CMAKE_CURRENT_BINARY_DIR}/HTSlib.cmake @ONLY)
+list(APPEND CMAKE_PREFIX_PATH "${CMAKE_CURRENT_BINARY_DIR}")
 
 # PFP
 find_program(PFP pfp++ PATHS ${CMAKE_RUNTIME_OUTPUT_DIRECTORY})
