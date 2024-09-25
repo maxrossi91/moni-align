@@ -5,3 +5,4 @@
 
 set(HTSlib_INCLUDE_DIRS @HTS_SRC@)
 set(HTSlib_LIBRARIES @HTS_LIB@)
+set(HTSlib_FOUND TRUE)

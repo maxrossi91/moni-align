@@ -46,6 +46,15 @@ include(AddGitSubmodule)
 include(FetchContent)
 include(ExternalProject)
 
+# ZLIB
+find_package(ZLIB REQUIRED)
+if (ZLIB_FOUND)
+    message(STATUS "zlib sources found at ${ZLIB_INCLUDE_DIRS}")
+    message(STATUS "zlib library found at ${ZLIB_LIBRARIES}")
+else()
+    message(FATAL_ERROR "zlib not found!")
+endif()
+
 # SDSL
 find_library(SDSL_LIB sdsl PATHS ${CMAKE_ARCHIVE_OUTPUT_DIRECTORY})
 if (NOT SDSL_LIB)
@@ -60,7 +69,6 @@ else()
   message(STATUS "sdsl library found at ${SDSL_LIB}.")
   message(STATUS "sdsl sources found at ${SDSL_SRC}.")
 endif()
-#list(APPEND CMAKE_INCLUDE_PATH "${SDSL_SRC}")
 
 # HTSLIB
 find_library(HTS_LIB hts PATHS ${CMAKE_LIBRARY_OUTPUT_DIRECTORY})
@@ -93,6 +101,19 @@ configure_file(${CMAKE_CURRENT_LIST_DIR}/pipeline/FindHTSlib.cmake.in ${CMAKE_CU
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_BINARY_DIR}")
 #list(APPEND CMAKE_INCLUDE_PATH "${HTS_SRC}")
 
+# PFP
+list(APPEND CMAKE_INCLUDE_PATH "${SDSL_SRC}" "${HTS_SRC}/htslib")
+find_program(PFP pfp++ PATHS ${CMAKE_RUNTIME_OUTPUT_DIRECTORY})
+if (NOT PFP)
+  message(STATUS "pfp++ not found. Building from submodule")
+  add_git_submodule(${CMAKE_CURRENT_LIST_DIR}/thirdparty/pfp)
+  set(PFP ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/pfp++ CACHE PATH "Path to pfp++ executable" FORCE)
+  set(PFP_CHECK ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/check CACHE PATH "Path to check executable" FORCE)
+else()
+  message(STATUS "pfp++ executable found at ${PFP}")
+endif()
+
+
 # Malloc Count
 set(MALLOC_COUNT_SRC ${CMAKE_CURRENT_LIST_DIR}/thirdparty/malloc_count)
 #list(APPEND CMAKE_INCLUDE_PATH "${MALLOC_COUNT_SRC}") # I need for PFP
@@ -110,16 +131,6 @@ set(KLIB_SRC ${CMAKE_CURRENT_LIST_DIR}/thirdparty/klib)
 add_library(klib INTERFACE)
 target_include_directories(klib INTERFACE ${KLIB_SRC})
 
-# PFP
-find_program(PFP pfp++ PATHS ${CMAKE_RUNTIME_OUTPUT_DIRECTORY})
-if (NOT PFP)
-  message(STATUS "pfp++ not found. Building from submodule")
-  add_git_submodule(${CMAKE_CURRENT_LIST_DIR}/thirdparty/pfp)
-  set(PFP ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/pfp++ CACHE PATH "Path to pfp++ executable" FORCE)
-  set(PFP_CHECK ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/check CACHE PATH "Path to check executable" FORCE)
-else()
-  message(STATUS "pfp++ executable found at ${PFP}")
-endif()
 
 #add_subdirectory(thirdparty)
 
