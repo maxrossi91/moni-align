@@ -32,14 +32,20 @@ set(CMAKE_INSTALL_INCLUDEDIR "include") # This is an hack because include(GUIIns
 if (NOT CMAKE_RUNTIME_OUTPUT_DIRECTORY)
   message(STATUS "CMAKE_RUNTIME_OUTPUT_DIRECTORY not defined. Setting variable to ${CMAKE_CURRENT_BINARY_DIR}/bin")
   set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/bin)
+else()
+  message(STATUS "CMAKE_RUNTIME_OUTPUT_DIRECTORY user defined as ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}")
 endif()
 if (NOT CMAKE_LIBRARY_OUTPUT_DIRECTORY)
   message(STATUS "CMAKE_LIBRARY_OUTPUT_DIRECTORY not defined. Setting variable to ${CMAKE_CURRENT_BINARY_DIR}/lib")
   set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/lib)
+else()
+  message(STATUS "CMAKE_LIBRARY_OUTPUT_DIRECTORY user defined as ${CMAKE_LIBRARY_OUTPUT_DIRECTORY}")
 endif()
 if (NOT CMAKE_ARCHIVE_OUTPUT_DIRECTORY)
   message(STATUS "CMAKE_ARCHIVE_OUTPUT_DIRECTORY not defined. Setting variable to ${CMAKE_LIBRARY_OUTPUT_DIRECTORY}")
   set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_LIBRARY_OUTPUT_DIRECTORY})
+else()
+  message(STATUS "CMAKE_ARCHIVE_OUTPUT_DIRECTORY user defined as ${CMAKE_ARCHIVE_OUTPUT_DIRECTORY}")
 endif()
 
 include(AddGitSubmodule)
@@ -51,13 +57,19 @@ find_package(ZLIB REQUIRED)
 if (ZLIB_FOUND)
     message(STATUS "zlib sources found at ${ZLIB_INCLUDE_DIRS}")
     message(STATUS "zlib library found at ${ZLIB_LIBRARIES}")
+    message(STATUS "Creating zlib global library accessible to all CMakeLists.txt")
+    add_library(zlib STATIC IMPORTED GLOBAL)
+    set_property(TARGET zlib PROPERTY IMPORTED_LOCATION ${ZLIB_LIBRARIES})
+    target_include_directories(zlib INTERFACE ${ZLIB_INCLUDE_DIRS}) 
 else()
     message(FATAL_ERROR "zlib not found!")
 endif()
 
 # SDSL
 find_library(SDSL_LIB sdsl PATHS ${CMAKE_ARCHIVE_OUTPUT_DIRECTORY})
-if (NOT SDSL_LIB)
+find_library(DIVSUFSORT_LIB divsufsort PATHS ${CMAKE_ARCHIVE_OUTPUT_DIRECTORY})
+find_library(DIVSUFSORT64_LIB divsufsort64 PATHS ${CMAKE_ARCHIVE_OUTPUT_DIRECTORY})
+if (NOT SDSL_LIB OR NOT DIVSUFSORT_LIB OR NOT DIVSUFSORT64_LIB)
   message(STATUS "sdsl not found. Building from submodule.")
   add_git_submodule(${CMAKE_CURRENT_LIST_DIR}/thirdparty/sdsl-lite)
   set(SDSL_SRC ${CMAKE_CURRENT_BINARY_DIR}/thirdparty/sdsl-lite/include/ CACHE PATH "Path to sdsl headers" FORCE)
@@ -68,9 +80,34 @@ if (NOT SDSL_LIB)
 else()
   message(STATUS "sdsl library found at ${SDSL_LIB}.")
   message(STATUS "sdsl sources found at ${SDSL_SRC}.")
+  message(STATUS "divsufsort library found at ${DIVSUFSORT_LIB}.")
+  message(STATUS "divsufsort64 library found at ${DIVSUFSORT64_LIB}.")
+  message(STATUS "divsufsort sources found at ${DIVSUFSORT_SRC}.")
+endif()
+
+if (TARGET sdsl AND TARGET divsufsort AND TARGET divsufsort64)
+  # Need to add this for PFP-thresholds
+  target_include_directories(divsufsort INTERFACE ${DIVSUFSORT_SRC})
+  target_include_directories(divsufsort64 INTERFACE ${DIVSUFSORT_SRC})
+else()
+  message(STATUS "Creating sdsl global library accessible to all CMakeLists.txt")
+  add_library(sdsl STATIC IMPORTED GLOBAL)
+  set_property(TARGET sdsl PROPERTY IMPORTED_LOCATION ${SDSL_LIB})
+  target_include_directories(sdsl INTERFACE ${SDSL_SRC})
+
+  message(STATUS "Creating divsufsort global library accessible to all CMakeLists.txt")
+  add_library(divsufsort STATIC IMPORTED GLOBAL)
+  set_property(TARGET divsufsort PROPERTY IMPORTED_LOCATION ${DIVSUFSORT_LIB})
+  target_include_directories(divsufsort INTERFACE ${DIVSUFSORT_SRC})
+
+  message(STATUS "Creating divsufsort64 global library accessible to all CMakeLists.txt")
+  add_library(divsufsort64 STATIC IMPORTED GLOBAL)
+  set_property(TARGET divsufsort64 PROPERTY IMPORTED_LOCATION ${DIVSUFSORT64_LIB})
+  target_include_directories(divsufsort INTERFACE ${DIVSUFSORT_SRC})
 endif()
 
 # HTSLIB
+get_filename_component(CMAKE_RUNTIME_OUTPUT_DIRECTORY_PARENT ${CMAKE_RUNTIME_OUTPUT_DIRECTORY} DIRECTORY) # Get directory above bin directory
 find_library(HTS_LIB hts PATHS ${CMAKE_LIBRARY_OUTPUT_DIRECTORY})
 if (NOT HTS_LIB)
   message(STATUS "htslib library not found. Building from submodule.")
@@ -80,7 +117,7 @@ if (NOT HTS_LIB)
     SOURCE_DIR ${CMAKE_CURRENT_LIST_DIR}/thirdparty/htslib
     BINARY_DIR ${CMAKE_CURRENT_LIST_DIR}/thirdparty/htslib
     UPDATE_COMMAND autoreconf -i
-    CONFIGURE_COMMAND ./configure --prefix=${CMAKE_CURRENT_BINARY_DIR} # Might have to modify
+    CONFIGURE_COMMAND ./configure --prefix=${CMAKE_RUNTIME_OUTPUT_DIRECTORY_PARENT} # Might have to modify
     BUILD_COMMAND $(MAKE)
     INSTALL_COMMAND $(MAKE) install)
   
@@ -92,9 +129,12 @@ else()
 endif()
 
 # This should work since the find_library command should only look in specified lib directory
-add_library(htslib STATIC IMPORTED GLOBAL)
-set_property(TARGET htslib PROPERTY IMPORTED_LOCATION ${HTS_LIB})
-target_include_directories(htslib INTERFACE ${HTS_SRC}) 
+if (NOT TARGET htslib)
+  message(STATUS "Creating htslib global library accessible to all CMakeLists.txt")
+  add_library(htslib STATIC IMPORTED GLOBAL)
+  set_property(TARGET htslib PROPERTY IMPORTED_LOCATION ${HTS_LIB})
+  target_include_directories(htslib INTERFACE ${HTS_SRC})
+endif() 
 
 # Create FindHTSlib.cmake for PFP
 configure_file(${CMAKE_CURRENT_LIST_DIR}/pipeline/FindHTSlib.cmake.in ${CMAKE_CURRENT_BINARY_DIR}/FindHTSlib.cmake @ONLY)
@@ -128,7 +168,7 @@ if(NOT largerepair OR NOT preprocess OR NOT postproc)
     INSTALL_COMMAND "") # make install DESTDIR=${} installs the executables in ${} but ${}/usr/local/bin
                         # make install prefix=${} doesn't seem to work
 
-  # "Move" the executables to the bin directory 
+  # Copy the executables to the bin directory 
   add_custom_command(
     TARGET bigrepair_proj
     POST_BUILD
@@ -138,29 +178,39 @@ if(NOT largerepair OR NOT preprocess OR NOT postproc)
     DEPENDS bigrepair_proj  # Ensure this runs after the project is built
   )
   set(largerepair ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/largeb_irepair CACHE PATH "Path to largeb_irepair" FORCE)
-  set(preprocess ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/procdic CACHE EPATH "Path to procdic" FORCE)
+  set(preprocess ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/procdic CACHE PATH "Path to procdic" FORCE)
   set(postproc ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/postproc CACHE PATH "Path to postproc" FORCE)
 
 else()
   message(STATUS "BigRePair components found at ${largerepair} ${preprocess} ${postproc}.")
 endif()
 
-# Malloc Count
-set(MALLOC_COUNT_SRC ${CMAKE_CURRENT_LIST_DIR}/thirdparty/malloc_count)
-#list(APPEND CMAKE_INCLUDE_PATH "${MALLOC_COUNT_SRC}") # I need for PFP
+# PFP-Thresholds
+find_program(pfp_thresholds pfp_thresholds PATHS ${CMAKE_RUNTIME_OUTPUT_DIRECTORY})
+if (NOT pfp_thresholds)
+  message(STATUS "pfp_thresholds not found. Building as submodule.")
+  add_git_submodule(${CMAKE_CURRENT_LIST_DIR}/thirdparty/pfp-thresholds)
+  set(pfp_thresholds ${CMAKE_CURRENT_BINARY_DIR}/bin/pfp_thresholds CACHE PATH "Path to pfp_thresholds" FORCE)
+else()
+  message(STATUS "pfp_thresholds found at ${pfp_thresholds}.")
+endif()
 
-message(STATUS "Creating malloc count libraries.")
-add_library(malloc_count OBJECT ${MALLOC_COUNT_SRC}/malloc_count.c ${MALLOC_COUNT_SRC}/malloc_count.h)
-target_link_libraries(malloc_count dl)
-target_include_directories(malloc_count PUBLIC "${MALLOC_COUNT_SRC}")
-add_library(memprofile OBJECT ${MALLOC_COUNT_SRC}/memprofile.h)
-target_include_directories(memprofile PUBLIC "${MALLOC_COUNT_SRC}")
+# # Malloc Count
+# set(MALLOC_COUNT_SRC ${CMAKE_CURRENT_LIST_DIR}/thirdparty/malloc_count)
+# #list(APPEND CMAKE_INCLUDE_PATH "${MALLOC_COUNT_SRC}") # I need for PFP
 
-# Klib
-set(KLIB_SRC ${CMAKE_CURRENT_LIST_DIR}/thirdparty/klib)
-#list(APPEND CMAKE_INCLUDE_PATH "${KLIB_SRC}")
-add_library(klib INTERFACE)
-target_include_directories(klib INTERFACE ${KLIB_SRC})
+# message(STATUS "Creating malloc count libraries.")
+# add_library(malloc_count OBJECT ${MALLOC_COUNT_SRC}/malloc_count.c ${MALLOC_COUNT_SRC}/malloc_count.h)
+# target_link_libraries(malloc_count dl)
+# target_include_directories(malloc_count PUBLIC "${MALLOC_COUNT_SRC}")
+# add_library(memprofile OBJECT ${MALLOC_COUNT_SRC}/memprofile.h)
+# target_include_directories(memprofile PUBLIC "${MALLOC_COUNT_SRC}")
+
+# # Klib
+# set(KLIB_SRC ${CMAKE_CURRENT_LIST_DIR}/thirdparty/klib)
+# #list(APPEND CMAKE_INCLUDE_PATH "${KLIB_SRC}")
+# add_library(klib INTERFACE)
+# target_include_directories(klib INTERFACE ${KLIB_SRC})
 
 
 #add_subdirectory(thirdparty)
