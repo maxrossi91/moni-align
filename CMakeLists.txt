@@ -113,6 +113,37 @@ else()
   message(STATUS "pfp++ executable found at ${PFP}")
 endif()
 
+# BigRePair
+find_program(largerepair largeb_irepair PATHS ${CMAKE_RUNTIME_OUTPUT_DIRECTORY})
+find_program(preprocess procdic PATHS ${CMAKE_RUNTIME_OUTPUT_DIRECTORY})
+find_program(postproc postproc PATHS ${CMAKE_RUNTIME_OUTPUT_DIRECTORY})
+if(NOT largerepair OR NOT preprocess OR NOT postproc)
+  message(STATUS "bigrepair not found. Building from submodule")
+  set(CMAKE_INSTALL_PREFIX ${CMAKE_RUNTIME_OUTPUT_DIRECTORY})
+  ExternalProject_Add(
+    bigrepair_proj 
+    SOURCE_DIR ${CMAKE_CURRENT_LIST_DIR}/thirdparty/bigrepair
+    BINARY_DIR ${CMAKE_CURRENT_BINARY_DIR}/thirdparty/bigrepair
+    BUILD_COMMAND $(MAKE)
+    INSTALL_COMMAND "") # make install DESTDIR=${} installs the executables in ${} but ${}/usr/local/bin
+                        # make install prefix=${} doesn't seem to work
+
+  # "Move" the executables to the bin directory 
+  add_custom_command(
+    TARGET bigrepair_proj
+    POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_CURRENT_BINARY_DIR}/thirdparty/bigrepair/procdic ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/
+    COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_CURRENT_BINARY_DIR}/thirdparty/bigrepair/postproc ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/
+    COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_CURRENT_BINARY_DIR}/thirdparty/bigrepair/largeb_repair/largeb_irepair ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/
+    DEPENDS bigrepair_proj  # Ensure this runs after the project is built
+  )
+  set(largerepair ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/largeb_irepair CACHE PATH "Path to largeb_irepair" FORCE)
+  set(preprocess ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/procdic CACHE EPATH "Path to procdic" FORCE)
+  set(postproc ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/postproc CACHE PATH "Path to postproc" FORCE)
+
+else()
+  message(STATUS "BigRePair components found at ${largerepair} ${preprocess} ${postproc}.")
+endif()
 
 # Malloc Count
 set(MALLOC_COUNT_SRC ${CMAKE_CURRENT_LIST_DIR}/thirdparty/malloc_count)
