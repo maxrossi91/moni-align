@@ -1,7 +1,0 @@
-# HTSlib.cmake
-# This module sets the following variables for htslib:
-# HTSLIB_INCLUDE_DIR - the include directory for htslib
-# HTSLIB_LIBRARY - the path to the htslib library
-
-set(HTSLIB_INCLUDE_DIR @HTS_SRC@)
-set(HTSLIB_LIBRARY @HTS_LIB@)

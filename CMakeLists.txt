@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.5.0)
 include_guard(GLOBAL)
-set(CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/CMakeModules")
+set(CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}/CMakeModules")
 
 # Set a default build type if none was specified
 # ------------------------------------------------------------------------------
@@ -60,6 +60,7 @@ else()
   message(STATUS "sdsl library found at ${SDSL_LIB}.")
   message(STATUS "sdsl sources found at ${SDSL_SRC}.")
 endif()
+#list(APPEND CMAKE_INCLUDE_PATH "${SDSL_SRC}")
 
 # HTSLIB
 find_library(HTS_LIB hts PATHS ${CMAKE_LIBRARY_OUTPUT_DIRECTORY})
@@ -85,11 +86,29 @@ endif()
 # This should work since the find_library command should only look in specified lib directory
 add_library(htslib STATIC IMPORTED GLOBAL)
 set_property(TARGET htslib PROPERTY IMPORTED_LOCATION ${HTS_LIB})
-target_include_directories(htslib INTERFACE ${HTS_SRC})    
+target_include_directories(htslib INTERFACE ${HTS_SRC}) 
 
-# Create HTSlib.cmake for PFP
-configure_file(${CMAKE_CURRENT_LIST_DIR}/pipeline/HTSlib.cmake.in ${CMAKE_CURRENT_BINARY_DIR}/HTSlib.cmake @ONLY)
-list(APPEND CMAKE_PREFIX_PATH "${CMAKE_CURRENT_BINARY_DIR}")
+# Create FindHTSlib.cmake for PFP
+configure_file(${CMAKE_CURRENT_LIST_DIR}/pipeline/FindHTSlib.cmake.in ${CMAKE_CURRENT_BINARY_DIR}/FindHTSlib.cmake @ONLY)
+list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_BINARY_DIR}")
+#list(APPEND CMAKE_INCLUDE_PATH "${HTS_SRC}")
+
+# Malloc Count
+set(MALLOC_COUNT_SRC ${CMAKE_CURRENT_LIST_DIR}/thirdparty/malloc_count)
+#list(APPEND CMAKE_INCLUDE_PATH "${MALLOC_COUNT_SRC}") # I need for PFP
+
+message(STATUS "Creating malloc count libraries.")
+add_library(malloc_count OBJECT ${MALLOC_COUNT_SRC}/malloc_count.c ${MALLOC_COUNT_SRC}/malloc_count.h)
+target_link_libraries(malloc_count dl)
+target_include_directories(malloc_count PUBLIC "${MALLOC_COUNT_SRC}")
+add_library(memprofile OBJECT ${MALLOC_COUNT_SRC}/memprofile.h)
+target_include_directories(memprofile PUBLIC "${MALLOC_COUNT_SRC}")
+
+# Klib
+set(KLIB_SRC ${CMAKE_CURRENT_LIST_DIR}/thirdparty/klib)
+#list(APPEND CMAKE_INCLUDE_PATH "${KLIB_SRC}")
+add_library(klib INTERFACE)
+target_include_directories(klib INTERFACE ${KLIB_SRC})
 
 # PFP
 find_program(PFP pfp++ PATHS ${CMAKE_RUNTIME_OUTPUT_DIRECTORY})
