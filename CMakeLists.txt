@@ -52,6 +52,10 @@ include(AddGitSubmodule)
 include(FetchContent)
 include(ExternalProject)
 
+# Set up CMAKE variables that control where to look 
+list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_BINARY_DIR}") #find_package
+list(APPEND CMAKE_PREFIX_PATH "${CMAKE_LIBRARY_OUTPUT_DIRECTORY}" "${CMAKE_ARCHIVE_OUTPUT_DIRECTORY}") #find_library
+
 # ZLIB
 find_package(ZLIB REQUIRED)
 if (ZLIB_FOUND)
@@ -103,7 +107,7 @@ else()
   message(STATUS "Creating divsufsort64 global library accessible to all CMakeLists.txt")
   add_library(divsufsort64 STATIC IMPORTED GLOBAL)
   set_property(TARGET divsufsort64 PROPERTY IMPORTED_LOCATION ${DIVSUFSORT64_LIB})
-  target_include_directories(divsufsort INTERFACE ${DIVSUFSORT_SRC})
+  target_include_directories(divsufsort64 INTERFACE ${DIVSUFSORT_SRC})
 endif()
 
 # HTSLIB
@@ -138,8 +142,6 @@ endif()
 
 # Create FindHTSlib.cmake for PFP
 configure_file(${CMAKE_CURRENT_LIST_DIR}/pipeline/FindHTSlib.cmake.in ${CMAKE_CURRENT_BINARY_DIR}/FindHTSlib.cmake @ONLY)
-list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_BINARY_DIR}")
-#list(APPEND CMAKE_INCLUDE_PATH "${HTS_SRC}")
 
 # PFP
 list(APPEND CMAKE_INCLUDE_PATH "${SDSL_SRC}" "${HTS_SRC}/htslib")
@@ -194,6 +196,17 @@ if (NOT pfp_thresholds)
 else()
   message(STATUS "pfp_thresholds found at ${pfp_thresholds}.")
 endif()
+
+# In project libraries
+#--------------------------------------------------------------------------
+
+if (NOT bigbwt_POPULATED)
+  add_git_submodule(${CMAKE_CURRENT_LIST_DIR}/thirdparty/r-index)
+  set(bigbwt_POPULATED TRUE)
+endif()
+
+
+
 
 # # Malloc Count
 # set(MALLOC_COUNT_SRC ${CMAKE_CURRENT_LIST_DIR}/thirdparty/malloc_count)
