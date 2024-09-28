@@ -24,7 +24,7 @@
 	url = https://github.com/attractivechaos/klib
 [submodule "thirdparty/r-index"]
 	path = thirdparty/r-index
-	url = https://github.com/maxrossi91/r-index.git
+	url = https://github.com/rvarki/r-index.git
 [submodule "thirdparty/ShapedSlp"]
 	path = thirdparty/ShapedSlp
 	url = https://github.com/maxrossi91/ShapedSlp.git

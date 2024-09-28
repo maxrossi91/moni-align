@@ -201,29 +201,50 @@ endif()
 #--------------------------------------------------------------------------
 
 if (NOT bigbwt_POPULATED)
-  add_git_submodule(${CMAKE_CURRENT_LIST_DIR}/thirdparty/r-index)
-  set(bigbwt_POPULATED TRUE)
+  message(STATUS "bigbwt not found. Building as submodule.")
+  add_git_submodule(${CMAKE_CURRENT_LIST_DIR}/thirdparty/Big-BWT)
+  set(bigbwt_POPULATED TRUE CACHE BOOL "Set bigbwt_POPULATED to be TRUE")
+else()
+  message(STATUS "bigbwt found. Do not build from submodule.")
 endif()
 
+# Malloc Count
+if (NOT TARGET malloc_count)
+  message(STATUS "malloc_count not found. Creating library.")
+  set(MALLOC_COUNT_SRC ${CMAKE_CURRENT_LIST_DIR}/thirdparty/malloc_count)
+  add_library(malloc_count OBJECT ${MALLOC_COUNT_SRC}/malloc_count.c ${MALLOC_COUNT_SRC}/malloc_count.h)
+  target_link_libraries(malloc_count dl)
+  target_include_directories(malloc_count PUBLIC "${MALLOC_COUNT_SRC}")
+else()
+  message(STATUS "malloc_count found. Do not create the library.")
+endif()
 
+if (NOT TARGET memprofile)
+  message(STATUS "memprofile not found. Creating library")
+  add_library(memprofile OBJECT ${MALLOC_COUNT_SRC}/memprofile.h)
+  target_include_directories(memprofile PUBLIC "${MALLOC_COUNT_SRC}")
+else()
+  message(STATUS "memprofile found. Do not create the library.")
+endif()
 
+# Klib
+if (NOT TARGET klib)
+  message(STATUS "klib not found. Creating library.")
+  set(KLIB_SRC ${CMAKE_CURRENT_LIST_DIR}/thirdparty/klib)
+  add_library(klib INTERFACE)
+  target_include_directories(klib INTERFACE ${KLIB_SRC})
+else()
+  message(STATUS "klib found. Do not create the library.")
+endif()
 
-# # Malloc Count
-# set(MALLOC_COUNT_SRC ${CMAKE_CURRENT_LIST_DIR}/thirdparty/malloc_count)
-# #list(APPEND CMAKE_INCLUDE_PATH "${MALLOC_COUNT_SRC}") # I need for PFP
-
-# message(STATUS "Creating malloc count libraries.")
-# add_library(malloc_count OBJECT ${MALLOC_COUNT_SRC}/malloc_count.c ${MALLOC_COUNT_SRC}/malloc_count.h)
-# target_link_libraries(malloc_count dl)
-# target_include_directories(malloc_count PUBLIC "${MALLOC_COUNT_SRC}")
-# add_library(memprofile OBJECT ${MALLOC_COUNT_SRC}/memprofile.h)
-# target_include_directories(memprofile PUBLIC "${MALLOC_COUNT_SRC}")
-
-# # Klib
-# set(KLIB_SRC ${CMAKE_CURRENT_LIST_DIR}/thirdparty/klib)
-# #list(APPEND CMAKE_INCLUDE_PATH "${KLIB_SRC}")
-# add_library(klib INTERFACE)
-# target_include_directories(klib INTERFACE ${KLIB_SRC})
+# r-index
+if (NOT r-index_POPULATED)
+  message(STATUS "r-index not found. Building as submodule.")
+  add_git_submodule(${CMAKE_CURRENT_LIST_DIR}/thirdparty/r-index)
+  set(r-index_POPULATED TRUE CACHE BOOL "Set r-index_POPULATED to be TRUE")
+else()
+  message(STATUS "r-index found. Do not build from submodule.")
+endif()
 
 
 #add_subdirectory(thirdparty)
