@@ -246,24 +246,96 @@ else()
   message(STATUS "r-index found. Do not build from submodule.")
 endif()
 
+# ShapedSLP
+if (NOT shaped_slp_POPULATED)
+  message(STATUS "ShapedSLP not found. Building as submodule.")
+  add_git_submodule(${CMAKE_CURRENT_LIST_DIR}/thirdparty/ShapedSlp)
+  set(shaped_slp_SOURCE_DIR ${CMAKE_CURRENT_LIST_DIR}/thirdparty/ShapedSlp CACHE PATH "Path to ShapedSLP root directory" FORCE)
+  set(FOLCA_SOURCE_DIR ${shaped_slp_SOURCE_DIR}/folca)
+  set(SUX_SOURCE_DIR ${shaped_slp_SOURCE_DIR}/external/sux/sux)
+else()
+  message(STATUS "ShapedSLP found. Do not build as submodule.")
+endif()
+
+# SSW
+if (NOT ssw_POPULATED)
+  message(STATUS "Complete Striped Smith Waterman library not found. Creating library")
+  set(ssw_SOURCE_DIR ${CMAKE_CURRENT_LIST_DIR}/thirdparty/Complete-Striped-Smith-Waterman-Library/src CACHE PATH "Path to ssw root directory" FORCE)
+  add_library(ssw OBJECT ${ssw_SOURCE_DIR}/ssw_cpp.cpp ${ssw_SOURCE_DIR}/ssw.c)
+  target_include_directories(ssw PUBLIC ${ssw_SOURCE_DIR}/src)
+  set(ssw_POPULATED TRUE CACHE BOOL "Set ssw_POPULATED to be TRUE")
+else()
+  message(STATUS "Complete Striped Smith Waterman found. Do not create library.")
+endif()
+
+# KSW2
+if (NOT ksw2_POPULATED)
+  message(STATUS "ksw2 library not found. Creating library.")
+  set(ksw2_SOURCE_DIR ${CMAKE_CURRENT_LIST_DIR}/thirdparty/ksw2 CACHE PATH "Path to ksw2 src directory")
+  add_library(ksw2 OBJECT ${ksw2_SOURCE_DIR}/kalloc.c 
+                            ${ksw2_SOURCE_DIR}/ksw2_gg.c 
+                            ${ksw2_SOURCE_DIR}/ksw2_gg2.c 
+                            ${ksw2_SOURCE_DIR}/ksw2_gg2_sse.c 
+                            ${ksw2_SOURCE_DIR}/ksw2_extz.c 
+                            ${ksw2_SOURCE_DIR}/ksw2_extz2_sse.c
+                            ${ksw2_SOURCE_DIR}/ksw2_extd.c 
+                            ${ksw2_SOURCE_DIR}/ksw2_extd2_sse.c 
+                            ${ksw2_SOURCE_DIR}/ksw2_extf2_sse.c 
+                            ${ksw2_SOURCE_DIR}/ksw2_exts2_sse.c)
+  target_include_directories(ksw2 PUBLIC ${ksw2_SOURCE_DIR}/src)
+  set(ksw2_POPULATED TRUE CACHE BOOL "Set ksw2_POPULATED to be TRUE")
+else()
+  message(STATUS "ksw2 library found. Do not create the library.")
+endif()
+
+# LevioSAM
+if (NOT TARGET lvsam)
+  message(STATUS "leviosam library not found. Building as submodule.")
+  add_git_submodule(${CMAKE_CURRENT_LIST_DIR}/thirdparty/levioSAM)
+  set(levioSAM_SOURCE_DIR ${CMAKE_CURRENT_LIST_DIR}/thirdparty/levioSAM/src CACHE PATH "Path to leviosam src directory")
+  target_include_directories(lvsam PUBLIC ${leviosam_SOURCE_DIR} ${CMAKE_INCLUDE_PATH})
+  target_link_libraries(lvsam htslib)
+else()
+  message(STATUS "leviosam library found. Do not create library")
+endif()
+
+# backward
+if (NOT backward_POPULATED)
+  message(STATUS "backward library not found. Building as submodule.")
+  set(BACKWARD_TESTS OFF CACHE BOOL "Avoid building backard-cpp tests")
+  add_git_submodule(${CMAKE_CURRENT_LIST_DIR}/thirdparty/backward-cpp)
+  set(backward_POPULATED TRUE CACHE BOOL "Set backard_POPULATED to be TRUE")
+else()
+   message(STATUS "backard library found. Do not build from submodule.")
+endif()
+
+# Catch2
+if (NOT catch2_POPULATED)
+  message(STATUS "catch2 not found. Building as submodule.")
+  add_git_submodule(${CMAKE_CURRENT_LIST_DIR}/thirdparty/Catch2)
+  set(catch2_POPULATED TRUE CACHE BOOL "Set catch2_POPULATED to be TRUE")
+else()
+  message(STATUS "catch2 found. Do not build from submodule.")
+endif()
+
 
 #add_subdirectory(thirdparty)
 
-
 # Configure the compiler with the appropriate flags
 # ------------------------------------------------------------------------------
-# if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang" OR "${CMAKE_CXX_COMPILER_ID}" STREQUAL "AppleClang")
-#   # using Clang
-#   include(ConfigureCompilerClang)
-# elseif ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU")
-#   # using GCC
-#   include(ConfigureCompilerGcc)
-# else ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU")
-# 	message(FATAL_ERROR "Only the compiler gcc and clang are supported")
-# endif()
+if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang" OR "${CMAKE_CXX_COMPILER_ID}" STREQUAL "AppleClang")
+  # using Clang
+  include(ConfigureCompilerClang)
+elseif ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU")
+  # using GCC
+  include(ConfigureCompilerGcc)
+else ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU")
+	message(FATAL_ERROR "Only the compiler gcc and clang are supported")
+endif()
 
-
+# message(STATUS "Adding include CMakeLists")
 # add_subdirectory(include)
+# message(STATUS "Adding src CMakeLists")
 # add_subdirectory(src)
 # add_subdirectory(test/src)
 # add_subdirectory(utils)
