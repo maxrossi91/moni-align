@@ -347,7 +347,6 @@ add_subdirectory(src)
 # add_subdirectory(test/src)
 message(STATUS "Adding utils CMakeLists")
 add_subdirectory(utils)
-# add_subdirectory(benchmarks/src)
 
 set(PFP_EXE ${PFP})
 set(PFP_CHECK_EXE ${PFP_CHECK})
@@ -369,7 +368,7 @@ configure_file(${PROJECT_SOURCE_DIR}/pipeline/moni.in ${PROJECT_BINARY_DIR}/moni
 install(TARGETS ms mems rlebwt_ms_build extend_ksw2 compress_dictionary build_seqidx TYPE RUNTIME)
 install(TARGETS rlebwt_ms_full_build align_full_ksw2 TYPE RUNTIME)
 install(TARGETS SlpEncBuild TYPE RUNTIME)
-# isntall(TARGETS pfp_thresholds pfp_thresholds64 TYPE RUNTIME)
+# install(TARGETS pfp_thresholds pfp_thresholds64 TYPE RUNTIME)
 install(PROGRAMS ${PROJECT_BINARY_DIR}/moni.install RENAME moni TYPE BIN)
 
 # CPack
@@ -393,7 +392,7 @@ set(CPACK_SOURCE_PACKAGE_FILE_NAME "${CMAKE_PROJECT_NAME}-sources")
 
 set(CPACK_DEBIAN_PACKAGE_MAINTAINER "Massimiliano Rossi")
 set(CPACK_DEBIAN_FILE_NAME DEB-DEFAULT) 
-set(CPACK_COMPONENTS_GROUPING ALL_COMPONENTS_IN_ONE) # Groupp all components
-set (CPACK_DEBIAN_PACKAGE_SHLIBDEPS ON)
+set(CPACK_COMPONENTS_GROUPING ALL_COMPONENTS_IN_ONE) # Group all components
+set(CPACK_DEBIAN_PACKAGE_SHLIBDEPS ON)
 set(CPACK_DEB_COMPONENT_INSTALL YES)
 include(CPack)
