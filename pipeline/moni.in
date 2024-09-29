@@ -30,7 +30,8 @@ version = "@MONI_VERSION@"
 install = @USE_INSTALL_PATH@
 
 dirname                 = os.path.dirname(os.path.abspath(__file__))
-
+if not install:
+  dirname               = "@CMAKE_RUNTIME_OUTPUT_DIRECTORY@" 
 
 bigbwt_dirname          = dirname
 bigrepair_dirname       = dirname
@@ -44,20 +45,7 @@ extend_dirname          = dirname
 spumoni_dirname         = dirname
 phoni_dirname           = dirname
 
-if not install:
-
-  bigbwt_dirname        = os.path.join(dirname, "_deps/bigbwt-build")
-  bigrepair_dirname     = os.path.join(dirname, "_deps/bigrepair-src")
-  thresholds_dirname    = os.path.join(dirname, "_deps/pfp_thresholds-build/test/src")
-  compress_dirname      = os.path.join(dirname, "src")
-  shaped_slp_dirname    = os.path.join(dirname, "_deps/shaped_slp-build")
-  repair_dirname        = os.path.join(bigrepair_dirname, "repair")
-  largeb_repair_dirname = os.path.join(bigrepair_dirname, "largeb_repair")
-  align_dirname         = os.path.join(dirname, "src/align")
-  extend_dirname        = os.path.join(dirname, "src/extend")
-  spumoni_dirname       = os.path.join(dirname, "src/spumoni")
-  phoni_dirname         = os.path.join(dirname, "src/phoni")
-
+#############################################################################
 
 pfp                     = "@PFP_EXE@"
 pfp_check               = "@PFP_CHECK_EXE@"
