@@ -70,18 +70,14 @@ After installing the dependencies, the following steps can be run to build the p
 ```
 git clone https://github.com/maxrossi91/moni-align.git
 cd moni-align
+git submodule update --init --recursive
 mkdir build
 cd build
 cmake ..
 make
 ```
 
-2. Set the LD_LIBRARY_PATH environment variable
-```
-export LD_LIBRARY_PATH="${LD_LIBRARY_PATH}:$PWD/thirdparty/lib"
-```
-
-3. Run the `moni` help command
+2. Run the `moni` help command
 ```
 ./moni -h
 ```
