@@ -27,7 +27,7 @@
 	url = https://github.com/rvarki/r-index.git
 [submodule "thirdparty/ShapedSlp"]
 	path = thirdparty/ShapedSlp
-	url = https://github.com/maxrossi91/ShapedSlp.git
+	url = https://github.com/rvarki/ShapedSlp.git
 [submodule "thirdparty/Complete-Striped-Smith-Waterman-Library"]
 	path = thirdparty/Complete-Striped-Smith-Waterman-Library
 	url = https://github.com/mengyao/Complete-Striped-Smith-Waterman-Library
