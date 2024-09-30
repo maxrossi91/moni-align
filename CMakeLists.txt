@@ -70,9 +70,9 @@ else()
 endif()
 
 # SDSL
-find_library(SDSL_LIB sdsl PATHS ${CMAKE_ARCHIVE_OUTPUT_DIRECTORY})
-find_library(DIVSUFSORT_LIB divsufsort PATHS ${CMAKE_ARCHIVE_OUTPUT_DIRECTORY})
-find_library(DIVSUFSORT64_LIB divsufsort64 PATHS ${CMAKE_ARCHIVE_OUTPUT_DIRECTORY})
+find_library(SDSL_LIB sdsl PATHS ${CMAKE_ARCHIVE_OUTPUT_DIRECTORY} NO_DEFAULT_PATH) # I am almost positive it is important that do not use local sdsl or htslib
+find_library(DIVSUFSORT_LIB divsufsort PATHS ${CMAKE_ARCHIVE_OUTPUT_DIRECTORY} NO_DEFAULT_PATH)
+find_library(DIVSUFSORT64_LIB divsufsort64 PATHS ${CMAKE_ARCHIVE_OUTPUT_DIRECTORY} NO_DEFAULT_PATH)
 if (NOT SDSL_LIB OR NOT DIVSUFSORT_LIB OR NOT DIVSUFSORT64_LIB)
   message(STATUS "sdsl not found. Building from submodule.")
   add_git_submodule(${CMAKE_CURRENT_LIST_DIR}/thirdparty/sdsl-lite)
@@ -112,7 +112,7 @@ endif()
 
 # HTSLIB
 get_filename_component(CMAKE_RUNTIME_OUTPUT_DIRECTORY_PARENT ${CMAKE_RUNTIME_OUTPUT_DIRECTORY} DIRECTORY) # Get directory above bin directory
-find_library(HTS_LIB hts PATHS ${CMAKE_LIBRARY_OUTPUT_DIRECTORY})
+find_library(HTS_LIB hts PATHS ${CMAKE_LIBRARY_OUTPUT_DIRECTORY} NO_DEFAULT_PATH)
 if (NOT HTS_LIB)
   message(STATUS "htslib library not found. Building from submodule.")
   make_directory(${CMAKE_CURRENT_BINARY_DIR}/thirdparty/htslib)
