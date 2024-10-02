@@ -70,6 +70,7 @@ After installing the dependencies, the following steps can be run to build the p
 ```
 git clone https://github.com/maxrossi91/moni-align.git
 cd moni-align
+git checkout git_submodules
 git submodule update --init --recursive
 mkdir build
 cd build
