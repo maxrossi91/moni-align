@@ -58,16 +58,6 @@ list(APPEND CMAKE_PREFIX_PATH "${CMAKE_LIBRARY_OUTPUT_DIRECTORY}" "${CMAKE_ARCHI
 
 # ZLIB
 find_package(ZLIB REQUIRED)
-if (ZLIB_FOUND)
-    message(STATUS "zlib sources found at ${ZLIB_INCLUDE_DIRS}")
-    message(STATUS "zlib library found at ${ZLIB_LIBRARIES}")
-    message(STATUS "Creating zlib global library accessible to all CMakeLists.txt")
-    add_library(zlib STATIC IMPORTED GLOBAL)
-    set_property(TARGET zlib PROPERTY IMPORTED_LOCATION ${ZLIB_LIBRARIES})
-    target_include_directories(zlib INTERFACE ${ZLIB_INCLUDE_DIRS}) 
-else()
-    message(FATAL_ERROR "zlib not found!")
-endif()
 
 # SDSL
 find_library(SDSL_LIB sdsl PATHS ${CMAKE_ARCHIVE_OUTPUT_DIRECTORY} NO_DEFAULT_PATH) # I am almost positive it is important that do not use local sdsl or htslib
