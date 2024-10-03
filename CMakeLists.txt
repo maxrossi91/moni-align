@@ -199,7 +199,7 @@ endif()
 
 # In project libraries
 #--------------------------------------------------------------------------
-
+# BigBWT
 if (NOT bigbwt_POPULATED)
   message(STATUS "bigbwt not found. Building as submodule.")
   add_git_submodule(${CMAKE_CURRENT_LIST_DIR}/thirdparty/Big-BWT)
@@ -311,6 +311,7 @@ if (NOT backward_POPULATED)
   set(BACKWARD_TESTS OFF CACHE BOOL "Avoid building backward-cpp tests")
   add_git_submodule(${CMAKE_CURRENT_LIST_DIR}/thirdparty/backward-cpp)
   set(backward_POPULATED TRUE CACHE BOOL "Set backward_POPULATED to be TRUE")
+  target_link_libraries(backward INTERFACE ${BACKWARD_LIBRARIES})
 else()
    message(STATUS "backward library found. Do not build from submodule.")
 endif()
