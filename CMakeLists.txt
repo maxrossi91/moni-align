@@ -298,6 +298,7 @@ endif()
 # backward
 if (NOT backward_POPULATED)
   message(STATUS "backward library not found. Building as submodule.")
+  set(STACK_DETAILS_AUTO_DETECT FALSE CACHE BOOL "Use default stack trace since cannot guarantee that bfd dependencies exist on system" FORCE)
   set(BACKWARD_TESTS OFF CACHE BOOL "Avoid building backward-cpp tests")
   add_git_submodule(${CMAKE_CURRENT_LIST_DIR}/thirdparty/backward-cpp)
   set(backward_POPULATED TRUE CACHE BOOL "Set backward_POPULATED to be TRUE")
