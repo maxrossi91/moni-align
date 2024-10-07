@@ -60,7 +60,7 @@ Currently, building from source only works on Linux machines.
 
 `moni-align` has the following dependencies:
 
-- `gcc` tool (version 9.3.0/9.4.0)
+- `gcc` tool (version 9.3.0/9.4.0 or greater)
 - `cmake`tool (version 3.15 or greater) 
 
 After installing the dependencies, the following steps can be run to build the project.
@@ -70,13 +70,15 @@ After installing the dependencies, the following steps can be run to build the p
 ```
 git clone https://github.com/maxrossi91/moni-align.git
 cd moni-align
-git checkout git_submodules
 git submodule update --init --recursive
 mkdir build
 cd build
 cmake ..
 make
 ```
+
+> [!WARNING]
+> Do not run make -j. There are some implicit dependencies between the subprojects that moni-align builds and running make in parallel will cause the whole build to fail.
 
 2. Run the `moni` help command
 ```
