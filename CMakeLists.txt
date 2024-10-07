@@ -156,7 +156,6 @@ find_program(preprocess procdic PATHS ${CMAKE_RUNTIME_OUTPUT_DIRECTORY})
 find_program(postproc postproc PATHS ${CMAKE_RUNTIME_OUTPUT_DIRECTORY})
 if(NOT largerepair OR NOT preprocess OR NOT postproc)
   message(STATUS "bigrepair not found. Building from submodule")
-  set(CMAKE_INSTALL_PREFIX ${CMAKE_RUNTIME_OUTPUT_DIRECTORY})
   ExternalProject_Add(
     bigrepair_proj 
     SOURCE_DIR ${CMAKE_CURRENT_LIST_DIR}/thirdparty/bigrepair
