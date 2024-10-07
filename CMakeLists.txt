@@ -360,9 +360,19 @@ configure_file(${CMAKE_CURRENT_LIST_DIR}/pipeline/moni.in ${CMAKE_CURRENT_BINARY
 # # install(TARGETS pfp_thresholds pfp_thresholds64 TYPE RUNTIME)
 # install(PROGRAMS ${PROJECT_BINARY_DIR}/moni.install RENAME moni TYPE BIN)
 
-install(DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/bin/ DESTINATION bin)
-install(DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/lib/ DESTINATION lib)
-install(DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/include/ DESTINATION include)
+install(DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/bin/ 
+        DESTINATION bin
+        FILE_PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE GROUP_READ GROUP_EXECUTE WORLD_EXECUTE) # Hopefully reasonable file permissions
+install(DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/lib/ 
+        DESTINATION lib
+        PATTERN "pkgconfig" EXCLUDE
+        PATTERN "backward" EXCLUDE) #pkgconfig and backward are controlled by backward repo install so this will remove nothing
+install(DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/include/ 
+        DESTINATION include 
+        PATTERN "CMakeFiles" EXCLUDE
+        PATTERN "cmake_install.cmake" EXCLUDE
+        PATTERN "gtest" EXCLUDE
+        PATTERN "Makefile" EXCLUDE) # This will remove everything specified but gtest which one of the sub-project installs there.
 install(PROGRAMS ${CMAKE_CURRENT_BINARY_DIR}/moni.install RENAME moni DESTINATION bin)
 
 # CPack
