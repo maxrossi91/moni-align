@@ -29,10 +29,14 @@ used internally by the algorithm.
 version = "@MONI_VERSION@"
 install = @USE_INSTALL_PATH@
 
+# Makes assumption that all executables are located in the same directory
+# whether the moni script built from install or not.
 dirname                 = os.path.dirname(os.path.abspath(__file__))
 if not install:
   dirname               = "@CMAKE_RUNTIME_OUTPUT_DIRECTORY@" 
 
+pfp_dirname             = dirname
+pfp_thresholds_dirname  = dirname
 bigbwt_dirname          = dirname
 bigrepair_dirname       = dirname
 thresholds_dirname      = dirname
@@ -47,20 +51,20 @@ phoni_dirname           = dirname
 
 #############################################################################
 
-pfp                     = "@PFP_EXE@"
-pfp_check               = "@PFP_CHECK_EXE@"
+pfp                     = os.path.join(pfp_dirname, "pfp++")
+pfp_check               = os.path.join(pfp_dirname, "check")
 
-pfp_thresholds          = "@PFP_THRESHOLDS_EXE@"
+pfp_thresholds          = os.path.join(pfp_thresholds_dirname, "pfp_thresholds")
 
 rlebwt_ms_exe           = os.path.join(compress_dirname, "rlebwt_ms_build")
 
 compress_exe            = os.path.join(compress_dirname, "compress_dictionary")
 
-largerepair_exe         = "@LARGEREPAIR_EXE@" # os.path.join(bigrepair_dirname,"largeb_repair/irepair")
+largerepair_exe         = os.path.join(bigrepair_dirname,"largeb_irepair")
 # preprocess dict into a sequence of int32 representing both chars and distinct EOS 
-preprocess_exe          = "@PREPROCESS_EXE@" # os.path.join(bigrepair_dirname,"procdic")
+preprocess_exe          = os.path.join(bigrepair_dirname,"procdic")
 # create final output file
-postprocess_exe         = "@POSTPROCESS_EXE@" # os.path.join(bigrepair_dirname,"postproc")
+postprocess_exe         = os.path.join(bigrepair_dirname,"postproc")
 
 shaped_slp              = os.path.join(shaped_slp_dirname, "SlpEncBuild")
 

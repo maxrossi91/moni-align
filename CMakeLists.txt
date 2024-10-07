@@ -11,6 +11,12 @@ if(NOT CMAKE_BUILD_TYPE)
 endif()
 
 message(STATUS "Install directory: ${CMAKE_INSTALL_PREFIX}")
+set(CMAKE_INSTALL_BINDIR "bin" CACHE PATH "Directory for installing executable files" FORCE)
+message(STATUS "Install bin directory: ${CMAKE_INSTALL_BINDIR}")
+set(CMAKE_INSTALL_INCLUDEDIR "include" CACHE PATH "Directory for installing header files" FORCE)
+message(STATUS "Install include directory: ${CMAKE_INSTALL_INCLUDEDIR}")
+set(CMAKE_INSTALL_LIBDIR "lib" CACHE PATH "Directory for installing libraries" FORCE)
+message(STATUS "Install lib directory: ${CMAKE_INSTALL_LIBDIR}")
 
 # About this project
 # ------------------------------------------------------------------------------
@@ -26,7 +32,6 @@ find_package(Git REQUIRED)
 
 # Configure thirdparty
 # ------------------------------------------------------------------------------
-set(CMAKE_INSTALL_INCLUDEDIR "include") # This is an hack because include(GUIInstallDirs) doesn't work
 
 # Set the output directories for executables and libraries
 if (NOT CMAKE_RUNTIME_OUTPUT_DIRECTORY)
@@ -340,28 +345,26 @@ add_subdirectory(src)
 message(STATUS "Adding utils CMakeLists")
 add_subdirectory(utils)
 
-set(PFP_EXE ${PFP})
-set(PFP_CHECK_EXE ${PFP_CHECK})
-set(PFP_THRESHOLDS_EXE ${pfp_thresholds})
-set(LARGEREPAIR_EXE ${largerepair})
-set(PREPROCESS_EXE ${preprocess})
-set(POSTPROCESS_EXE ${postproc})
 set(MONI_VERSION ${VERSION})
 
 # Configure pipeline for build folder
 set(USE_INSTALL_PATH False)
-configure_file(${PROJECT_SOURCE_DIR}/pipeline/moni.in ${PROJECT_BINARY_DIR}/moni @ONLY)
+configure_file(${CMAKE_CURRENT_LIST_DIR}/pipeline/moni.in ${CMAKE_CURRENT_BINARY_DIR}/moni @ONLY)
 
 # Configure pipeline for install folder
 set(USE_INSTALL_PATH True)
-configure_file(${PROJECT_SOURCE_DIR}/pipeline/moni.in ${PROJECT_BINARY_DIR}/moni.install @ONLY)
+configure_file(${CMAKE_CURRENT_LIST_DIR}/pipeline/moni.in ${CMAKE_CURRENT_BINARY_DIR}/moni.install @ONLY)
 
+# install(TARGETS ms mems rlebwt_ms_build extend_ksw2 compress_dictionary build_seqidx TYPE RUNTIME)
+# install(TARGETS rlebwt_ms_full_build align_full_ksw2 TYPE RUNTIME)
+# install(TARGETS SlpEncBuild TYPE RUNTIME)
+# # install(TARGETS pfp_thresholds pfp_thresholds64 TYPE RUNTIME)
+# install(PROGRAMS ${PROJECT_BINARY_DIR}/moni.install RENAME moni TYPE BIN)
 
-install(TARGETS ms mems rlebwt_ms_build extend_ksw2 compress_dictionary build_seqidx TYPE RUNTIME)
-install(TARGETS rlebwt_ms_full_build align_full_ksw2 TYPE RUNTIME)
-install(TARGETS SlpEncBuild TYPE RUNTIME)
-# install(TARGETS pfp_thresholds pfp_thresholds64 TYPE RUNTIME)
-install(PROGRAMS ${PROJECT_BINARY_DIR}/moni.install RENAME moni TYPE BIN)
+install(DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/bin/ DESTINATION bin)
+install(DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/lib/ DESTINATION lib)
+install(DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/include/ DESTINATION include)
+install(PROGRAMS ${CMAKE_CURRENT_BINARY_DIR}/moni.install RENAME moni DESTINATION bin)
 
 # CPack
 # ------------------------------------------------------------------------------
