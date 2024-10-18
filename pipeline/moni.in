@@ -659,10 +659,10 @@ def main():
   parser = argparse.ArgumentParser( description=Description, formatter_class=argparse.RawTextHelpFormatter)
   subparsers = parser.add_subparsers(title='subcommands',description='valid subcommands', help='additional help')
   build_parser = subparsers.add_parser('build', help='build help', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-  ms_parser = subparsers.add_parser('ms', help='build help', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-  pseudo_ms_parser = subparsers.add_parser('pseudo-ms', help='build help', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+  ms_parser = subparsers.add_parser('ms', help='compute the matching statistics', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+  pseudo_ms_parser = subparsers.add_parser('pseudo-ms', help='compute the pseudo matching statistics', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
   mems_parser = subparsers.add_parser('mems', help='compute the maximal exact matches', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-  extend_parser = subparsers.add_parser('extend', help='extend the MEMs ofthe reads in the reference genome', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+  extend_parser = subparsers.add_parser('extend', help='extend the MEMs of the reads in the reference genome', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
   align_parser = subparsers.add_parser('align', help='align the reads to the reference genome', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 
   parser.add_argument('--version', action='version', version='%(prog)s\n{}'.format(getVersion()))
