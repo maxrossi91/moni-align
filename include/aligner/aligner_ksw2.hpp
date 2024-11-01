@@ -400,6 +400,12 @@ public:
     size_t i = 0;
 
     std::vector<std::pair<size_t, size_t >> left_mem_vec;
+
+    int32_t max_score = 0; // Max score among all aligned chains.
+    std::vector<std::string> alt_haplotypes; // The alternative haplotypes the read best aligns to in the pangenome.
+    std::vector<size_t> alt_pos; // The mapping locations in the alternative haplotypes for the read.
+    std::vector<size_t> alt_scores; // The scores for the alignment to the alternative haplotypes (should be same as AS field in SAM file).
+
     while (i < al.chains.size() and different_scores.size() < check_k)
     {
         different_scores.insert(al.chains[i].score);
@@ -431,23 +437,35 @@ public:
             score = chain_score(anchors_chain, al.anchors, al.mems, min_score, al.read);
           
           score.lft = idx.lift(score.pos);
+          // Check how well this chain scores against the best chain score
+          max_score = check_max_score(max_score, score, alt_haplotypes, alt_pos, alt_scores);
           // Check if there is another read scored in the same region
           bool replaced = false;
           for(size_t j = 0; j < best_scores.size(); ++j)
+          {
             if( (dist(std::get<1>(best_scores[j]),score.lft) < region_dist))
+            {
               if (score.score > std::get<0>(best_scores[j]) )
+              {
                 if ( replaced )
                   best_scores[j] = std::make_tuple(0,0,i-1);
                 else
                   best_scores[j] = std::make_tuple(score.score, score.lft, i++), replaced = true;
+              }
               else if (score.score <= std::get<0>(best_scores[j]) )
                 j = best_scores.size(), replaced = true, i++;
-
+            }
+          }
           if( not replaced )
             best_scores.push_back(std::make_tuple(score.score, score.lft, i++));
         }
     }
     
+    // For optional AA (Alternative Alignment) field tag in SAM file
+    al.sam.alt_haplotypes = alt_haplotypes;
+    al.sam.alt_pos = alt_pos;
+    al.sam.alt_scores = alt_scores;
+
     al.sub_n = best_scores.size() -1; 
 
     while (best_scores.size() < 2)
@@ -500,6 +518,33 @@ public:
 
     return al.aligned;
   
+  }
+
+  // Check if the score of the current fully aligned chain is greater than or equal to the highest score among all fully aligned chains
+  // If current chain has score greater than previous max score, then update the max score and discard the previous best_equivalent scores
+  // If the current chain has a score equal to the current max score then we will add to the best equivalent scores.
+  // If the current chain has a score less than the current max score than do nothing.
+  // return the max_score 
+  int32_t check_max_score(
+    int32_t max_score, 
+    const score_t& align_score, 
+    std::vector<std::string>& alt_haplotypes, 
+    std::vector<size_t>& alt_pos,
+    std::vector<size_t>& alt_scores)
+  {
+    if (align_score.score > max_score){
+      max_score = align_score.score;
+      alt_haplotypes.clear();
+      alt_pos.clear();
+      alt_scores.clear();
+    }
+    else if (align_score.score == max_score){
+      auto ref = idx.index(align_score.pos);
+      alt_haplotypes.emplace_back(ref.first);
+      alt_pos.emplace_back(ref.second + 1);
+      alt_scores.emplace_back(align_score.score);
+    }
+    return max_score;
   }
 
   // Check whether the left most MEM lifted over REF position is within certain distance of previous left most MEM lifted over REF positions.

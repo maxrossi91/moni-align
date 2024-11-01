@@ -65,6 +65,11 @@ typedef struct sam_t{
     std::string md = ""; // MD: String encoding mismatched and deleted reference bases
     std::string oa = ""; // OA: The original alignment information of the record prior to realignment or unalignment by a subsequent tool.
 
+    std::string aa = ""; // AA: The alternative best alignments to the haplotypes in the pangenome.
+    std::vector<std::string> alt_haplotypes; // Contains the alternative haplotypes the read aligns to in the pangenome.
+    std::vector<size_t> alt_pos; // Contains the alternative haplotypes mapping position in the pangenome.
+    std::vector<size_t> alt_scores; // Contains the scores of the alternative haplotype alignments (should match AS field of SAM file)
+
     size_t rlen = 0; // Length of the match in the referenc. Requiredd to compute TLEN
 
     std::string lift_rname = "*"; // RNAME: Reference sequence NAME
@@ -173,8 +178,13 @@ inline void write_sam(FILE *out, const sam_t s)
     fprintf(out, "%s,", s.lift_cigar.c_str()); // OA
     fprintf(out, "%d,", s.mapq);               // OA
     fprintf(out, "%d;", s.lift_nm);            // OA
+    // Printing AA 
+    fprintf(out, "\tAA:Z:");
+    for (int i = 0; i < s.alt_haplotypes.size(); i++){
+      fprintf(out, "%s,%d,%d;", s.alt_haplotypes[i].c_str(), s.alt_pos[i], s.alt_scores[i]);
     }
     fprintf(out, "\n");
+  }
 }
 
 // Adapted from https://github.com/mengyao/Complete-Striped-Smith-Waterman-Library/blob/master/src/main.c
