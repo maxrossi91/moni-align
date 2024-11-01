@@ -27,12 +27,9 @@ RUN apt-get update -qq && \
     update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-9 9
 
 # Install Moni
-
-ENV LD_LIBRARY_PATH="${LD_LIBRARY_PATH}:/build/moni-align/build/thirdparty/lib"
-
 RUN git clone https://github.com/maxrossi91/moni-align.git &&\
     cd moni-align &&\
-    git checkout develop &&\
+    git submodule update --init --recursive &&\
     mkdir build &&\
     cd build &&\
     cmake .. &&\

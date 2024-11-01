@@ -29,9 +29,14 @@ used internally by the algorithm.
 version = "@MONI_VERSION@"
 install = @USE_INSTALL_PATH@
 
+# Makes assumption that all executables are located in the same directory
+# whether the moni script built from install or not.
 dirname                 = os.path.dirname(os.path.abspath(__file__))
+if not install:
+  dirname               = "@CMAKE_RUNTIME_OUTPUT_DIRECTORY@" 
 
-
+pfp_dirname             = dirname
+pfp_thresholds_dirname  = dirname
 bigbwt_dirname          = dirname
 bigrepair_dirname       = dirname
 thresholds_dirname      = dirname
@@ -44,35 +49,22 @@ extend_dirname          = dirname
 spumoni_dirname         = dirname
 phoni_dirname           = dirname
 
-if not install:
+#############################################################################
 
-  bigbwt_dirname        = os.path.join(dirname, "_deps/bigbwt-build")
-  bigrepair_dirname     = os.path.join(dirname, "_deps/bigrepair-src")
-  thresholds_dirname    = os.path.join(dirname, "_deps/pfp_thresholds-build/test/src")
-  compress_dirname      = os.path.join(dirname, "src")
-  shaped_slp_dirname    = os.path.join(dirname, "_deps/shaped_slp-build")
-  repair_dirname        = os.path.join(bigrepair_dirname, "repair")
-  largeb_repair_dirname = os.path.join(bigrepair_dirname, "largeb_repair")
-  align_dirname         = os.path.join(dirname, "src/align")
-  extend_dirname        = os.path.join(dirname, "src/extend")
-  spumoni_dirname       = os.path.join(dirname, "src/spumoni")
-  phoni_dirname         = os.path.join(dirname, "src/phoni")
+pfp                     = os.path.join(pfp_dirname, "pfp++")
+pfp_check               = os.path.join(pfp_dirname, "check")
 
-
-pfp                     = "@PFP_EXE@"
-pfp_check               = "@PFP_CHECK_EXE@"
-
-pfp_thresholds          = "@PFP_THRESHOLDS_EXE@"
+pfp_thresholds          = os.path.join(pfp_thresholds_dirname, "pfp_thresholds")
 
 rlebwt_ms_exe           = os.path.join(compress_dirname, "rlebwt_ms_build")
 
 compress_exe            = os.path.join(compress_dirname, "compress_dictionary")
 
-largerepair_exe         = "@LARGEREPAIR_EXE@" # os.path.join(bigrepair_dirname,"largeb_repair/irepair")
+largerepair_exe         = os.path.join(bigrepair_dirname,"largeb_irepair")
 # preprocess dict into a sequence of int32 representing both chars and distinct EOS 
-preprocess_exe          = "@PREPROCESS_EXE@" # os.path.join(bigrepair_dirname,"procdic")
+preprocess_exe          = os.path.join(bigrepair_dirname,"procdic")
 # create final output file
-postprocess_exe         = "@POSTPROCESS_EXE@" # os.path.join(bigrepair_dirname,"postproc")
+postprocess_exe         = os.path.join(bigrepair_dirname,"postproc")
 
 shaped_slp              = os.path.join(shaped_slp_dirname, "SlpEncBuild")
 
@@ -667,10 +659,10 @@ def main():
   parser = argparse.ArgumentParser( description=Description, formatter_class=argparse.RawTextHelpFormatter)
   subparsers = parser.add_subparsers(title='subcommands',description='valid subcommands', help='additional help')
   build_parser = subparsers.add_parser('build', help='build help', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-  ms_parser = subparsers.add_parser('ms', help='build help', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-  pseudo_ms_parser = subparsers.add_parser('pseudo-ms', help='build help', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+  ms_parser = subparsers.add_parser('ms', help='compute the matching statistics', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+  pseudo_ms_parser = subparsers.add_parser('pseudo-ms', help='compute the pseudo matching statistics', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
   mems_parser = subparsers.add_parser('mems', help='compute the maximal exact matches', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-  extend_parser = subparsers.add_parser('extend', help='extend the MEMs ofthe reads in the reference genome', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+  extend_parser = subparsers.add_parser('extend', help='extend the MEMs of the reads in the reference genome', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
   align_parser = subparsers.add_parser('align', help='align the reads to the reference genome', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 
   parser.add_argument('--version', action='version', version='%(prog)s\n{}'.format(getVersion()))
