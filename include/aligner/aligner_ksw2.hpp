@@ -521,8 +521,8 @@ public:
   }
 
   // Check if the score of the current fully aligned chain is greater than or equal to the highest score among all fully aligned chains
-  // If current chain has score greater than previous max score, then update the max score and discard the previous best_equivalent scores
-  // If the current chain has a score equal to the current max score then we will add to the best equivalent scores.
+  // If current chain has score greater than previous max score, then update the max score and discard the info of the previous best alignments
+  // If the current chain has a score equal to the current max score then we will add info to the best equivalent alignments.
   // If the current chain has a score less than the current max score than do nothing.
   // return the max_score 
   int32_t check_max_score(
@@ -1328,6 +1328,16 @@ public:
     std::vector<std::pair<size_t, size_t >> mate1_left_mem_vec;
     std::vector<std::pair<size_t, size_t >> mate2_left_mem_vec;
 
+    int32_t mate1_max_score = 0; // Max score among all aligned chains.
+    std::vector<std::string> mate1_alt_haplotypes; // The alternative haplotypes the read best aligns to in the pangenome.
+    std::vector<size_t> mate1_alt_pos; // The mapping locations in the alternative haplotypes for the read.
+    std::vector<size_t> mate1_alt_scores; // The scores for the alignment to the alternative haplotypes (should be same as AS field in SAM file).
+
+    int32_t mate2_max_score = 0; // Max score among all aligned chains.
+    std::vector<std::string> mate2_alt_haplotypes; // The alternative haplotypes the read best aligns to in the pangenome.
+    std::vector<size_t> mate2_alt_pos; // The mapping locations in the alternative haplotypes for the read.
+    std::vector<size_t> mate2_alt_scores; // The scores for the alignment to the alternative haplotypes (should be same as AS field in SAM file).
+
     while (i < al.chains.size() and different_scores.size() < k)
     {
         different_scores.insert(al.chains[i].score);
@@ -1345,6 +1355,11 @@ public:
         {
           // Align the chain
           paired_score_t score = paired_chain_score(al, i);
+
+          // Check how well this chain scores against the best chain score
+          mate1_max_score = check_max_score(mate1_max_score, score.m1, mate1_alt_haplotypes, mate1_alt_pos, mate1_alt_scores);
+          // Check how well this chain scores against the best chain score
+          mate2_max_score = check_max_score(mate2_max_score, score.m2, mate2_alt_haplotypes, mate2_alt_pos, mate2_alt_scores);
 
           // Check if there is another read scored in the same region
           if (score.tot >= al.min_score)
@@ -1373,6 +1388,15 @@ public:
           ++i;
         }
     }
+
+    // For optional AA (Alternative Alignment) field tag in SAM file
+    al.sam_m1.alt_haplotypes = mate1_alt_haplotypes;
+    al.sam_m1.alt_pos = mate1_alt_pos;
+    al.sam_m1.alt_scores = mate1_alt_scores;
+
+    al.sam_m2.alt_haplotypes = mate2_alt_haplotypes;
+    al.sam_m2.alt_pos = mate2_alt_pos;
+    al.sam_m2.alt_scores = mate2_alt_scores;
 
     paired_score_t zero;
     zero.chain_i = al.chains.size();
