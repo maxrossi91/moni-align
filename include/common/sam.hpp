@@ -179,12 +179,12 @@ inline void write_sam(FILE *out, const sam_t s)
     fprintf(out, "%d,", s.mapq);               // OA
     fprintf(out, "%d;", s.lift_nm);            // OA
     // Printing AA 
-    fprintf(out, "\tAA:Z:");
+    fprintf(out, "\tAA:Z:");                   // AA
     for (int i = 0; i < s.alt_haplotypes.size(); i++){
       fprintf(out, "%s,%d,%d;", s.alt_haplotypes[i].c_str(), s.alt_pos[i], s.alt_scores[i]);
     }
-    fprintf(out, "\n");
   }
+  fprintf(out, "\n");
 }
 
 // Adapted from https://github.com/mengyao/Complete-Striped-Smith-Waterman-Library/blob/master/src/main.c
