@@ -1268,6 +1268,13 @@ public:
 
     if (best_scores[0].tot < al.min_score)
     {
+      // If read will be orphaned then clear the AA tag info
+      al.sam_m1.alt_haplotypes.clear();
+      al.sam_m1.alt_pos.clear();
+      al.sam_m1.alt_scores.clear();
+      al.sam_m2.alt_haplotypes.clear();
+      al.sam_m2.alt_pos.clear();
+      al.sam_m2.alt_scores.clear();
       MTIME_END(2); //Timing helper
       MTIME_TSAFE_MERGE;
       return false;
@@ -2682,7 +2689,7 @@ orphan_paired_score_t paired_chain_orphan_score(
           sam->rlen = ref_len;
 
           score.score = ez.score;
-          score.pos = ref_occ;
+          score.pos = start;
           // score.pos = start;
           free(l_ref);
         }  else { // Read is unmapped because it align on an insertion of length > readlength
