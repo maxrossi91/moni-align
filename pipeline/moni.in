@@ -515,7 +515,7 @@ def query_helper(args, exe, exe_name):
       command += " -s"
     if args.freq_dis:
       command += " -f"
-    if args.left_dis:
+    if args.chain_dis:
       command += " -a"
     if args.orphan_dis:
       command += " -u"
@@ -749,8 +749,8 @@ def main():
   align_parser.add_argument('-g', '--grammar',    help='select the grammar (only for moni and phoni) [plain, shaped]', type=str, default='plain')
   align_parser.add_argument('-l', '--minl',       help='minimum seed length', type=int, default=25)
   align_parser.add_argument('-L', '--extl',       help='length of reference substring for extension', type=int, default=100)
-  align_parser.add_argument('-w', '--max_iter',   help='max number of iterations of the chaining algorithm', type=int, default=50)
-  align_parser.add_argument('-v', '--max_pred',   help='max number of predecessors to be considered in chaining algorithm', type=int, default=50)
+  align_parser.add_argument('-w', '--max_iter',   help='max number of iterations of the chaining algorithm', type=int, default=10)
+  align_parser.add_argument('-v', '--max_pred',   help='max number of predecessors to be considered in chaining algorithm', type=int, default=5)
   align_parser.add_argument('-x', '--max_dist_x', help='max distance for two anchors to be chained', type=int, default=500)
   align_parser.add_argument('-y', '--max_dist_y', help='max distance for two anchors from the same read to be chained', type=int, default=100)
   align_parser.add_argument('-k', '--min_chain_mem', help='minimum number of MEMs that have to belong to a chain', type=int, default=1)
@@ -763,10 +763,10 @@ def main():
   align_parser.add_argument('-d', '--dir-dis',    help='disable direction filtering.', action='store_true')
   align_parser.add_argument('-D', '--dir-thr',    help='direction filtering threshold.', type=float, default='50.0')
   align_parser.add_argument('-s', '--seed-dis',   help='disable seed filtering.', action='store_true')
-  align_parser.add_argument('-S', '--seed-thr',   help='seed filtering threshold.', type=int, default=5000)
+  align_parser.add_argument('-S', '--seed-thr',   help='seed filtering threshold.', type=int, default=1000)
   align_parser.add_argument('-f', '--freq-dis',   help='disable freq filtering.', action='store_true')
-  align_parser.add_argument('-F', '--freq-thr',   help='frequency filtering threshold.', type=float, default=0.30)
-  align_parser.add_argument('-a', '--left-dis',   help='disable chain left mem lift check heuristic', action='store_true')
+  align_parser.add_argument('-F', '--freq-thr',   help='frequency filtering threshold.', type=float, default=0.50)
+  align_parser.add_argument('-a', '--chain-dis',  help='disable chain filter heuristic', action='store_true')
   align_parser.add_argument('-u', '--orphan-dis', help='disable orphan recovery for paired-end alignment', action='store_true')
   align_parser.add_argument('--no-lcp',           help='build the moni index without the lcp samples.',action='store_true')
   align_parser.add_argument('--moni',             help='run moni index',action='store_true')

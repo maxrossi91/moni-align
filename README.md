@@ -174,12 +174,12 @@ Either command should produce the `mouse.sam` file in the `data/mouse/output` di
 
 There are three type of MEM filters implemented in `moni align`. 
 
-1. MEM occurance filter (-S 5000): This filter by default keeps 5000 occurances of a MEM per genome in the pangenome. This threshold can be modified with the -S option, or can be disabled with the -s option. 
+1. MEM occurance filter (-S 1000): This filter by default keeps 1000 occurances of a MEM per genome in the pangenome. This threshold can be modified with the -S option, or can be disabled with the -s option. 
 
 > [!NOTE]
 > The MEM occurance filter is the only filter applied during the seed extraction step. The remaining two filter are applied after the seed extractions step. This filter plays an important role in limiting the memory usage. 
 
-2. MEM frequency filter (-F 0.3): This filter by default removes MEMs whose occurances account for over 30% of the total MEM occurances for the read. This threshold can be modified with the -F option, or can be disabled with the -f option.
+2. MEM frequency filter (-F 0.5): This filter by default removes MEMs whose occurances account for over 50% of the total MEM occurances for the read. This threshold can be modified with the -F option, or can be disabled with the -f option.
 
 3. MEM orientation feature (-D 50): This filter by default removes MEM occurances found on either the forward or reverse strand if the average size of the MEMs found on both two strands differs by more than 50 bp. The MEMs are removed from the strand that produced the smaller MEMs on average. This filter is only applied when aligning paired-end reads. This threshold can be changed with the -D option, or can be disabled with the -d option.
 
