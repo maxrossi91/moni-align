@@ -95,10 +95,10 @@ public:
         double dir_thr = 50.0; // Use MEMs average length distance to filter the orientation of the reads
 
         bool filter_seeds = true; // Filter seed if occurs more than threshold
-        size_t n_seeds_thr = 5000;   // Filter seed if occurs more than threshold
+        size_t n_seeds_thr = 1000;   // Filter seed if occurs more than threshold
 
         bool filter_freq = true;  // Filter seed if it occurs with frequency greater than threshold
-        double freq_thr = 0.30;   // Filter seed if it occurs with frequency greater than threshold
+        double freq_thr = 0.50;   // Filter seed if it occurs with frequency greater than threshold
         
         // ksw2 parameters
         int8_t smatch = 2;      // Match score default
@@ -119,12 +119,12 @@ public:
         // Chaining parameters
         ll max_dist_x = 500;    // Max distance for two anchors to be chained
         ll max_dist_y = 100;    // Max distance for two anchors from the same read to be chained
-        ll max_iter = 50;       // Max number of iterations of the chaining algorithhm
-        ll max_pred = 50;       // Max number of predecessor to be considered
+        ll max_iter = 10;       // Max number of iterations of the chaining algorithhm
+        ll max_pred = 5;       // Max number of predecessor to be considered
         ll min_chain_score = 40;// Minimum chain score
         ll min_chain_length = 1;// Minimum chain length
         bool secondary_chains = false; // Find secondary chains in paired-end setting
-        bool left_mem_check = true; // Chain left MEM lift check heuristic
+        bool left_mem_check = true; // Chain left MEM lift check heuristic (chain filter)
         bool find_orphan = true; // Perform orphan recovery 
 
     } config_t;
@@ -227,7 +227,7 @@ public:
                 max_dist_x(config.max_dist_x),  // Max distance for two anchors to be chained
                 max_dist_y(config.max_dist_y),  // Max distance for two anchors from the same read to be chained
                 secondary_chains(config.secondary_chains), // Attempt to find secondary chains in paired-end setting
-                left_mem_check(config.left_mem_check), // Chain left MEM lift check heuristic
+                left_mem_check(config.left_mem_check), // Chain left MEM lift check heuristic (chain filter)
                 find_orphan(config.find_orphan), // Perform orphan recovery
                 smatch(config.smatch),          // Match score default
                 smismatch(config.smismatch),    // Mismatch score default
@@ -3308,16 +3308,16 @@ protected:
     double dir_thr = 50.0;
 
     bool filter_seeds = true;
-    size_t n_seeds_thr = 5000;
+    size_t n_seeds_thr = 1000;
 
     bool filter_freq = true;  // Filter seed if it occurs with frequency greater than threshold
-    double freq_thr = 0.30;   // Filter seed if it occurs with frequency greater than threshold
+    double freq_thr = 0.50;   // Filter seed if it occurs with frequency greater than threshold
 
-    bool left_mem_check = true; // Chain left MEM lift check heuristic
+    bool left_mem_check = true; // Chain left MEM lift check heuristic (chain filter)
     bool find_orphan = true; // Perform orphan recovery  
 
-    ll max_iter = 50;       // Max number of iterations of the chaining algorithhm
-    ll max_pred = 50;       // Max number of predecessor to be considered
+    ll max_iter = 10;       // Max number of iterations of the chaining algorithhm
+    ll max_pred = 5;       // Max number of predecessor to be considered
     ll max_dist_x = 500;    // Max distance for two anchors to be chained
     ll max_dist_y = 100;    // Max distance for two anchors from the same read to be chained
     bool secondary_chains = false; // Find secondary chains in paired-end setting

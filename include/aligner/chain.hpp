@@ -73,8 +73,8 @@ typedef struct{
     ll G = LLONG_MAX;
     ll max_dist_x = 500;//LLONG_MAX;
     ll max_dist_y = 100;//LLONG_MAX;
-    ll max_iter = 50;
-    ll max_pred = 50;
+    ll max_iter = 10;
+    ll max_pred = 5;
     ll min_chain_score = 40;
     ll min_chain_length = 1;
 } chain_config_t;

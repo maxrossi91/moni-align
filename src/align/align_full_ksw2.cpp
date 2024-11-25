@@ -72,7 +72,7 @@ struct Args
   bool filter_freq = true; // Filter seed if it occurs with frequency greater than threshold
   double freq_thr = 0.30; // Filter seed if it occurs with frequency greater than threshold
 
-  bool left_mem_check = true; // Chain left MEM lift check heuristic
+  bool left_mem_check = true; // Chain left MEM lift check heuristic (chain filter)
   bool find_orphan = true; // Perform orphan recovery 
 
   // ksw2 parameters
@@ -88,8 +88,8 @@ struct Args
   // int zdrop = -1;         // Zdrop enable
 
   // chaining parameters
-  ll max_iter = 50;       // Max number of iterations of the chaining algorithhm
-  ll max_pred = 50;       // Max number of predecessor to be considered
+  ll max_iter = 10;       // Max number of iterations of the chaining algorithhm
+  ll max_pred = 5;       // Max number of predecessor to be considered
   ll max_dist_x = 500;    // Max distance for two anchors to be chained
   ll max_dist_y = 100;    // Max distance for two anchors from the same read to be chained
   ll min_chain_mem = 1;   // Minimum number of MEMs that must belong to a chain
@@ -104,7 +104,7 @@ void parseArgs(int argc, char *const argv[], Args &arg)
   extern char *optarg;
   extern int optind;
 
-  std::string usage("usage: " + std::string(argv[0]) + " infile [-p patterns] [-1 mate1] [-2 mate2] [-o output] [-m report_mems] [-c csv] [-t threads] [-b batch] [-l len] [-q shaped_slp]  [-L ext_l] [-A smatch] [-B smismatc] [-O gapo] [-E gape] [-d dir_dis] [-s seeds_dis] [-f freq_dis] [-D dir_thr] [-S seeds_thr] [-F freq_thr] [-n no_lcp] [-c max_iter] [-d max_pred] [-x max_dist_x] [-y max_dist_y] [-k min_chain_mem] [-j min_chain_score] [-Z secondary_chains] [-a left_dis] [-u orphan_dis]\n\n" +
+  std::string usage("usage: " + std::string(argv[0]) + " infile [-p patterns] [-1 mate1] [-2 mate2] [-o output] [-m report_mems] [-c csv] [-t threads] [-b batch] [-l len] [-q shaped_slp]  [-L ext_l] [-A smatch] [-B smismatc] [-O gapo] [-E gape] [-d dir_dis] [-s seeds_dis] [-f freq_dis] [-D dir_thr] [-S seeds_thr] [-F freq_thr] [-n no_lcp] [-c max_iter] [-d max_pred] [-x max_dist_x] [-y max_dist_y] [-k min_chain_mem] [-j min_chain_score] [-Z secondary_chains] [-a chain_dis] [-u orphan_dis]\n\n" +
                     "Align the reads in the pattern against the reference index in infile.\n" +
                     "   pattens: [string]  - path to patterns file.\n" +
                     "     mate1: [string]  - path to file with #1 mates paired with mate2.\n" +
@@ -131,7 +131,7 @@ void parseArgs(int argc, char *const argv[], Args &arg)
                  "min_chain_mem: [integer] - minimum number of MEMs that have to belong to a chain (def. " + std::to_string(arg.min_chain_mem) + ")\n" +
                "min_chain_score: [integer] - minimum chain score (def. " + std::to_string(arg.min_chain_score) + ")\n" +
               "secondary_chains: [boolean] - enable finding secondary chains for paired-end reads (def. " + std::to_string(arg.secondary_chains) + ")\n" +
-                    "  left_dis: [boolean] - disable chain left mem lift check heuristic (def. " + std::to_string(!arg.left_mem_check) + ")\n" +
+                    " chain_dis: [boolean] - disable chain filter heuristic (def. " + std::to_string(!arg.left_mem_check) + ")\n" +
                     "orphan_dis: [boolean] - disable orphan recovery for paired-end alignment (def. " + std::to_string(!arg.find_orphan) + ")\n" +
                     "    smatch: [integer] - match score value (def. " + std::to_string(arg.smatch) + ")\n" +
                     " smismatch: [integer] - mismatch penalty value (def. " + std::to_string(arg.smismatch) + ")\n" +
@@ -308,7 +308,7 @@ typename aligner_t::config_t configurer(Args &args){
   config.min_chain_length = args.min_chain_mem; // Minimum number of MEMs that must belong to a chain 
   config.min_chain_score = args.min_chain_score; // Minimum chain score
   config.secondary_chains = args.secondary_chains; // Attempt to find secondary chains in paired-end setting
-  config.left_mem_check = args.left_mem_check; // Chain left MEM lift check heuristic
+  config.left_mem_check = args.left_mem_check; // Chain left MEM lift check heuristic (chain filter)
   config.find_orphan = args.find_orphan; // Perform orphan recovery 
 
   config.report_mems = args.report_mems; //report the MEMs in the SAM file
