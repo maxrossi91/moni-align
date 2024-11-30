@@ -25,7 +25,7 @@ target_include_directories(ksw_ksw2_global PUBLIC    "../include/common"
 target_compile_options(ksw_ksw2_global PUBLIC "-std=c++17")
 
 add_executable(ra random_access.cpp)
-target_link_libraries(ra common sdsl lvsam klib z)
+target_link_libraries(ra common sdsl htslib lvsam klib z)
 target_include_directories(ra PUBLIC    "../include/common"
                                                 "../include/aligner"
                                                 "${shaped_slp_SOURCE_DIR}" 
@@ -36,7 +36,7 @@ target_include_directories(ra PUBLIC    "../include/common"
 target_compile_options(ra PUBLIC "-std=c++17")
 
 add_executable(extract extract.cpp)
-target_link_libraries(extract common sdsl lvsam klib z)
+target_link_libraries(extract common sdsl htslib lvsam klib z)
 target_include_directories(extract PUBLIC    "../include/common"
                                                 "../include/aligner"
                                                 "${shaped_slp_SOURCE_DIR}" 

@@ -1,0 +1,45 @@
+[submodule "thirdparty/sdsl-lite"]
+	path = thirdparty/sdsl-lite
+	url = https://github.com/simongog/sdsl-lite.git
+[submodule "thirdparty/htslib"]
+	path = thirdparty/htslib
+	url = https://github.com/samtools/htslib
+[submodule "thirdparty/pfp"]
+	path = thirdparty/pfp
+	url = https://github.com/rvarki/pfp
+[submodule "thirdparty/bigrepair"]
+	path = thirdparty/bigrepair
+	url = https://gitlab.com/maxrossi91/bigrepair.git
+[submodule "thirdparty/pfp-thresholds"]
+	path = thirdparty/pfp-thresholds
+	url = https://github.com/rvarki/pfp-thresholds.git
+[submodule "thirdparty/Big-BWT"]
+	path = thirdparty/Big-BWT
+	url = https://github.com/alshai/Big-BWT.git
+[submodule "thirdparty/malloc_count"]
+	path = thirdparty/malloc_count
+	url = https://github.com/bingmann/malloc_count
+[submodule "thirdparty/klib"]
+	path = thirdparty/klib
+	url = https://github.com/attractivechaos/klib
+[submodule "thirdparty/r-index"]
+	path = thirdparty/r-index
+	url = https://github.com/rvarki/r-index.git
+[submodule "thirdparty/ShapedSlp"]
+	path = thirdparty/ShapedSlp
+	url = https://github.com/rvarki/ShapedSlp.git
+[submodule "thirdparty/Complete-Striped-Smith-Waterman-Library"]
+	path = thirdparty/Complete-Striped-Smith-Waterman-Library
+	url = https://github.com/mengyao/Complete-Striped-Smith-Waterman-Library
+[submodule "thirdparty/ksw2"]
+	path = thirdparty/ksw2
+	url = https://github.com/lh3/ksw2
+[submodule "thirdparty/levioSAM"]
+	path = thirdparty/levioSAM
+	url = https://github.com/maxrossi91/levioSAM.git
+[submodule "thirdparty/backward-cpp"]
+	path = thirdparty/backward-cpp
+	url = https://github.com/bombela/backward-cpp.git
+[submodule "thirdparty/Catch2"]
+	path = thirdparty/Catch2
+	url = https://github.com/catchorg/Catch2.git

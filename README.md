@@ -11,7 +11,7 @@ ___  ___            _         ___  _ _
 \_|  |_/\___/|_| |_|_|      \_| |_/_|_|\__, |_| |_|
                                         __/ |      
                                        |___/       
-                                            ver 0.1.0
+                                            ver 1.0.0
 ```
 A Read Aligner with Multi-Genome References.
 
@@ -60,7 +60,7 @@ Currently, building from source only works on Linux machines.
 
 `moni-align` has the following dependencies:
 
-- `gcc` tool (version 9.3.0/9.4.0)
+- `gcc` tool (version 9.3.0/9.4.0 or greater)
 - `cmake`tool (version 3.15 or greater) 
 
 After installing the dependencies, the following steps can be run to build the project.
@@ -70,21 +70,23 @@ After installing the dependencies, the following steps can be run to build the p
 ```
 git clone https://github.com/maxrossi91/moni-align.git
 cd moni-align
+git submodule update --init --recursive
 mkdir build
 cd build
 cmake ..
 make
 ```
 
-2. Set the LD_LIBRARY_PATH environment variable
-```
-export LD_LIBRARY_PATH="${LD_LIBRARY_PATH}:$PWD/thirdparty/lib"
-```
+> [!WARNING]
+> Do not run make -j. There are some implicit dependencies between the subprojects that moni-align builds and running make in parallel will cause the build to fail.
 
-3. Run the `moni` help command
+2. Run the `moni` help command
 ```
 ./moni -h
 ```
+
+> [!NOTE]
+> The project contains legacy commands. See the Legacy Commands section for more details.
 
 # Example
 
@@ -172,12 +174,12 @@ Either command should produce the `mouse.sam` file in the `data/mouse/output` di
 
 There are three type of MEM filters implemented in `moni align`. 
 
-1. MEM occurance filter (-S 5000): This filter by default keeps 5000 occurances of a MEM per genome in the pangenome. This threshold can be modified with the -S option, or can be disabled with the -s option. 
+1. MEM occurance filter (-S 1000): This filter by default keeps 1000 occurances of a MEM per genome in the pangenome. This threshold can be modified with the -S option, or can be disabled with the -s option. 
 
 > [!NOTE]
 > The MEM occurance filter is the only filter applied during the seed extraction step. The remaining two filter are applied after the seed extractions step. This filter plays an important role in limiting the memory usage. 
 
-2. MEM frequency filter (-F 0.3): This filter by default removes MEMs whose occurances account for over 30% of the total MEM occurances for the read. This threshold can be modified with the -F option, or can be disabled with the -f option.
+2. MEM frequency filter (-F 0.5): This filter by default removes MEMs whose occurances account for over 50% of the total MEM occurances for the read. This threshold can be modified with the -F option, or can be disabled with the -f option.
 
 3. MEM orientation feature (-D 50): This filter by default removes MEM occurances found on either the forward or reverse strand if the average size of the MEMs found on both two strands differs by more than 50 bp. The MEMs are removed from the strand that produced the smaller MEMs on average. This filter is only applied when aligning paired-end reads. This threshold can be changed with the -D option, or can be disabled with the -d option.
 
@@ -230,6 +232,18 @@ Here we provide a brief summary of the options used in the above command.
 
 Running this command will write all MEMs of length 25 or greater to the SAM file for all reads. This will likely cause the SAM file created to be much larger in size than if reporting the read alignments. This is because each read can have multiple entries in the SAM file depending on how many MEMs are found in the pangenome. The same MEM from the same read can have multiple entires if it is found in multiple of the genomes. 
 
+# Legacy Commands
+
+This project includes some legacy commands that were inherited from previous projects. These commands remain in the codebase because they are deeply embedded, and removing them would be complex. We do not guarantee that these commands will work as expected, and we will not address issues related to them in this repository.
+
+For updates or more stable versions of these commands, please refer to the original projects. Below is a list of legacy commands and links to their original repositories:
+
+## Legacy Command List
+
+* ms ([MONI](https://github.com/maxrossi91/moni)): Compute the matching statistics for the reads.
+* pseudo-ms ([SPUMONI](https://github.com/oma219/spumoni)): Compute the pseudo-matching statistics for the reads.
+* mems ([MONI](https://github.com/maxrossi91/moni)): compute Maximal Exact Matches (MEMs) using read-based coordinates in a FASTA-like file.
+* extend ([MONI](https://github.com/maxrossi91/moni)): extend the MEMs of the reads in the reference genome.
 
 # External resources
 

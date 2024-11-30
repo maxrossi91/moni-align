@@ -3,12 +3,12 @@ add_executable(compress_dictionary compress_dictionary.cpp)
 target_link_libraries(compress_dictionary sdsl malloc_count)
 target_include_directories(compress_dictionary PUBLIC "../include/common")
 
-FetchContent_GetProperties(r-index)
-FetchContent_GetProperties(shaped_slp)
-FetchContent_GetProperties(ssw)
-FetchContent_GetProperties(ksw2)
-FetchContent_GetProperties(klib)
-FetchContent_GetProperties(bigbwt)
+# FetchContent_GetProperties(r-index)
+# FetchContent_GetProperties(shaped_slp)
+# FetchContent_GetProperties(ssw)
+# FetchContent_GetProperties(ksw2)
+# FetchContent_GetProperties(klib)
+# FetchContent_GetProperties(bigbwt)
 
 set(FOLCA_SOURCE_DIR ${shaped_slp_SOURCE_DIR}/folca)
 set(SUX_SOURCE_DIR ${shaped_slp_SOURCE_DIR}/external/sux/sux)
@@ -85,7 +85,7 @@ target_include_directories(build_seqidx PUBLIC    "../include/ms"
 target_compile_options(build_seqidx PUBLIC "-std=c++17")
 
 add_executable(build_liftidx build_liftidx.cpp)
-target_link_libraries(build_liftidx common sdsl divsufsort divsufsort64 malloc_count klib z lvsam)
+target_link_libraries(build_liftidx common sdsl htslib divsufsort divsufsort64 malloc_count klib z lvsam)
 target_include_directories(build_liftidx PUBLIC    "../include/ms" 
                                         "../include/common" 
                                         "../include/aligner" 
@@ -93,7 +93,7 @@ target_include_directories(build_liftidx PUBLIC    "../include/ms"
 target_compile_options(build_liftidx PUBLIC "-std=c++17")
 
 add_executable(seqidx2liftidx seqidx2liftidx.cpp)
-target_link_libraries(seqidx2liftidx common sdsl divsufsort divsufsort64 malloc_count klib z lvsam)
+target_link_libraries(seqidx2liftidx common sdsl htslib divsufsort divsufsort64 malloc_count klib z lvsam)
 target_include_directories(seqidx2liftidx PUBLIC    "../include/ms" 
                                         "../include/common" 
                                         "../include/aligner" 

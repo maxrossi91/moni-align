@@ -29,9 +29,14 @@ used internally by the algorithm.
 version = "@MONI_VERSION@"
 install = @USE_INSTALL_PATH@
 
+# Makes assumption that all executables are located in the same directory
+# whether the moni script built from install or not.
 dirname                 = os.path.dirname(os.path.abspath(__file__))
+if not install:
+  dirname               = "@CMAKE_RUNTIME_OUTPUT_DIRECTORY@" 
 
-
+pfp_dirname             = dirname
+pfp_thresholds_dirname  = dirname
 bigbwt_dirname          = dirname
 bigrepair_dirname       = dirname
 thresholds_dirname      = dirname
@@ -44,35 +49,22 @@ extend_dirname          = dirname
 spumoni_dirname         = dirname
 phoni_dirname           = dirname
 
-if not install:
+#############################################################################
 
-  bigbwt_dirname        = os.path.join(dirname, "_deps/bigbwt-build")
-  bigrepair_dirname     = os.path.join(dirname, "_deps/bigrepair-src")
-  thresholds_dirname    = os.path.join(dirname, "_deps/pfp_thresholds-build/test/src")
-  compress_dirname      = os.path.join(dirname, "src")
-  shaped_slp_dirname    = os.path.join(dirname, "_deps/shaped_slp-build")
-  repair_dirname        = os.path.join(bigrepair_dirname, "repair")
-  largeb_repair_dirname = os.path.join(bigrepair_dirname, "largeb_repair")
-  align_dirname         = os.path.join(dirname, "src/align")
-  extend_dirname        = os.path.join(dirname, "src/extend")
-  spumoni_dirname       = os.path.join(dirname, "src/spumoni")
-  phoni_dirname         = os.path.join(dirname, "src/phoni")
+pfp                     = os.path.join(pfp_dirname, "pfp++")
+pfp_check               = os.path.join(pfp_dirname, "check")
 
-
-pfp                     = "@PFP_EXE@"
-pfp_check               = "@PFP_CHECK_EXE@"
-
-pfp_thresholds          = "@PFP_THRESHOLDS_EXE@"
+pfp_thresholds          = os.path.join(pfp_thresholds_dirname, "pfp_thresholds")
 
 rlebwt_ms_exe           = os.path.join(compress_dirname, "rlebwt_ms_build")
 
 compress_exe            = os.path.join(compress_dirname, "compress_dictionary")
 
-largerepair_exe         = "@LARGEREPAIR_EXE@" # os.path.join(bigrepair_dirname,"largeb_repair/irepair")
+largerepair_exe         = os.path.join(bigrepair_dirname,"largeb_irepair")
 # preprocess dict into a sequence of int32 representing both chars and distinct EOS 
-preprocess_exe          = "@PREPROCESS_EXE@" # os.path.join(bigrepair_dirname,"procdic")
+preprocess_exe          = os.path.join(bigrepair_dirname,"procdic")
 # create final output file
-postprocess_exe         = "@POSTPROCESS_EXE@" # os.path.join(bigrepair_dirname,"postproc")
+postprocess_exe         = os.path.join(bigrepair_dirname,"postproc")
 
 shaped_slp              = os.path.join(shaped_slp_dirname, "SlpEncBuild")
 
@@ -523,7 +515,7 @@ def query_helper(args, exe, exe_name):
       command += " -s"
     if args.freq_dis:
       command += " -f"
-    if args.left_dis:
+    if args.chain_dis:
       command += " -a"
     if args.orphan_dis:
       command += " -u"
@@ -667,10 +659,10 @@ def main():
   parser = argparse.ArgumentParser( description=Description, formatter_class=argparse.RawTextHelpFormatter)
   subparsers = parser.add_subparsers(title='subcommands',description='valid subcommands', help='additional help')
   build_parser = subparsers.add_parser('build', help='build help', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-  ms_parser = subparsers.add_parser('ms', help='build help', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-  pseudo_ms_parser = subparsers.add_parser('pseudo-ms', help='build help', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+  ms_parser = subparsers.add_parser('ms', help='compute the matching statistics', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+  pseudo_ms_parser = subparsers.add_parser('pseudo-ms', help='compute the pseudo matching statistics', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
   mems_parser = subparsers.add_parser('mems', help='compute the maximal exact matches', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-  extend_parser = subparsers.add_parser('extend', help='extend the MEMs ofthe reads in the reference genome', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+  extend_parser = subparsers.add_parser('extend', help='extend the MEMs of the reads in the reference genome', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
   align_parser = subparsers.add_parser('align', help='align the reads to the reference genome', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 
   parser.add_argument('--version', action='version', version='%(prog)s\n{}'.format(getVersion()))
@@ -757,8 +749,8 @@ def main():
   align_parser.add_argument('-g', '--grammar',    help='select the grammar (only for moni and phoni) [plain, shaped]', type=str, default='plain')
   align_parser.add_argument('-l', '--minl',       help='minimum seed length', type=int, default=25)
   align_parser.add_argument('-L', '--extl',       help='length of reference substring for extension', type=int, default=100)
-  align_parser.add_argument('-w', '--max_iter',   help='max number of iterations of the chaining algorithm', type=int, default=50)
-  align_parser.add_argument('-v', '--max_pred',   help='max number of predecessors to be considered in chaining algorithm', type=int, default=50)
+  align_parser.add_argument('-w', '--max_iter',   help='max number of iterations of the chaining algorithm', type=int, default=10)
+  align_parser.add_argument('-v', '--max_pred',   help='max number of predecessors to be considered in chaining algorithm', type=int, default=5)
   align_parser.add_argument('-x', '--max_dist_x', help='max distance for two anchors to be chained', type=int, default=500)
   align_parser.add_argument('-y', '--max_dist_y', help='max distance for two anchors from the same read to be chained', type=int, default=100)
   align_parser.add_argument('-k', '--min_chain_mem', help='minimum number of MEMs that have to belong to a chain', type=int, default=1)
@@ -771,10 +763,10 @@ def main():
   align_parser.add_argument('-d', '--dir-dis',    help='disable direction filtering.', action='store_true')
   align_parser.add_argument('-D', '--dir-thr',    help='direction filtering threshold.', type=float, default='50.0')
   align_parser.add_argument('-s', '--seed-dis',   help='disable seed filtering.', action='store_true')
-  align_parser.add_argument('-S', '--seed-thr',   help='seed filtering threshold.', type=int, default=5000)
+  align_parser.add_argument('-S', '--seed-thr',   help='seed filtering threshold.', type=int, default=1000)
   align_parser.add_argument('-f', '--freq-dis',   help='disable freq filtering.', action='store_true')
-  align_parser.add_argument('-F', '--freq-thr',   help='frequency filtering threshold.', type=float, default=0.30)
-  align_parser.add_argument('-a', '--left-dis',   help='disable chain left mem lift check heuristic', action='store_true')
+  align_parser.add_argument('-F', '--freq-thr',   help='frequency filtering threshold.', type=float, default=0.50)
+  align_parser.add_argument('-a', '--chain-dis',  help='disable chain filter heuristic', action='store_true')
   align_parser.add_argument('-u', '--orphan-dis', help='disable orphan recovery for paired-end alignment', action='store_true')
   align_parser.add_argument('--no-lcp',           help='build the moni index without the lcp samples.',action='store_true')
   align_parser.add_argument('--moni',             help='run moni index',action='store_true')
